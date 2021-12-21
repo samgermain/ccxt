@@ -62,6 +62,7 @@ module.exports = class huobi extends Exchange {
                 'fetchTradingFee': true,
                 'fetchTradingLimits': true,
                 'fetchWithdrawals': true,
+                'fetchWithdrawQuota': true,
                 'transfer': true,
                 'withdraw': true,
             },
@@ -2624,6 +2625,64 @@ module.exports = class huobi extends Exchange {
         const response = await this.spotPrivateGetV1QueryDepositWithdraw (this.extend (request, params));
         // return response
         return this.parseTransactions (response['data'], currency, since, limit);
+    }
+
+    async fetchWithdrawQuota (code = undefined, params = {}) {
+        await this.loadMarkets ();
+        if (code === undefined) {
+            throw new ArgumentsRequired (this.id + ' fetchWithdrawQuota requires argument code');
+        }
+        const currency = this.currency (code);
+        const request = {
+            'currency': currency['id'],
+        };
+        const response = await this.spotPrivateGetV2AccountWithdrawQuota (this.extend (request, params));
+        //
+        //    {
+        //        "code": 200,
+        //        "data": {
+        //            "currency": "usdt",
+        //            "chains": [
+        //                {
+        //                    "chain": "hrc20usdt",
+        //                    "maxWithdrawAmt": "2000000.000000000000000000",
+        //                    "withdrawQuotaPerDay": "4845303.99999991",
+        //                    "remainWithdrawQuotaPerDay": "4845303.99999991",
+        //                    "withdrawQuotaPerYear": "-1",
+        //                    "remainWithdrawQuotaPerYear": "-1",
+        //                    "withdrawQuotaTotal": "-1",
+        //                    "remainWithdrawQuotaTotal": "-1"
+        //                },
+        //                ...
+        //            ]
+        //        }
+        //    }
+        //
+        const data = this.safeValue (response, 'data', []);
+        const chains = this.safeValue (data, 'chains');
+        const result = [];
+        for (let i = 0; i < chains.length; i++) {
+            const chain = chains[i];
+            result.push ({
+                'currency': code,
+                'min': undefined,
+                'max': this.safeNumber (chain, 'maxWithdrawAmt'),
+                'daily': {
+                    'max': this.safeNumber (chain, 'withdrawQuotaPerDay'),
+                    'remaining': this.safeNumber (chain, 'remainWithdrawQuotaPerDay'),
+                },
+                'yearly': {
+                    'max': this.safeNumber (chain, 'withdrawQuotaPerYear'),
+                    'remaining': this.safeNumber (chain, 'remainWithdrawQuotaPerYear'),
+                },
+                'total': {
+                    'max': this.safeNumber (chain, 'withdrawQuotaTotal'),
+                    'remaining': this.safeNumber (chain, 'remainWithdrawQuotaTotal'),
+                },
+                'info': chain,
+            });
+        }
+        return result;
     }
 
     parseTransaction (transaction, currency = undefined) {
