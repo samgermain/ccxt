@@ -18,6 +18,8 @@ module.exports = class oceanex extends Exchange {
             'urls': {
                 'logo': 'https://user-images.githubusercontent.com/1294454/58385970-794e2d80-8001-11e9-889c-0567cd79b78e.jpg',
                 'api': 'https://api.oceanex.pro',
+                'contract': 'https://contract.oceanex.cc/api',
+                'keyUserApi': 'https://contract.oceanex.cc/key_user_api',
                 'www': 'https://www.oceanex.pro.com',
                 'doc': 'https://api.oceanex.pro/doc/v1',
                 'referral': 'https://oceanex.pro/signup?referral=VE24QX',
@@ -96,6 +98,52 @@ module.exports = class oceanex extends Exchange {
                         'order/delete/multi',
                         'orders/clear',
                     ],
+                },
+                'contract': {
+                    'public': {
+                        'get': [
+                            'ifcontract/quote',
+                            'ifcontract/tickers',
+                            'ifcontract/trades',
+                            'ifcontract/depth',
+                            'ifcontract/contracts',
+                            'ifcontract/fundingrate',
+                            'ifcontract/insuranceBalance',
+                        ],
+                    },
+                    'private': {
+                        'get': [
+                            'ifcontract/userLiqRecords',
+                            'ifcontract/orderTrades',
+                            'ifcontract/userTrades',
+                            'ifcontract/accounts',
+                            'ifcontract/userOrders',
+                            'ifcontract/userPositions',
+                            'ifcontract/profile',
+                            'ifcontract/funds/transfer',
+                        ],
+                        'post': [
+                            'ifcontract/marginOper',
+                            'ifcontract/cancelOrder',
+                            'ifcontract/submitOrder',
+                            'ifcontract/funds/transfer',
+                            'ifcontract/createContractAccount',
+                        ],
+                    },
+                    'key_user_api': {
+                        'private': {
+                            'get': [
+                                'ifcontract/accounts',
+                                'ifcontract/userOrders',
+                                'ifcontract/userOrderInfo',
+                                'ifcontract/userPositions',
+                            ],
+                            'post': [
+                                'ifcontract/cancelOrder',
+                                'ifcontract/submitOrder',
+                            ],
+                        },
+                    },
                 },
             },
             'fees': {
@@ -711,7 +759,12 @@ module.exports = class oceanex extends Exchange {
     }
 
     sign (path, api = 'public', method = 'GET', params = {}, headers = undefined, body = undefined) {
-        let url = this.urls['api'] + '/' + this.version + '/' + this.implodeParams (path, params);
+        let apiPath = 'api';
+        if (Array.isArray (api)) {
+            apiPath = this.safeString (api, 0);
+            api = this.safeString (api, 1);
+        }
+        let url = this.urls[apiPath] + '/' + this.version + '/' + this.implodeParams (path, params);
         const query = this.omit (params, this.extractParams (path));
         if (api === 'public') {
             if (path === 'tickers_multi' || path === 'order_book/multi') {
