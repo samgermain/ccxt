@@ -381,12 +381,37 @@ module.exports = class bitfinex2 extends bitfinex {
         // todo drop v1 in favor of v2 configs  ( temp-reference for v2update: https://pastebin.com/raw/S8CmqSHQ )
         // pub:list:pair:exchange,pub:list:pair:margin,pub:list:pair:futures,pub:info:pair
         const v2response = await this.publicGetConfPubListPairFutures (params);
+        //
+        //    [
+        //        [
+        //            "AAVEF0:USTF0",
+        //            "ADAF0:USTF0",
+        //            "ALGF0:USTF0",
+        //            ...
+        //        ]
+        //    ]
+        //
         const v1response = await this.v1GetSymbolsDetails (params);
         const swapMarketIds = this.safeValue (v2response, 0, []);
+        //
+        //    [
+        //        {
+        //            "pair":"btcusd",
+        //            "price_precision":5,
+        //            "initial_margin":"10.0",
+        //            "minimum_margin":"5.0",
+        //            "maximum_order_size":"2000.0",
+        //            "minimum_order_size":"0.00006",
+        //            "expiration":"NA",
+        //            "margin":true
+        //        },
+        //        ...
+        //    ]
+        //
         const result = [];
         for (let i = 0; i < v1response.length; i++) {
             const market = v1response[i];
-            let id = this.safeStringUpper (market, 'pair');
+            const id = this.safeStringUpper (market, 'pair');
             let spot = true;
             if (this.inArray (id, swapMarketIds)) {
                 spot = false;
@@ -405,47 +430,53 @@ module.exports = class bitfinex2 extends bitfinex {
             }
             const base = this.safeCurrencyCode (baseId);
             const quote = this.safeCurrencyCode (quoteId);
-            const symbol = base + '/' + quote;
-            id = 't' + id;
-            baseId = this.getCurrencyId (baseId);
-            quoteId = this.getCurrencyId (quoteId);
-            const precision = {
-                'price': this.safeInteger (market, 'price_precision'),
-                'amount': 8, // https://github.com/ccxt/ccxt/issues/7310
-            };
-            const minOrderSizeString = this.safeString (market, 'minimum_order_size');
-            const maxOrderSizeString = this.safeString (market, 'maximum_order_size');
-            const limits = {
-                'amount': {
-                    'min': this.parseNumber (minOrderSizeString),
-                    'max': this.parseNumber (maxOrderSizeString),
-                },
-                'price': {
-                    'min': this.parseNumber ('1e-8'),
-                    'max': undefined,
-                },
-            };
-            limits['cost'] = {
-                'min': undefined,
-                'max': undefined,
-            };
-            const margin = this.safeValue (market, 'margin');
             result.push ({
-                'id': id,
-                'symbol': symbol,
+                'id': 't' + id,
+                'symbol': base + '/' + quote,
                 'base': base,
                 'quote': quote,
+                'settle': undefined,
                 'baseId': baseId,
                 'quoteId': quoteId,
-                'active': true,
-                'precision': precision,
-                'limits': limits,
-                'info': market,
+                'settleId': undefined,
                 'type': type,
-                'swap': swap,
                 'spot': spot,
-                'margin': margin,
+                'margin': this.safeValue (market, 'margin'),
+                'swap': swap,
                 'future': false,
+                'option': false,
+                'active': true,
+                'contract': false,
+                'linear': undefined,
+                'inverse': undefined,
+                'contractSize': undefined,
+                'expiry': undefined,
+                'expiryDatetime': undefined,
+                'strike': undefined,
+                'optionType': undefined,
+                'precision': {
+                    'price': this.safeInteger (market, 'price_precision'),
+                    'amount': this.parseNumber ('8'), // https://github.com/ccxt/ccxt/issues/7310
+                },
+                'limits': {
+                    'leverage': {
+                        'min': undefined,
+                        'max': undefined,
+                    },
+                    'amount': {
+                        'min': this.safeNumber (market, 'minimum_order_size'),
+                        'max': this.safeNumber (market, 'maximum_order_size'),
+                    },
+                    'price': {
+                        'min': this.parseNumber ('1e-8'),
+                        'max': undefined,
+                    },
+                    'cost': {
+                        'min': undefined,
+                        'max': undefined,
+                    },
+                },
+                'info': market,
             });
         }
         return result;
