@@ -2245,7 +2245,7 @@ module.exports = class ascendex extends Exchange {
         return await this.v2PrivateAccountGroupPostFuturesMarginType (this.extend (request, params));
     }
 
-    async fetchLeverageBrackets (symbol = undefined, params = {}) {
+    async fetchLeverageTiers (symbol = undefined, params = {}) {
         await this.loadMarkets ();
         let symbols = undefined;
         if (symbol) {
@@ -2271,8 +2271,8 @@ module.exports = class ascendex extends Exchange {
                             'notionalFloor': this.safeNumber (bracket, 'positionNotionalLowerBound'),
                             'notionalCap': this.safeNumber (bracket, 'positionNotionalUpperBound'),
                             'maintenanceMarginRatio': this.parseNumber (maintenanceMarginRatio),
-                            'maintenanceAmount': undefined,
                             'maxLeverage': this.parseNumber (Precise.stringDiv ('1', maintenanceMarginRatio)),
+                            'maintenanceAmount': undefined,
                             'info': bracket,
                         });
                     }
