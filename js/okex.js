@@ -3857,10 +3857,11 @@ module.exports = class okex extends Exchange {
             const entry = data[i];
             brackets.push (
                 {
-                    'notionalFloor': this.safeFloat (entry, 'minSz'),
-                    'notionalCap': this.safeFloat (entry, 'maxSz'),
-                    'maintenanceMarginRatio': this.safeFloat (entry, 'mmr'),
-                    'maxLeverage': this.safeFloat (entry, 'maxLever'),
+                    'tier': this.safeInteger (entry, 'tier'),
+                    'notionalFloor': this.safeNumber (entry, 'minSz'),
+                    'notionalCap': this.safeNumber (entry, 'maxSz'),
+                    'maintenanceMarginRatio': this.safeNumber (entry, 'mmr'),
+                    'maxLeverage': this.safeNumber (entry, 'maxLever'),
                     'maintenanceAmount': undefined,
                     'info': entry,
                 }
