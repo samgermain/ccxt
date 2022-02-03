@@ -3815,13 +3815,10 @@ module.exports = class okex extends Exchange {
         return await this.modifyMarginHelper (symbol, amount, 'add', params);
     }
 
-    async loadLeverageBrackets (reload = false, params = {}) {
+    async fetchLeverageTiers (symbol = undefined, params = {}) {
         await this.loadMarkets ();
-        // by default cache the leverage bracket
-        // it contains useful stuff like the maintenance margin and initial margin for positions
-        const symbol = this.safeString (params, 'symbol');
         if (!symbol) {
-            throw new ArgumentsRequired (this.id + '.loadLeverageBrackets requires params.symbol');
+            throw new ArgumentsRequired (this.id + '.fetchLeverageBrackets requires params.symbol');
         }
         const market = this.market (symbol);
         const type = market['spot'] ? 'MARGIN' : market['type'].toUpperCase ();
@@ -3832,22 +3829,46 @@ module.exports = class okex extends Exchange {
         if (type === 'MARGIN') {
             request['instId'] = market['id'];
         }
-        const leverageBrackets = this.safeValue (this.options, 'leverageBrackets');
-        if ((leverageBrackets === undefined) || (reload)) {
-            const response = await this.publicGetPublicPositionTiers (this.extend (request, params));
-            this.options['leverageBrackets'] = {};
-            const data = this.safeValue (response, 'data');
-            const leverageBrackets = [];
-            for (let i = 0; i < data.length; i++) {
-                const entry = data[i];
-                // we use floats here internally on purpose
-                const floorValue = this.safeFloat (entry, 'minSz');
-                const maintenanceMarginPercentage = this.safeString (entry, 'mmr');
-                leverageBrackets.push ([ floorValue, maintenanceMarginPercentage ]);
-            }
-            this.options['leverageBrackets'] = leverageBrackets;
+        const response = await this.publicGetPublicPositionTiers (this.extend (request, params));
+        //
+        //    {
+        //        "code": "0",
+        //        "data": [
+        //            {
+        //                "baseMaxLoan": "500",
+        //                "imr": "0.1",
+        //                "instId": "ETH-USDT",
+        //                "maxLever": "10",
+        //                "maxSz": "500",
+        //                "minSz": "0",
+        //                "mmr": "0.03",
+        //                "optMgnFactor": "0",
+        //                "quoteMaxLoan": "200000",
+        //                "tier": "1",
+        //                "uly": ""
+        //            },
+        //            ...
+        //        ]
+        //    }
+        //
+        const data = this.safeValue (response, 'data');
+        const brackets = [];
+        for (let i = 0; i < data.length; i++) {
+            const entry = data[i];
+            brackets.push (
+                {
+                    'notionalFloor': this.safeFloat (entry, 'minSz'),
+                    'notionalCap': this.safeFloat (entry, 'maxSz'),
+                    'maintenanceMarginRatio': this.safeFloat (entry, 'mmr'),
+                    'maxLeverage': this.safeFloat (entry, 'maxLever'),
+                    'maintenanceAmount': undefined,
+                    'info': entry,
+                }
+            );
         }
-        return this.options['leverageBrackets'];
+        const result = [];
+        result[symbol] = brackets;
+        return result;
     }
 
     setSandboxMode (enable) {
