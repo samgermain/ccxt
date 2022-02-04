@@ -5330,7 +5330,7 @@ module.exports = class huobi extends Exchange {
         if (symbol) {
             const market = this.market (symbol);
             if (!market['contract']) {
-                throw new BadRequest (this.id + '.fetchLeverageBrackets symbol supports contract markets only');
+                throw new BadRequest (this.id + '.fetchLeverageTiers symbol supports contract markets only');
             }
             request['symbol'] = market['id'];
         }
@@ -5365,7 +5365,7 @@ module.exports = class huobi extends Exchange {
         //    }
         //
         const data = this.safeValue (response, 'data');
-        const result = [];
+        const tiers = {};
         for (let i = 0; i < data.length; i++) {
             const market = data[i];
             const list = this.safeValue (market, 'list', []);
@@ -5387,9 +5387,9 @@ module.exports = class huobi extends Exchange {
                         'info': bracket,
                     });
                 }
-                result[market['symbol']] = brackets;
+                tiers[market['symbol']] = brackets;
             }
         }
-        return result;
+        return tiers;
     }
 };
