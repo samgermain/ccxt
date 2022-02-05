@@ -825,7 +825,17 @@ module.exports = class wavesexchange extends Exchange {
         //     }
         //
         const data = this.safeValue (response, 'data', []);
-        const result = this.parseOHLCVs (data, market, timeframe, since, limit);
+        const time = this.milliseconds ().toString ();
+        const ohlcvs = [];
+        for (let i = 0; i < data.length; i++) {
+            const ohlcv = data[i];
+            const dataInner = this.safeValue (ohlcv, 'data', {});
+            const timestamp = this.parse8601 (this.safeString (dataInner, 'time')).toString ();
+            if (Precise.stringLt (timestamp, time)) {
+                ohlcvs.push (ohlcv);
+            }
+        }
+        const result = this.parseOHLCVs (ohlcvs, market, timeframe, since, limit);
         let lastClose = undefined;
         const length = result.length;
         for (let i = 0; i < result.length; i++) {
