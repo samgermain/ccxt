@@ -2296,7 +2296,6 @@ module.exports = class ascendex extends Exchange {
                             'notionalCap': this.safeNumber (bracket, 'positionNotionalUpperBound'),
                             'maintenanceMarginRatio': this.parseNumber (maintenanceMarginRatio),
                             'maxLeverage': this.parseNumber (Precise.stringDiv ('1', maintenanceMarginRatio)),
-                            'maintenanceAmount': undefined,
                             'info': bracket,
                         });
                     }

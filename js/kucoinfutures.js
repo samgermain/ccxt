@@ -1641,7 +1641,6 @@ module.exports = class kucoinfutures extends kucoin {
                 'notionalCap': this.safeNumber (tier, 'maxRiskLimit'),
                 'maintenanceMarginRatio': this.safeNumber (tier, 'maintainMargin'),
                 'maxLeverage': this.safeNumber (tier, 'maxLeverage'),
-                'maintenanceAmount': undefined,
                 'info': tier,
             });
         }
