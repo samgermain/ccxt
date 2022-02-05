@@ -900,7 +900,6 @@ module.exports = class bybit extends Exchange {
                 'option': option,
                 'linear': linear,
                 'inverse': inverse,
-                'maintenanceMarginRatio': undefined,
                 'limits': {
                     'amount': {
                         'min': this.safeNumber (lotSizeFilter, 'min_trading_qty'),
