@@ -1140,13 +1140,22 @@ module.exports = class kucoin extends Exchange {
         const marketId = this.marketId (symbol);
         // required param, cannot be used twice
         const clientOrderId = this.safeString2 (params, 'clientOid', 'clientOrderId', this.uuid ());
-        params = this.omit (params, [ 'clientOid', 'clientOrderId' ]);
+        let timeInForce = this.safeStringUpper (params, 'timeInForce');
+        let postOnly = false;
+        [ type, postOnly, timeInForce, params ] = this.isPostOnly (type, timeInForce, undefined, params);
+        params = this.omit (params, [ 'clientOid', 'clientOrderId', 'timeInForce', 'postOnly' ]);
         const request = {
             'clientOid': clientOrderId,
             'side': side,
             'symbol': marketId,
             'type': type, // limit or market
         };
+        if (postOnly) {
+            request['postOnly'] = postOnly;
+        }
+        if (timeInForce !== undefined) {
+            request['timeInForce'] = timeInForce;
+        }
         const quoteAmount = this.safeNumber2 (params, 'cost', 'funds');
         let amountString = undefined;
         let costString = undefined;
