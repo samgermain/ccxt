@@ -1477,6 +1477,21 @@ module.exports = class ftx extends Exchange {
             // 'orderPrice': 0.306525, // optional, for stop and takeProfit orders only (market by default). If not specified, a market order will be submitted
         };
         const clientOrderId = this.safeString2 (params, 'clientId', 'clientOrderId');
+        let timeInForce = this.safeStringLower (params, 'timeInForce');
+        const execInst = this.safeString (params, 'execInst');
+        let postOnly = false;
+        [ type, postOnly, timeInForce, params ] = this.isPostOnly (type, timeInForce, execInst === '6', params);
+        params = this.omit (params, [ 'timeInForce' ]);
+        if (postOnly) {
+            request['execInst'] = '6';
+        }
+        if (timeInForce === 'gtc') {
+            request['timeInForce'] = 1;
+        } else if (timeInForce === 'ioc') {
+            request['timeInForce'] = 3;
+        } else if (timeInForce !== undefined) {
+            request['timeInForce'] = timeInForce;
+        }
         if (clientOrderId !== undefined) {
             request['clientId'] = clientOrderId;
             params = this.omit (params, [ 'clientId', 'clientOrderId' ]);
