@@ -1238,7 +1238,6 @@ module.exports = class ascendex extends Exchange {
 
     async createOrder (symbol, type, side, amount, price = undefined, params = {}) {
         await this.loadMarkets ();
-        await this.loadAccounts ();
         const market = this.market (symbol);
         let marketType = undefined;
         [ marketType, params ] = this.handleMarketTypeAndParams ('createOrder', market, params);
@@ -1248,7 +1247,11 @@ module.exports = class ascendex extends Exchange {
         const account = this.safeValue (this.accounts, 0, {});
         const accountGroup = this.safeValue (account, 'id');
         const clientOrderId = this.safeString2 (params, 'clientOrderId', 'id');
-        const reduceOnly = this.safeValue (params, 'execInst');
+        const reduceOnly = this.safeValue (params, 'execInst', 'reduceOnly');
+        let timeInForce = this.safeStringUpper (params, 'timeInForce');
+        let postOnly = false;
+        [ type, postOnly, timeInForce, params ] = this.isPostOnly (type, timeInForce, undefined, params);
+        params = this.omit (params, 'timeInForce');
         if (reduceOnly !== undefined) {
             if ((marketType !== 'swap')) {
                 throw new InvalidOrder (this.id + ' createOrder() does not support reduceOnly for ' + marketType + ' orders, reduceOnly orders are supported for perpetuals only');
@@ -1270,6 +1273,12 @@ module.exports = class ascendex extends Exchange {
             // 'posStopLossPrice': position stop loss price ( v2 swap orders only)
             // 'posTakeProfitPrice': position take profit price (v2 swap orders only)
         };
+        if (postOnly) {
+            request['postOnly'] = true;
+        }
+        if (timeInForce !== undefined) {
+            request['timeInForce'] = timeInForce;
+        }
         if (clientOrderId !== undefined) {
             request['id'] = clientOrderId;
             params = this.omit (params, [ 'clientOrderId', 'id' ]);
@@ -1286,8 +1295,6 @@ module.exports = class ascendex extends Exchange {
                 params = this.omit (params, 'stopPrice');
             }
         }
-        const timeInForce = this.safeString (params, 'timeInForce');
-        const postOnly = this.safeValue (params, 'postOnly', false);
         if ((timeInForce === 'PO') || (postOnly)) {
             request['postOnly'] = true;
             params = this.omit (params, [ 'postOnly', 'timeInForce' ]);
