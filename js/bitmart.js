@@ -30,6 +30,7 @@ module.exports = class bitmart extends Exchange {
                 'cancelOrder': true,
                 'cancelOrders': false,
                 'createOrder': true,
+                'createPostOnlyOrder': undefined, // has, but couldn't implement because CCXT is on an outdated api version
                 'createStopLimitOrder': false,
                 'createStopMarketOrder': false,
                 'createStopOrder': false,

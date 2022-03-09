@@ -33,6 +33,7 @@ module.exports = class kucoinfutures extends kucoin {
                 'cancelOrder': true,
                 'createDepositAddress': true,
                 'createOrder': true,
+                'createPostOnlyOrder': true,
                 'createStopLimitOrder': true,
                 'createStopMarketOrder': true,
                 'createStopOrder': true,
