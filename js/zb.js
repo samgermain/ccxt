@@ -1742,10 +1742,12 @@ module.exports = class zb extends Exchange {
         const market = this.market (symbol);
         const swap = market['swap'];
         const spot = market['spot'];
-        const timeInForce = this.safeString (params, 'timeInForce');
+        let timeInForce = this.safeString (params, 'timeInForce');
         const reduceOnly = this.safeValue (params, 'reduceOnly');
         const stop = this.safeValue (params, 'stop');
         const stopPrice = this.safeNumber2 (params, 'triggerPrice', 'stopPrice');
+        let postOnly = undefined;
+        [ type, postOnly, timeInForce, params ] = this.isPostOnly (type, timeInForce, type === 2, params);
         if (type === 'market') {
             throw new InvalidOrder (this.id + ' createOrder() on ' + market['type'] + ' markets does not allow market orders');
         }
@@ -1786,7 +1788,13 @@ module.exports = class zb extends Exchange {
             } else if (side === 0) {
                 request['side'] = 0; // one way position close only
             }
-            if (type === 'trigger' || orderType === 1) {
+            if (postOnly) {
+                if (market['spot']) {
+                    request['orderType'] = 2;
+                } else {
+                    request['action'] = 4;
+                }
+            } else if (type === 'trigger' || orderType === 1) {
                 request['orderType'] = 1;
             } else if (type === 'stop loss' || type === 'take profit' || orderType === 2 || priceType || bizType) {
                 request['orderType'] = 2;
