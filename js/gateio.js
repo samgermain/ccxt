@@ -3965,22 +3965,24 @@ module.exports = class gateio extends Exchange {
         //        }
         //    ]
         //
-        const interest = [];
-        for (let i = 0; i < response.length; i++) {
-            const row = response[i];
-            const account = (symbol === undefined) ? 'CROSS' : symbol;
-            interest.push ({
-                'account': account, // isolated symbol, will not be returned for crossed margin
-                'currency': this.safeCurrencyCode (this.safeString (row, 'currency')),
-                'interest': this.safeString (row, 'unpaid_interest'),
-                'interestRate': this.safeNumber (row, 'rate'),
-                'amountBorrowed': this.safeNumber (row, 'amount'),
-                'timestamp': undefined, // Interest accrued time
-                'datetime': undefined,
-                'info': row,
-            });
-        }
+        const interest = this.parseBorrowInterests (response);
         return this.filterByCurrencySinceLimit (interest, code, since, limit);
+    }
+
+    parseBorrowInterest (info, market = undefined) {
+        const marketId = this.safeString (info, 'currency_pair');
+        market = this.market (marketId);
+        return {
+            'symbol': market['symbol'],
+            'marginType': (marketId === undefined) ? 'cross' : 'isolated',
+            'currency': this.safeCurrencyCode (this.safeString (info, 'currency')),
+            'interest': this.safeString (info, 'unpaid_interest'),
+            'interestRate': this.safeNumber (info, 'rate'),
+            'amountBorrowed': this.safeNumber (info, 'amount'),
+            'timestamp': undefined, // Interest accrued time
+            'datetime': undefined,
+            'info': info,
+        };
     }
 
     sign (path, api = [], method = 'GET', params = {}, headers = undefined, body = undefined) {
