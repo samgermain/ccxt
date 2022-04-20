@@ -36,7 +36,7 @@ class huobi(Exchange):
             'name': 'Huobi',
             'countries': ['CN'],
             'rateLimit': 100,
-            'userAgent': self.userAgents['chrome39'],
+            'userAgent': self.userAgents['chrome100'],
             'certified': True,
             'version': 'v1',
             'accounts': None,
@@ -3714,8 +3714,8 @@ class huobi(Exchange):
         #
         return response
 
-    def currency_to_precision(self, currency, fee):
-        return self.decimal_to_precision(fee, 0, self.currencies[currency]['precision'])
+    def currency_to_precision(self, code, fee):
+        return self.decimal_to_precision(fee, 0, self.currencies[code]['precision'])
 
     def safe_network(self, networkId):
         lastCharacterIndex = len(networkId) - 1

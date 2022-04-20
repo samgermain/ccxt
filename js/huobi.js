@@ -16,7 +16,7 @@ module.exports = class huobi extends Exchange {
             'name': 'Huobi',
             'countries': [ 'CN' ],
             'rateLimit': 100,
-            'userAgent': this.userAgents['chrome39'],
+            'userAgent': this.userAgents['chrome100'],
             'certified': true,
             'version': 'v1',
             'accounts': undefined,
@@ -3918,8 +3918,8 @@ module.exports = class huobi extends Exchange {
         return response;
     }
 
-    currencyToPrecision (currency, fee) {
-        return this.decimalToPrecision (fee, 0, this.currencies[currency]['precision']);
+    currencyToPrecision (code, fee) {
+        return this.decimalToPrecision (fee, 0, this.currencies[code]['precision']);
     }
 
     safeNetwork (networkId) {
