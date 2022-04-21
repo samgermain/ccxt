@@ -7,15 +7,8 @@ function usage() {
   echo "	-s      Remove special characters"
   echo "	-h      Display help"
   echo "	-v      Verbose mode"
-  echo "	-k      Stacked"
   echo "	-t      Use table"
-  echo "  -y      symbol"
-  echo "  -d      code"
-  echo "  -l      limit"
-  echo "  -i      since"
-  echo "  -p      params"
-  echo "  -m      method"
-  echo "  -g      languages"
+  echo "  -l      language, default='js'"
   exit 1
 }
 
@@ -35,13 +28,7 @@ removeSpecial=false
 numLines=0
 stacked=false
 useTable=false
-symbol=undefined
-code=undefined
-limit=undefined
-since=undefined
-amount=undefined
-params=undefined
-languages='js,py,php'
+language='js'
 
 function display {
   # Displays output in a less window or just to stdout
@@ -114,31 +101,25 @@ function padOutput {
 }
 
 # Loop through command line arguments
-while getopts 'hn:ruvkts:c:l:n:p:m:g:' flag; do
+while getopts 'hc:slvtk' flag; do
   case "${flag}" in
   h) usage ;;
-  n) numLines="${OPTARG}" ;;
-  r) removeSpecial=true ;;
-  u) useLess=true ;;
+  c) numLines="${OPTARG}" ;;
+  s) removeSpecial=true ;;
+  l) useLess=true ;;
   v) verbose=true ;;
-  k) stacked=true ;;
-  t) useTable=true ;;
-  s) symbol="${OPTARG}" ;;
-  c) code="${OPTARG}" ;;
+  y) symbol="${OPTARG}" ;;
+  d) code="${OPTARG}" ;;
   l) limit="${OPTARG}" ;;
-  n) since="${OPTARG}" ;;
+  i) since="${OPTARG}" ;;
   a) amount="${OPTARG}" ;;
   p) params="${OPTARG}" ;;
-  m) methods=($(echo $OPTARG | tr ',' "\n")) ;;
+  m) method="${OPTARG}" ;;
   g) languages="${OPTARG}" ;;
-  e) exchange="${OPTARG}" ;;
+  t) useTable=true ;;
   *) usage ;;
   esac
 done
-
-useJs=$(grep -q 'js' <<< $languages ; echo $? )
-usePython=$(grep -q 'py' <<< $languages ; echo $? )
-usePhp=$(grep -q 'php' <<< $languages ; echo $? )
 
 shift $((OPTIND - 1))
 
@@ -158,34 +139,22 @@ else
   table="--no-table"
 fi
 
-if [ -z ${methods+x} ]; then
-  for method in "${methods[@]}"; do
-    if [ $method == ]; then
-    fi
-  done
-fi
+jsArgs=$(<<< "$args" sed -E -e 's/(null|None)/undefined/g')
+pythonArgs=$(<<< "$args" sed -E -e 's/(undefined|null)/None/g')
+phpArgs=$(<<< "$args" sed -E -e 's/(undefined|None)/null/g')
 
-if [ $useJs -gt 0 ]; then
-  color=3
-  jsArgs=$(<<< "$args" sed -E -e 's/(null|None)/undefined/g')
-  jsOutput=$(writeOutput node $jsCli "${table} $jsArgs")
-  checkExitCode
-  ((color++))
-fi
+color=3
+jsOutput=$(writeOutput node $jsCli "${table} $jsArgs")
+checkExitCode
+((color++))
 
-if [ $usePy -gt 0 ]; then
-  pythonArgs=$(<<< "$args" sed -E -e 's/(undefined|null)/None/g')
-  pythonOutput=$(writeOutput python3 $pythonCli "$pythonArgs")
-  checkExitCode
-  pythonLength=$(wc -l <<< "$pythonOutput")
-  ((color++))
-fi
+pythonOutput=$(writeOutput python3 $pythonCli "$pythonArgs")
+checkExitCode
+pythonLength=$(wc -l <<< "$pythonOutput")
+((color++))
 
-if [ $usePhp -gt 0 ]; then
-  phpArgs=$(<<< "$args" sed -E -e 's/(undefined|None)/null/g')
-  phpOutput=$(writeOutput php $phpCli "$phpArgs")
-  checkExitCode
-fi
+phpOutput=$(writeOutput php $phpCli "$phpArgs")
+checkExitCode
 
 if ${stacked}; then
   echo -e "$jsOutput\n$phpOutput\n$pythonOutput" | display
