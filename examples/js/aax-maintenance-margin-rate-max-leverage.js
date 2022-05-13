@@ -93,26 +93,30 @@ async function main () {
     let maxLeverage = getMaxLeverage (market, leverage, positionSize, 'limit', bid); // Max leverage for linear limit position, entryPrice=bid
     let maintenanceMarginRate = getMaintenanceMarginRate (market, leverage, positionSize, bid, 'maker'); // Maintenance margin rate for linear maker position, entryPrice=bid
     let marginWhenAdjustingLeverage = getMarginWhenAdjustingLeverage (market, leverage, positionSize, bid, 'maker', unrealizedPnl); // Margin when adjusting leverage for linear maker position, entryPrice=bid
-    console.log (maxLeverage, maintenanceMarginRate, marginWhenAdjustingLeverage);
+    console.log (`\nLinear limit position`)
+    console.log ({maxLeverage, maintenanceMarginRate, marginWhenAdjustingLeverage});
     
     maxLeverage = getMaxLeverage (market, leverage, positionSize, 'market', undefined, bid, ask); // Max leverage for linear market position
     maintenanceMarginRate = getMaintenanceMarginRate (market, leverage, positionSize, ask, 'taker'); // Maintenance margin rate for linear taker position, entryPrice=ask
     marginWhenAdjustingLeverage = getMarginWhenAdjustingLeverage (market, leverage, positionSize, ask, 'taker', unrealizedPnl); // Margin when adjusting leverage for linear taker position, entryPrice=ask
-    console.log (maxLeverage, maintenanceMarginRate, marginWhenAdjustingLeverage);
+    console.log (`\nLinear market position`)
+    console.log ({maxLeverage, maintenanceMarginRate, marginWhenAdjustingLeverage});
     
     // Inverse markets
     symbol = 'BTC/USD:BTC';
     market = exchange.market (symbol);
-
+    
     maxLeverage = getMaxLeverage (market, leverage, positionSize, 'limit', bid); // Max leverage for linear limit position, entryPrice=bid
     maintenanceMarginRate = getMaintenanceMarginRate (market, leverage, positionSize, bid, 'maker'); // Maintenance margin rate for linear maker position, entryPrice=bid
     marginWhenAdjustingLeverage = getMarginWhenAdjustingLeverage (market, leverage, positionSize, bid, 'maker', unrealizedPnl); // Margin when adjusting leverage for linear maker position, entryPrice=bid
-    console.log (maxLeverage, maintenanceMarginRate, marginWhenAdjustingLeverage);
+    console.log (`\nInverse limit position`)
+    console.log ({maxLeverage, maintenanceMarginRate, marginWhenAdjustingLeverage});
     
     maxLeverage = getMaxLeverage (market, leverage, positionSize, 'market', undefined, bid, ask); // Max leverage for linear market position
     maintenanceMarginRate = getMaintenanceMarginRate (market, leverage, positionSize, ask, 'taker'); // Maintenance margin rate for linear taker position, entryPrice=ask
     marginWhenAdjustingLeverage = getMarginWhenAdjustingLeverage (market, leverage, positionSize, ask, 'taker', unrealizedPnl); // Margin when adjusting leverage for linear taker position, entryPrice=ask
-    console.log (maxLeverage, maintenanceMarginRate, marginWhenAdjustingLeverage);
+    console.log (`\nInverse market position`)
+    console.log ({maxLeverage, maintenanceMarginRate, marginWhenAdjustingLeverage});
 }
 
 main ()
