@@ -37,7 +37,9 @@ module.exports = class bitget extends Exchange {
                 'fetchClosedOrders': true,
                 'fetchCurrencies': true,
                 'fetchDeposits': false,
+                'fetchFundingRate': true,
                 'fetchLedger': true,
+                'fetchLeverage': true,
                 'fetchMarkets': true,
                 'fetchMyTrades': true,
                 'fetchOHLCV': true,
@@ -2116,7 +2118,7 @@ module.exports = class bitget extends Exchange {
         await this.loadMarkets ();
         const market = this.market (symbol);
         if (market['swap']) {
-            throw new BadSymbol (this.id + ' fetchMyTrades only supports spot markets');
+            throw new BadSymbol (this.id + ' fetchMyTrades() only supports spot markets');
         }
         const request = {
             'symbol': market['id'],
@@ -2231,7 +2233,8 @@ module.exports = class bitget extends Exchange {
         //       ]
         //     }
         //
-        return response;
+        const data = this.safeValue (response, 'data', []);
+        return this.parsePosition (data[0], market);
     }
 
     async fetchPositions (symbols = undefined, params = {}) {
@@ -2268,7 +2271,141 @@ module.exports = class bitget extends Exchange {
         //         }
         //       ]
         //     }
-        return response;
+        //
+        const position = this.safeValue (response, 'data', []);
+        const result = [];
+        for (let i = 0; i < position.length; i++) {
+            result.push (this.parsePosition (position[i]));
+        }
+        return this.filterByArray (result, 'symbol', symbols, false);
+    }
+
+    parsePosition (position, market = undefined) {
+        //
+        //     {
+        //         marginCoin: 'USDT',
+        //         symbol: 'BTCUSDT_UMCBL',
+        //         holdSide: 'long',
+        //         openDelegateCount: '0',
+        //         margin: '1.921475',
+        //         available: '0.001',
+        //         locked: '0',
+        //         total: '0.001',
+        //         leverage: '20',
+        //         achievedProfits: '0',
+        //         averageOpenPrice: '38429.5',
+        //         marginMode: 'fixed',
+        //         holdMode: 'double_hold',
+        //         unrealizedPL: '0.14869',
+        //         liquidationPrice: '0',
+        //         keepMarginRate: '0.004',
+        //         cTime: '1645922194988'
+        //     }
+        //
+        const marketId = this.safeString (position, 'symbol');
+        market = this.safeMarket (marketId, market);
+        const timestamp = this.safeInteger (position, 'cTime');
+        let marginMode = this.safeString (position, 'marginMode');
+        if (marginMode === 'fixed') {
+            marginMode = 'isolated';
+        } else if (marginMode === 'crossed') {
+            marginMode = 'cross';
+        }
+        let hedged = this.safeString (position, 'holdMode');
+        if (hedged === 'double_hold') {
+            hedged = true;
+        } else if (hedged === 'single_hold') {
+            hedged = false;
+        }
+        let contracts = this.safeInteger (position, 'openDelegateCount');
+        let liquidation = this.safeNumber (position, 'liquidationPrice');
+        if (contracts === 0) {
+            contracts = undefined;
+        }
+        if (liquidation === 0) {
+            liquidation = undefined;
+        }
+        return {
+            'info': position,
+            'id': undefined,
+            'symbol': market['symbol'],
+            'notional': undefined,
+            'marginMode': marginMode,
+            'marginType': undefined, // deprecated
+            'liquidationPrice': liquidation,
+            'entryPrice': this.safeNumber (position, 'averageOpenPrice'),
+            'unrealizedPnl': this.safeNumber (position, 'unrealizedPL'),
+            'percentage': undefined,
+            'contracts': contracts,
+            'contractSize': this.safeNumber (position, 'total'),
+            'markPrice': undefined,
+            'side': this.safeString (position, 'holdSide'),
+            'hedged': hedged,
+            'timestamp': timestamp,
+            'datetime': this.iso8601 (timestamp),
+            'maintenanceMargin': undefined,
+            'maintenanceMarginPercentage': this.safeNumber (position, 'keepMarginRate'),
+            'collateral': this.safeNumber (position, 'margin'),
+            'initialMargin': undefined,
+            'initialMarginPercentage': undefined,
+            'leverage': this.safeNumber (position, 'leverage'),
+            'marginRatio': undefined,
+        };
+    }
+
+    async fetchFundingRate (symbol, params = {}) {
+        await this.loadMarkets ();
+        const market = this.market (symbol);
+        if (!market['swap']) {
+            throw new BadSymbol (this.id + ' fetchFundingRate() supports swap contracts only');
+        }
+        const request = {
+            'symbol': market['id'],
+        };
+        const response = await this.publicMixGetMarketCurrentFundRate (this.extend (request, params));
+        //
+        //     {
+        //         "code": "00000",
+        //         "msg": "success",
+        //         "requestTime": 1652401684275,
+        //         "data": {
+        //             "symbol": "BTCUSDT_UMCBL",
+        //             "fundingRate": "-0.000182"
+        //         }
+        //     }
+        //
+        const data = this.safeValue (response, 'data', {});
+        return this.parseFundingRate (data, market);
+    }
+
+    parseFundingRate (contract, market = undefined) {
+        //
+        //     {
+        //         "symbol": "BTCUSDT_UMCBL",
+        //         "fundingRate": "-0.000182"
+        //     }
+        //
+        const marketId = this.safeString (contract, 'symbol');
+        const symbol = this.safeSymbol (marketId, market);
+        return {
+            'info': contract,
+            'symbol': symbol,
+            'markPrice': undefined,
+            'indexPrice': undefined,
+            'interestRate': undefined,
+            'estimatedSettlePrice': undefined,
+            'timestamp': undefined,
+            'datetime': undefined,
+            'fundingRate': this.safeNumber (contract, 'fundingRate'),
+            'fundingTimestamp': undefined,
+            'fundingDatetime': undefined,
+            'nextFundingRate': undefined,
+            'nextFundingTimestamp': undefined,
+            'nextFundingDatetime': undefined,
+            'previousFundingRate': undefined,
+            'previousFundingTimestamp': undefined,
+            'previousFundingDatetime': undefined,
+        };
     }
 
     sign (path, api = [], method = 'GET', params = {}, headers = undefined, body = undefined) {
@@ -2313,6 +2450,28 @@ module.exports = class bitget extends Exchange {
         return { 'url': url, 'method': method, 'body': body, 'headers': headers };
     }
 
+    async fetchLeverage (symbol, params = {}) {
+        await this.loadMarkets ();
+        const market = this.market (symbol);
+        const request = {
+            'symbol': market['id'],
+        };
+        const response = await this.publicMixGetMarketSymbolLeverage (this.extend (request, params));
+        //
+        //     {
+        //         "code": "00000",
+        //         "msg": "success",
+        //         "requestTime": 1652347673483,
+        //         "data": {
+        //             "symbol": "BTCUSDT_UMCBL",
+        //             "minLeverage": "1",
+        //             "maxLeverage": "125"
+        //         }
+        //     }
+        //
+        return response;
+    }
+
     async setLeverage (leverage, symbol = undefined, params = {}) {
         if (symbol === undefined) {
             throw new ArgumentsRequired (this.id + ' setLeverage() requires a symbol argument');
@@ -2332,20 +2491,20 @@ module.exports = class bitget extends Exchange {
         return await this.privateMixPostAccountSetLeverage (this.extend (request, params));
     }
 
-    async setMarginMode (marginType, symbol = undefined, params = {}) {
+    async setMarginMode (marginMode, symbol = undefined, params = {}) {
         if (symbol === undefined) {
             throw new ArgumentsRequired (this.id + ' setMarginMode() requires a symbol argument');
         }
-        marginType = marginType.toLowerCase ();
-        if ((marginType !== 'fixed') && (marginType !== 'crossed')) {
-            throw new ArgumentsRequired (this.id + ' setMarginMode() marginType must be "fixed" or "crossed"');
+        marginMode = marginMode.toLowerCase ();
+        if ((marginMode !== 'fixed') && (marginMode !== 'crossed')) {
+            throw new ArgumentsRequired (this.id + ' setMarginMode() marginMode must be "fixed" or "crossed"');
         }
         await this.loadMarkets ();
         const market = this.market (symbol);
         const request = {
             'symbol': market['id'],
             'marginCoin': market['settleId'],
-            'marginMode': marginType,
+            'marginMode': marginMode,
         };
         return await this.privateMixPostAccountSetMarginMode (this.extend (request, params));
     }

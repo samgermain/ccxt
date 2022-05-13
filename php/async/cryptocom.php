@@ -37,7 +37,6 @@ class cryptocom extends Exchange {
                 'fetchDepositAddress' => true,
                 'fetchDepositAddressesByNetwork' => true,
                 'fetchDeposits' => true,
-                'fetchFundingFees' => false,
                 'fetchFundingHistory' => false,
                 'fetchFundingRate' => false,
                 'fetchFundingRates' => false,
@@ -56,6 +55,7 @@ class cryptocom extends Exchange {
                 'fetchTrades' => true,
                 'fetchTradingFee' => false,
                 'fetchTradingFees' => false,
+                'fetchTransactionFees' => false,
                 'fetchTransactions' => false,
                 'fetchTransfers' => true,
                 'fetchWithdrawals' => true,
@@ -514,7 +514,7 @@ class cryptocom extends Exchange {
         );
         list($marketType, $query) = $this->handle_market_type_and_params('fetchTicker', $market, $params);
         if ($marketType !== 'spot') {
-            throw new NotSupported($this->id . ' fetchTicker only supports spot markets');
+            throw new NotSupported($this->id . ' fetchTicker() only supports spot markets');
         }
         $response = yield $this->spotPublicGetPublicGetTicker (array_merge($request, $query));
         // {
@@ -1179,7 +1179,7 @@ class cryptocom extends Exchange {
         $data = $this->safe_value($response, 'result', array());
         $addresses = $this->safe_value($data, 'deposit_address_list', array());
         if (strlen($addresses) === 0) {
-            throw new ExchangeError($this->id . ' generating $address->..');
+            throw new ExchangeError($this->id . ' fetchDepositAddressesByNetwork() generating $address->..');
         }
         $result = array();
         for ($i = 0; $i < count($addresses); $i++) {
@@ -1310,16 +1310,8 @@ class cryptocom extends Exchange {
         $fromAccount = strtolower($fromAccount);
         $toAccount = strtolower($toAccount);
         $accountsById = $this->safe_value($this->options, 'accountsByType', array());
-        $fromId = $this->safe_string($accountsById, $fromAccount);
-        if ($fromId === null) {
-            $keys = is_array($accountsById) ? array_keys($accountsById) : array();
-            throw new ExchangeError($this->id . ' $fromAccount must be one of ' . implode(', ', $keys));
-        }
-        $toId = $this->safe_string($accountsById, $toAccount);
-        if ($toId === null) {
-            $keys = is_array($accountsById) ? array_keys($accountsById) : array();
-            throw new ExchangeError($this->id . ' $toAccount must be one of ' . implode(', ', $keys));
-        }
+        $fromId = $this->safe_string($accountsById, $fromAccount, $fromAccount);
+        $toId = $this->safe_string($accountsById, $toAccount, $toAccount);
         $request = array(
             'currency' => $currency['id'],
             'amount' => floatval($amount),
@@ -1339,7 +1331,7 @@ class cryptocom extends Exchange {
 
     public function fetch_transfers($code = null, $since = null, $limit = null, $params = array ()) {
         if (!(is_array($params) && array_key_exists('direction', $params))) {
-            throw new ArgumentsRequired($this->id . ' fetchTransfers requires a direction param to be either "IN" or "OUT"');
+            throw new ArgumentsRequired($this->id . ' fetchTransfers() requires a direction param to be either "IN" or "OUT"');
         }
         yield $this->load_markets();
         $currency = null;

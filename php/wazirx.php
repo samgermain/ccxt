@@ -28,6 +28,9 @@ class wazirx extends Exchange {
                 'cancelAllOrders' => true,
                 'cancelOrder' => true,
                 'createOrder' => true,
+                'createStopLimitOrder' => true,
+                'createStopMarketOrder' => true,
+                'createStopOrder' => true,
                 'fetchBalance' => true,
                 'fetchBidsAsks' => false,
                 'fetchClosedOrders' => false,
@@ -35,7 +38,6 @@ class wazirx extends Exchange {
                 'fetchDepositAddress' => false,
                 'fetchDepositAddressesByNetwork' => false,
                 'fetchDeposits' => true,
-                'fetchFundingFees' => false,
                 'fetchFundingHistory' => false,
                 'fetchFundingRate' => false,
                 'fetchFundingRateHistory' => false,
@@ -57,6 +59,7 @@ class wazirx extends Exchange {
                 'fetchTrades' => true,
                 'fetchTradingFee' => false,
                 'fetchTradingFees' => false,
+                'fetchTransactionFees' => false,
                 'fetchTransactions' => false,
                 'fetchTransfers' => false,
                 'fetchWithdrawals' => false,
@@ -382,16 +385,19 @@ class wazirx extends Exchange {
     public function fetch_status($params = array ()) {
         $response = $this->publicGetSystemStatus ($params);
         //
-        //  array( "status":"normal","message":"System is running normally." )
+        //     {
+        //         "status":"normal", // normal, system maintenance
+        //         "message":"System is running normally."
+        //     }
         //
         $status = $this->safe_string($response, 'status');
-        $status = ($status === 'normal') ? 'ok' : 'maintenance';
-        $this->status = array_merge($this->status, array(
-            'status' => $status,
+        return array(
+            'status' => ($status === 'normal') ? 'ok' : 'maintenance',
             'updated' => $this->milliseconds(),
+            'eta' => null,
+            'url' => null,
             'info' => $response,
-        ));
-        return $this->status;
+        );
     }
 
     public function fetch_time($params = array ()) {
@@ -486,7 +492,7 @@ class wazirx extends Exchange {
 
     public function fetch_orders($symbol = null, $since = null, $limit = null, $params = array ()) {
         if ($symbol === null) {
-            throw new ArgumentsRequired($this->id . ' fetchOrders requires a `$symbol` argument');
+            throw new ArgumentsRequired($this->id . ' fetchOrders() requires a `$symbol` argument');
         }
         $this->load_markets();
         $market = $this->market($symbol);
@@ -574,7 +580,7 @@ class wazirx extends Exchange {
 
     public function cancel_all_orders($symbol = null, $params = array ()) {
         if ($symbol === null) {
-            throw new ArgumentsRequired($this->id . ' cancelAllOrders requires a `$symbol` argument');
+            throw new ArgumentsRequired($this->id . ' cancelAllOrders() requires a `$symbol` argument');
         }
         $this->load_markets();
         $market = $this->market($symbol);
@@ -586,7 +592,7 @@ class wazirx extends Exchange {
 
     public function cancel_order($id, $symbol = null, $params = array ()) {
         if ($symbol === null) {
-            throw new ArgumentsRequired($this->id . ' cancelOrder requires a `$symbol` argument');
+            throw new ArgumentsRequired($this->id . ' cancelOrder() requires a `$symbol` argument');
         }
         $this->load_markets();
         $market = $this->market($symbol);

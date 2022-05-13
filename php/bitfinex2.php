@@ -36,13 +36,15 @@ class bitfinex2 extends bitfinex {
                 'createLimitOrder' => true,
                 'createMarketOrder' => true,
                 'createOrder' => true,
+                'createStopLimitOrder' => true,
+                'createStopMarketOrder' => true,
+                'createStopOrder' => true,
                 'editOrder' => null,
                 'fetchBalance' => true,
                 'fetchClosedOrder' => true,
                 'fetchClosedOrders' => true,
                 'fetchCurrencies' => true,
                 'fetchDepositAddress' => true,
-                'fetchFundingFees' => null,
                 'fetchIndexOHLCV' => false,
                 'fetchLedger' => true,
                 'fetchMarkOHLCV' => false,
@@ -57,6 +59,7 @@ class bitfinex2 extends bitfinex {
                 'fetchTime' => false,
                 'fetchTradingFee' => false,
                 'fetchTradingFees' => true,
+                'fetchTransactionFees' => null,
                 'fetchTransactions' => true,
                 'withdraw' => true,
             ),
@@ -383,14 +386,14 @@ class bitfinex2 extends bitfinex {
         //    [0] // maintenance
         //
         $response = $this->publicGetPlatformStatus ($params);
-        $status = $this->safe_integer($response, 0);
-        $formattedStatus = ($status === 1) ? 'ok' : 'maintenance';
-        $this->status = array_merge($this->status, array(
-            'status' => $formattedStatus,
+        $statusRaw = $this->safe_string($response, 0);
+        return array(
+            'status' => $this->safe_string(array( '0' => 'maintenance', '1' => 'ok' ), $statusRaw, $statusRaw),
             'updated' => $this->milliseconds(),
+            'eta' => null,
+            'url' => null,
             'info' => $response,
-        ));
-        return $this->status;
+        );
     }
 
     public function fetch_markets($params = array ()) {
@@ -639,10 +642,10 @@ class bitfinex2 extends bitfinex {
         $this->load_markets();
         $accountsByType = $this->safe_value($this->options, 'v2AccountsByType', array());
         $requestedType = $this->safe_string($params, 'type', 'exchange');
-        $accountType = $this->safe_string($accountsByType, $requestedType);
+        $accountType = $this->safe_string($accountsByType, $requestedType, $requestedType);
         if ($accountType === null) {
             $keys = is_array($accountsByType) ? array_keys($accountsByType) : array();
-            throw new ExchangeError($this->id . ' fetchBalance $type parameter must be one of ' . implode(', ', $keys));
+            throw new ExchangeError($this->id . ' fetchBalance() $type parameter must be one of ' . implode(', ', $keys));
         }
         $isDerivative = $requestedType === 'derivatives';
         $query = $this->omit($params, 'type');
@@ -675,12 +678,12 @@ class bitfinex2 extends bitfinex {
         $fromId = $this->safe_string($accountsByType, $fromAccount);
         if ($fromId === null) {
             $keys = is_array($accountsByType) ? array_keys($accountsByType) : array();
-            throw new ExchangeError($this->id . ' transfer $fromAccount must be one of ' . implode(', ', $keys));
+            throw new ArgumentsRequired($this->id . ' transfer() $fromAccount must be one of ' . implode(', ', $keys));
         }
         $toId = $this->safe_string($accountsByType, $toAccount);
         if ($toId === null) {
             $keys = is_array($accountsByType) ? array_keys($accountsByType) : array();
-            throw new ExchangeError($this->id . ' transfer $toAccount must be one of ' . implode(', ', $keys));
+            throw new ArgumentsRequired($this->id . ' transfer() $toAccount must be one of ' . implode(', ', $keys));
         }
         $currency = $this->currency($code);
         $fromCurrencyId = $this->convert_derivatives_id($currency, $fromAccount);
@@ -749,7 +752,7 @@ class bitfinex2 extends bitfinex {
     }
 
     public function fetch_order($id, $symbol = null, $params = array ()) {
-        throw new NotSupported($this->id . ' fetchOrder is not implemented yet');
+        throw new NotSupported($this->id . ' fetchOrder() is not supported yet');
     }
 
     public function fetch_order_book($symbol, $limit = null, $params = array ()) {
@@ -1823,7 +1826,7 @@ class bitfinex2 extends bitfinex {
 
     public function fetch_positions($symbols = null, $params = array ()) {
         $this->load_markets();
-        $response = $this->privatePostPositions ($params);
+        $response = $this->privatePostAuthRPositions ($params);
         //
         //     array(
         //         array(

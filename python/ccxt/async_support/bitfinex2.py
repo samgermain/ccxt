@@ -47,13 +47,15 @@ class bitfinex2(bitfinex):
                 'createLimitOrder': True,
                 'createMarketOrder': True,
                 'createOrder': True,
+                'createStopLimitOrder': True,
+                'createStopMarketOrder': True,
+                'createStopOrder': True,
                 'editOrder': None,
                 'fetchBalance': True,
                 'fetchClosedOrder': True,
                 'fetchClosedOrders': True,
                 'fetchCurrencies': True,
                 'fetchDepositAddress': True,
-                'fetchFundingFees': None,
                 'fetchIndexOHLCV': False,
                 'fetchLedger': True,
                 'fetchMarkOHLCV': False,
@@ -68,6 +70,7 @@ class bitfinex2(bitfinex):
                 'fetchTime': False,
                 'fetchTradingFee': False,
                 'fetchTradingFees': True,
+                'fetchTransactionFees': None,
                 'fetchTransactions': True,
                 'withdraw': True,
             },
@@ -389,14 +392,14 @@ class bitfinex2(bitfinex):
         #    [0]  # maintenance
         #
         response = await self.publicGetPlatformStatus(params)
-        status = self.safe_integer(response, 0)
-        formattedStatus = 'ok' if (status == 1) else 'maintenance'
-        self.status = self.extend(self.status, {
-            'status': formattedStatus,
+        statusRaw = self.safe_string(response, 0)
+        return {
+            'status': self.safe_string({'0': 'maintenance', '1': 'ok'}, statusRaw, statusRaw),
             'updated': self.milliseconds(),
+            'eta': None,
+            'url': None,
             'info': response,
-        })
-        return self.status
+        }
 
     async def fetch_markets(self, params={}):
         # todo drop v1 in favor of v2 configs  ( temp-reference for v2update: https://pastebin.com/raw/S8CmqSHQ )
@@ -637,10 +640,10 @@ class bitfinex2(bitfinex):
         await self.load_markets()
         accountsByType = self.safe_value(self.options, 'v2AccountsByType', {})
         requestedType = self.safe_string(params, 'type', 'exchange')
-        accountType = self.safe_string(accountsByType, requestedType)
+        accountType = self.safe_string(accountsByType, requestedType, requestedType)
         if accountType is None:
             keys = list(accountsByType.keys())
-            raise ExchangeError(self.id + ' fetchBalance type parameter must be one of ' + ', '.join(keys))
+            raise ExchangeError(self.id + ' fetchBalance() type parameter must be one of ' + ', '.join(keys))
         isDerivative = requestedType == 'derivatives'
         query = self.omit(params, 'type')
         response = await self.privatePostAuthRWallets(query)
@@ -669,11 +672,11 @@ class bitfinex2(bitfinex):
         fromId = self.safe_string(accountsByType, fromAccount)
         if fromId is None:
             keys = list(accountsByType.keys())
-            raise ExchangeError(self.id + ' transfer fromAccount must be one of ' + ', '.join(keys))
+            raise ArgumentsRequired(self.id + ' transfer() fromAccount must be one of ' + ', '.join(keys))
         toId = self.safe_string(accountsByType, toAccount)
         if toId is None:
             keys = list(accountsByType.keys())
-            raise ExchangeError(self.id + ' transfer toAccount must be one of ' + ', '.join(keys))
+            raise ArgumentsRequired(self.id + ' transfer() toAccount must be one of ' + ', '.join(keys))
         currency = self.currency(code)
         fromCurrencyId = self.convert_derivatives_id(currency, fromAccount)
         toCurrencyId = self.convert_derivatives_id(currency, toAccount)
@@ -736,7 +739,7 @@ class bitfinex2(bitfinex):
         return currencyId
 
     async def fetch_order(self, id, symbol=None, params={}):
-        raise NotSupported(self.id + ' fetchOrder is not implemented yet')
+        raise NotSupported(self.id + ' fetchOrder() is not supported yet')
 
     async def fetch_order_book(self, symbol, limit=None, params={}):
         await self.load_markets()
@@ -1730,7 +1733,7 @@ class bitfinex2(bitfinex):
 
     async def fetch_positions(self, symbols=None, params={}):
         await self.load_markets()
-        response = await self.privatePostPositions(params)
+        response = await self.privatePostAuthRPositions(params)
         #
         #     [
         #         [

@@ -732,12 +732,15 @@ module.exports = class digifinex extends Exchange {
         //         "code": 0
         //     }
         //
-        this.status = this.extend (this.status, {
-            'status': 'ok',
+        const code = this.safeInteger (response, 'code');
+        const status = (code === 0) ? 'ok' : 'maintenance';
+        return {
+            'status': status,
             'updated': this.milliseconds (),
+            'eta': undefined,
+            'url': undefined,
             'info': response,
-        });
-        return this.status;
+        };
     }
 
     async fetchTrades (symbol, since = undefined, limit = undefined, params = {}) {
@@ -894,7 +897,7 @@ module.exports = class digifinex extends Exchange {
         const canceledOrders = this.safeValue (response, 'success', []);
         const numCanceledOrders = canceledOrders.length;
         if (numCanceledOrders !== 1) {
-            throw new OrderNotFound (this.id + ' cancelOrder ' + id + ' not found');
+            throw new OrderNotFound (this.id + ' cancelOrder() ' + id + ' not found');
         }
         return response;
     }
@@ -924,7 +927,7 @@ module.exports = class digifinex extends Exchange {
         const canceledOrders = this.safeValue (response, 'success', []);
         const numCanceledOrders = canceledOrders.length;
         if (numCanceledOrders < 1) {
-            throw new OrderNotFound (this.id + ' cancelOrders error');
+            throw new OrderNotFound (this.id + ' cancelOrders() error');
         }
         return response;
     }
@@ -1313,7 +1316,7 @@ module.exports = class digifinex extends Exchange {
         const addresses = this.parseDepositAddresses (data);
         const address = this.safeValue (addresses, code);
         if (address === undefined) {
-            throw new InvalidAddress (this.id + ' fetchDepositAddress did not return an address for ' + code + ' - create the deposit address in the user settings on the exchange website first.');
+            throw new InvalidAddress (this.id + ' fetchDepositAddress() did not return an address for ' + code + ' - create the deposit address in the user settings on the exchange website first.');
         }
         return address;
     }

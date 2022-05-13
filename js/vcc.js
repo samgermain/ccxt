@@ -29,6 +29,9 @@ module.exports = class vcc extends Exchange {
                 'cancelOrder': true,
                 'createOrder': true,
                 'createReduceOnlyOrder': false,
+                'createStopLimitOrder': true,
+                'createStopMarketOrder': true,
+                'createStopOrder': true,
                 'editOrder': undefined,
                 'fetchBalance': true,
                 'fetchBorrowRate': false,
@@ -443,7 +446,7 @@ module.exports = class vcc extends Exchange {
         };
         if (limit !== undefined) {
             if ((limit !== 0) && (limit !== 5) && (limit !== 10) && (limit !== 20) && (limit !== 50) && (limit !== 100) && (limit !== 500)) {
-                throw new BadRequest (this.id + ' fetchOrderBook limit must be 0, 5, 10, 20, 50, 100, 500 if specified');
+                throw new BadRequest (this.id + ' fetchOrderBook() limit must be 0, 5, 10, 20, 50, 100, 500 if specified');
             }
             request['depth'] = limit;
         }

@@ -2,7 +2,7 @@
 Supported Exchanges
 ===================
 
-The CCXT library currently supports the following 114 cryptocurrency exchange markets and trading APIs:
+The CCXT library currently supports the following 116 cryptocurrency exchange markets and trading APIs:
 
 .. list-table::
    :header-rows: 1
@@ -939,7 +939,10 @@ The CCXT library currently supports the following 114 cryptocurrency exchange ma
           :alt: API Version 2
      
      - 
-     - 
+     - .. image:: https://img.shields.io/badge/CCXT-Pro-black
+          :target: https://ccxt.pro
+          :alt: CCXT Pro
+     
    * - .. image:: https://user-images.githubusercontent.com/1294454/76137448-22748a80-604e-11ea-8069-6e389271911d.jpg
           :target: https://www.huobi.com/en-us/topic/double-reward/?invite_code=6rmm2223
           :alt: huobi
@@ -1105,6 +1108,18 @@ The CCXT library currently supports the following 114 cryptocurrency exchange ma
      
      - 
      - 
+   * - .. image:: https://user-images.githubusercontent.com/1294454/38063602-9605e28a-3302-11e8-81be-64b1e53c4cfb.jpg
+          :target: https://www.lbex.io/invite?icode=7QCY
+          :alt: lbank2
+     
+     - lbank2
+     - `LBank <https://www.lbex.io/invite?icode=7QCY>`__
+     - .. image:: https://img.shields.io/badge/2-lightgray
+          :target: https://github.com/LBank-exchange/lbank-official-api-docs
+          :alt: API Version 2
+     
+     - 
+     - 
    * - .. image:: https://user-images.githubusercontent.com/1294454/45798859-1a872600-bcb4-11e8-8746-69291ce87b04.jpg
           :target: https://www.liquid.com/sign-up/?affiliate=SbzC62lt30976
           :alt: liquid
@@ -1162,6 +1177,24 @@ The CCXT library currently supports the following 114 cryptocurrency exchange ma
      - .. image:: https://img.shields.io/badge/2-lightgray
           :target: https://mxcdevelop.github.io/APIDoc/
           :alt: API Version 2
+     
+     - .. image:: https://img.shields.io/badge/CCXT-Certified-green.svg
+          :target: https://github.com/ccxt/ccxt/wiki/Certification
+          :alt: CCXT Certified
+     
+     - .. image:: https://img.shields.io/badge/CCXT-Pro-black
+          :target: https://ccxt.pro
+          :alt: CCXT Pro
+     
+   * - .. image:: https://user-images.githubusercontent.com/1294454/137283979-8b2a818d-8633-461b-bfca-de89e8c446b2.jpg
+          :target: https://m.mexc.com/auth/signup?inviteCode=1FQ1G
+          :alt: mexc3
+     
+     - mexc3
+     - `MEXC Global <https://m.mexc.com/auth/signup?inviteCode=1FQ1G>`__
+     - .. image:: https://img.shields.io/badge/3-lightgray
+          :target: https://mxcdevelop.github.io/apidocs/spot_v3_en/
+          :alt: API Version 3
      
      - .. image:: https://img.shields.io/badge/CCXT-Certified-green.svg
           :target: https://github.com/ccxt/ccxt/wiki/Certification

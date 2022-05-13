@@ -224,13 +224,8 @@ class hitbtc(Exchange):
                 },
                 'defaultTimeInForce': 'FOK',
                 'accountsByType': {
-                    'bank': 'bank',
-                    'exchange': 'exchange',
-                    'main': 'bank',  # alias of the above
                     'funding': 'bank',
                     'spot': 'exchange',
-                    'trade': 'exchange',
-                    'trading': 'exchange',
                 },
                 'fetchBalanceMethod': {
                     'account': 'account',
@@ -382,15 +377,10 @@ class hitbtc(Exchange):
         type = self.safe_string(params, 'type')
         if type is None:
             accountsByType = self.safe_value(self.options, 'accountsByType', {})
-            fromId = self.safe_string(accountsByType, fromAccount)
-            toId = self.safe_string(accountsByType, toAccount)
-            keys = list(accountsByType.keys())
-            if fromId is None:
-                raise ExchangeError(self.id + ' fromAccount must be one of ' + ', '.join(keys) + ' instead of ' + fromId)
-            if toId is None:
-                raise ExchangeError(self.id + ' toAccount must be one of ' + ', '.join(keys) + ' instead of ' + toId)
+            fromId = self.safe_string(accountsByType, fromAccount, fromAccount)
+            toId = self.safe_string(accountsByType, toAccount, toAccount)
             if fromId == toId:
-                raise ExchangeError(self.id + ' from and to cannot be the same account')
+                raise ExchangeError(self.id + ' transfer() from and to cannot be the same account')
             type = fromId + 'To' + self.capitalize(toId)
         request['type'] = type
         response = await self.privatePostAccountTransfer(self.extend(request, params))
@@ -548,7 +538,7 @@ class hitbtc(Exchange):
         fetchBalanceAccounts = self.safe_value(self.options, 'fetchBalanceMethod', {})
         typeId = self.safe_string(fetchBalanceAccounts, type)
         if typeId is None:
-            raise ExchangeError(self.id + ' fetchBalance account type must be either main or trading')
+            raise ExchangeError(self.id + ' fetchBalance() account type must be either main or trading')
         method = 'privateGet' + self.capitalize(typeId) + 'Balance'
         query = self.omit(params, 'type')
         response = await getattr(self, method)(query)
@@ -1185,7 +1175,7 @@ class hitbtc(Exchange):
         fromNetwork = self.safe_string(networks, fromNetwork, fromNetwork)  # handle ETH>ERC20 alias
         toNetwork = self.safe_string(networks, toNetwork, toNetwork)  # handle ETH>ERC20 alias
         if fromNetwork == toNetwork:
-            raise ExchangeError(self.id + ' fromNetwork cannot be the same as toNetwork')
+            raise ExchangeError(self.id + ' convertCurrencyNetwork() fromNetwork cannot be the same as toNetwork')
         request = {
             'fromCurrency': currency['id'] + fromNetwork,
             'toCurrency': currency['id'] + toNetwork,

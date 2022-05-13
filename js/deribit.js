@@ -30,6 +30,9 @@ module.exports = class deribit extends Exchange {
                 'cancelOrder': true,
                 'createDepositAddress': true,
                 'createOrder': true,
+                'createStopLimitOrder': true,
+                'createStopMarketOrder': true,
+                'createStopOrder': true,
                 'editOrder': true,
                 'fetchBalance': true,
                 'fetchBorrowRate': false,
@@ -388,26 +391,29 @@ module.exports = class deribit extends Exchange {
     }
 
     async fetchStatus (params = {}) {
-        const request = {
-            // 'expected_result': false, // true will trigger an error for testing purposes
-        };
-        const response = await this.publicGetTest (this.extend (request, params));
+        const response = await this.publicGetStatus (params);
         //
         //     {
-        //         jsonrpc: '2.0',
-        //         result: { version: '1.2.26' },
-        //         usIn: 1583922623964485,
-        //         usOut: 1583922623964487,
-        //         usDiff: 2,
-        //         testnet: false
+        //         "jsonrpc": "2.0",
+        //         "result": {
+        //             "locked": "false" // true, partial, false
+        //         },
+        //         "usIn": 1650641690226788,
+        //         "usOut": 1650641690226836,
+        //         "usDiff": 48,
+        //         "testnet": false
         //     }
         //
-        this.status = this.extend (this.status, {
-            'status': 'ok',
-            'updated': this.milliseconds (),
+        const result = this.safeString (response, 'result');
+        const locked = this.safeString (result, 'locked');
+        const updateTime = this.safeIntegerProduct (response, 'usIn', 0.001, this.milliseconds ());
+        return {
+            'status': (locked === 'false') ? 'ok' : 'maintenance',
+            'updated': updateTime,
+            'eta': undefined,
+            'url': undefined,
             'info': response,
-        });
-        return this.status;
+        };
     }
 
     async fetchMarkets (params = {}) {
@@ -1921,7 +1927,8 @@ module.exports = class deribit extends Exchange {
             'liquidationPrice': this.safeNumber (position, 'estimated_liquidation_price'),
             'markPrice': markPrice,
             'collateral': undefined,
-            'marginType': undefined,
+            'marginMode': undefined,
+            'marginType': undefined, // deprecated
             'side': side,
             'percentage': this.parseNumber (percentage),
         };
@@ -1983,7 +1990,7 @@ module.exports = class deribit extends Exchange {
             if (Array.isArray (symbols)) {
                 const length = symbols.length;
                 if (length !== 1) {
-                    throw new BadRequest (this.id + ' fetchPositions symbols argument cannot contain more than 1 symbol');
+                    throw new BadRequest (this.id + ' fetchPositions() symbols argument cannot contain more than 1 symbol');
                 }
                 const market = this.market (symbols[0]);
                 code = market['base'];

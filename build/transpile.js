@@ -95,7 +95,8 @@ class Transpiler {
             [ /\.groupBy\s/g, '.group_by'],
             [ /\.marketIds\s/g, '.market_ids'],
             [ /\.marketId\s/g, '.market_id'],
-            [ /\.fetchFundingFees\s/g, '.fetch_funding_fees'],
+            [ /\.fetchTransactionFee\s/g, '.fetch_transaction_fee'],
+            [ /\.fetchTransactionFees\s/g, '.fetch_transaction_fees'],
             [ /\.fetchTradingFees\s/g, '.fetch_trading_fees'],
             [ /\.fetchTradingFee\s/g, '.fetch_trading_fee'],
             [ /\.fetchFees\s/g, '.fetch_fees'],
@@ -129,6 +130,11 @@ class Transpiler {
             [ /\.appendInactiveMarkets\s/g, '.append_inactive_markets'],
             [ /\.fetchCategories\s/g, '.fetch_categories'],
             [ /\.calculateFee\s/g, '.calculate_fee'],
+            [ /\.createOrder\s/g, '.create_order'],
+            [ /\.createPostOnlyOrder\s/g, '.create_post_only_order'],
+            [ /\.createStopOrder\s/g, '.create_stop_order'],
+            [ /\.createStopLimitOrder\s/g, '.create_stop_limit_order'],
+            [ /\.createStopMarketOrder\s/g, '.create_stop_market_order'],
             [ /\.editLimitBuyOrder\s/g, '.edit_limit_buy_order'],
             [ /\.editLimitSellOrder\s/g, '.edit_limit_sell_order'],
             [ /\.editLimitOrder\s/g, '.edit_limit_order'],
@@ -165,6 +171,7 @@ class Transpiler {
             [ /errorHierarchy/g, 'error_hierarchy'],
             [ /\.base16ToBinary/g, '.base16_to_binary'],
             [ /\'use strict\';?\s+/g, '' ],
+            [ /\.urlencodeNested\s/g, '.urlencode_nested' ],
             [ /\.urlencodeWithArrayRepeat\s/g, '.urlencode_with_array_repeat' ],
             [ /\.call\s*\(this, /g, '(' ],
             [ /\.getSupportedMapping\s/g, '.get_supported_mapping'],
@@ -657,7 +664,7 @@ class Transpiler {
         const libraries = []
 
         for (let library in pythonStandardLibraries) {
-            const regex = new RegExp ("[^\\'a-zA-Z]" + library + "[^\\'a-zA-Z]")
+            const regex = new RegExp ("[^\\'\\\"a-zA-Z]" + library + "[^\\'\\\"a-zA-Z]")
             if (bodyAsString.match (regex))
                 libraries.push ('import ' + pythonStandardLibraries[library])
         }

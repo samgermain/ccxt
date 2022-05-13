@@ -38,6 +38,9 @@ class okx extends Exchange {
                 'createDepositAddress' => null,
                 'createOrder' => true,
                 'createReduceOnlyOrder' => null,
+                'createStopLimitOrder' => true,
+                'createStopMarketOrder' => true,
+                'createStopOrder' => true,
                 'fetchAccounts' => true,
                 'fetchBalance' => true,
                 'fetchBidsAsks' => null,
@@ -55,8 +58,6 @@ class okx extends Exchange {
                 'fetchDepositAddresses' => null,
                 'fetchDepositAddressesByNetwork' => true,
                 'fetchDeposits' => true,
-                'fetchFundingFee' => null,
-                'fetchFundingFees' => null,
                 'fetchFundingHistory' => true,
                 'fetchFundingRate' => true,
                 'fetchFundingRateHistory' => true,
@@ -93,6 +94,8 @@ class okx extends Exchange {
                 'fetchTradingFee' => true,
                 'fetchTradingFees' => null,
                 'fetchTradingLimits' => null,
+                'fetchTransactionFee' => null,
+                'fetchTransactionFees' => null,
                 'fetchTransactions' => null,
                 'fetchTransfer' => true,
                 'fetchTransfers' => false,
@@ -262,6 +265,8 @@ class okx extends Exchange {
                         'asset/purchase_redempt' => 5 / 3,
                         'asset/withdrawal-lightning' => 5,
                         'asset/set-lending-rate' => 5 / 3,
+                        'asset/cancel-withdrawal' => 5 / 3,
+                        'asset/convert-dust-assets' => 10,
                         'trade/order' => 1 / 3,
                         'trade/batch-orders' => 1 / 15,
                         'trade/cancel-order' => 1 / 3,
@@ -276,6 +281,7 @@ class okx extends Exchange {
                         'users/subaccount/modify-apikey' => 10,
                         'users/subaccount/apikey' => 10,
                         'asset/subaccount/transfer' => 10,
+                        'asset/subaccount/set-transfer-out' => 10,
                         // broker
                         'broker/nd/create-subaccount' => 10,
                         'broker/nd/delete-subaccount' => 10,
@@ -649,9 +655,8 @@ class okx extends Exchange {
                     'swap' => '9',
                     'option' => '12',
                     'trading' => '18', // unified trading account
-                    'unified' => '18',
                 ),
-                'typesByAccount' => array(
+                'accountsById' => array(
                     '1' => 'spot',
                     '3' => 'future',
                     '5' => 'margin',
@@ -708,8 +713,11 @@ class okx extends Exchange {
     public function fetch_status($params = array ()) {
         $response = $this->publicGetSystemStatus ($params);
         //
+        // Note, if there is no maintenance around, the 'data' array is empty
+        //
         //     {
         //         "code" => "0",
+        //         "msg" => "",
         //         "data" => array(
         //             array(
         //                 "begin" => "1621328400000",
@@ -721,16 +729,17 @@ class okx extends Exchange {
         //                 "system" => "classic", // classic, unified
         //                 "title" => "Classic Spot System Upgrade"
         //             ),
-        //         ),
-        //         "msg" => ""
+        //         )
         //     }
         //
         $data = $this->safe_value($response, 'data', array());
+        $dataLength = is_array($data) ? count($data) : 0;
         $timestamp = $this->milliseconds();
         $update = array(
             'updated' => $timestamp,
-            'status' => 'ok',
+            'status' => ($dataLength === 0) ? 'ok' : 'maintenance',
             'eta' => null,
+            'url' => null,
             'info' => $response,
         );
         for ($i = 0; $i < count($data); $i++) {
@@ -741,8 +750,7 @@ class okx extends Exchange {
                 $update['status'] = 'maintenance';
             }
         }
-        $this->status = array_merge($this->status, $update);
-        return $this->status;
+        return $update;
     }
 
     public function fetch_time($params = array ()) {
@@ -977,7 +985,7 @@ class okx extends Exchange {
             $defaultUnderlying = $this->safe_value($this->options, 'defaultUnderlying', 'BTC-USD');
             $currencyId = $this->safe_string_2($params, 'uly', 'marketId', $defaultUnderlying);
             if ($currencyId === null) {
-                throw new ArgumentsRequired($this->id . ' fetchMarketsByType requires an underlying uly or marketId parameter for options markets');
+                throw new ArgumentsRequired($this->id . ' fetchMarketsByType() requires an underlying uly or marketId parameter for options markets');
             } else {
                 $request['uly'] = $currencyId;
             }
@@ -1286,7 +1294,7 @@ class okx extends Exchange {
             $defaultUnderlying = $this->safe_value($this->options, 'defaultUnderlying', 'BTC-USD');
             $currencyId = $this->safe_string_2($params, 'uly', 'marketId', $defaultUnderlying);
             if ($currencyId === null) {
-                throw new ArgumentsRequired($this->id . ' fetchTickersByType requires an underlying uly or marketId parameter for options markets');
+                throw new ArgumentsRequired($this->id . ' fetchTickersByType() requires an underlying uly or marketId parameter for options markets');
             } else {
                 $request['uly'] = $currencyId;
             }
@@ -1659,7 +1667,7 @@ class okx extends Exchange {
         } else if ($market['swap'] || $market['future'] || $market['option']) {
             $request['uly'] = $market['baseId'] . '-' . $market['quoteId'];
         } else {
-            throw new NotSupported($this->id . ' fetchTradingFee supports spot, swap, future or option markets only');
+            throw new NotSupported($this->id . ' fetchTradingFee() supports spot, swap, future or option markets only');
         }
         $response = $this->privateGetAccountTradeFee (array_merge($request, $params));
         //
@@ -3708,7 +3716,7 @@ class okx extends Exchange {
                 $result[] = $this->parse_position($positions[$i]);
             }
         }
-        return $result;
+        return $this->filter_by_array($result, 'symbol', $symbols, false);
     }
 
     public function parse_position($position, $market = null) {
@@ -3779,17 +3787,17 @@ class okx extends Exchange {
             $notionalString = Precise::string_div(Precise::string_mul($contractsAbs, $contractSizeString), $markPriceString);
         }
         $notional = $this->parse_number($notionalString);
-        $marginType = $this->safe_string($position, 'mgnMode');
+        $marginMode = $this->safe_string($position, 'mgnMode');
         $initialMarginString = null;
         $entryPriceString = $this->safe_string($position, 'avgPx');
         $unrealizedPnlString = $this->safe_string($position, 'upl');
         $leverageString = $this->safe_string($position, 'lever');
         $initialMarginPercentage = null;
         $collateralString = null;
-        if ($marginType === 'cross') {
+        if ($marginMode === 'cross') {
             $initialMarginString = $this->safe_string($position, 'imr');
             $collateralString = Precise::string_add($initialMarginString, $unrealizedPnlString);
-        } else if ($marginType === 'isolated') {
+        } else if ($marginMode === 'isolated') {
             $initialMarginPercentage = Precise::string_div('1', $leverageString);
             $collateralString = $this->safe_string($position, 'margin');
         }
@@ -3812,7 +3820,8 @@ class okx extends Exchange {
             'info' => $position,
             'symbol' => $symbol,
             'notional' => $notional,
-            'marginType' => $marginType,
+            'marginMode' => $marginMode,
+            'marginType' => $marginMode, // deprecated
             'liquidationPrice' => $liquidationPrice,
             'entryPrice' => $this->parse_number($entryPriceString),
             'unrealizedPnl' => $this->parse_number($unrealizedPnlString),
@@ -3838,16 +3847,8 @@ class okx extends Exchange {
         $this->load_markets();
         $currency = $this->currency($code);
         $accountsByType = $this->safe_value($this->options, 'accountsByType', array());
-        $fromId = $this->safe_string($accountsByType, $fromAccount);
-        $toId = $this->safe_string($accountsByType, $toAccount);
-        if ($fromId === null) {
-            $keys = is_array($accountsByType) ? array_keys($accountsByType) : array();
-            throw new ExchangeError($this->id . ' $fromAccount must be one of ' . implode(', ', $keys));
-        }
-        if ($toId === null) {
-            $keys = is_array($accountsByType) ? array_keys($accountsByType) : array();
-            throw new ExchangeError($this->id . ' $toAccount must be one of ' . implode(', ', $keys));
-        }
+        $fromId = $this->safe_string($accountsByType, $fromAccount, $fromAccount);
+        $toId = $this->safe_string($accountsByType, $toAccount, $toAccount);
         $request = array(
             'ccy' => $currency['id'],
             'amt' => $this->currency_to_precision($code, $amount),
@@ -3858,6 +3859,17 @@ class okx extends Exchange {
             // 'instId' => market['id'], // required when from is 3, 5 or 9, margin trading pair like BTC-USDT or contract underlying like BTC-USD to be transferred out
             // 'toInstId' => market['id'], // required when from is 3, 5 or 9, margin trading pair like BTC-USDT or contract underlying like BTC-USD to be transferred in
         );
+        if ($fromId === 'master') {
+            $request['type'] = '1';
+            $request['subAcct'] = $toId;
+            $request['from'] = $this->safe_string($params, 'from', '6');
+            $request['to'] = $this->safe_string($params, 'to', '6');
+        } else if ($toId === 'master') {
+            $request['type'] = '2';
+            $request['subAcct'] = $fromId;
+            $request['from'] = $this->safe_string($params, 'from', '6');
+            $request['to'] = $this->safe_string($params, 'to', '6');
+        }
         $response = $this->privatePostAssetTransfer (array_merge($request, $params));
         //
         //     {
@@ -3912,9 +3924,9 @@ class okx extends Exchange {
         $amount = $this->safe_number($transfer, 'amt');
         $fromAccountId = $this->safe_string($transfer, 'from');
         $toAccountId = $this->safe_string($transfer, 'to');
-        $typesByAccount = $this->safe_value($this->options, 'typesByAccount', array());
-        $fromAccount = $this->safe_string($typesByAccount, $fromAccountId);
-        $toAccount = $this->safe_string($typesByAccount, $toAccountId);
+        $accountsById = $this->safe_value($this->options, 'accountsById', array());
+        $fromAccount = $this->safe_string($accountsById, $fromAccountId);
+        $toAccount = $this->safe_string($accountsById, $toAccountId);
         $timestamp = $this->milliseconds();
         $status = $this->safe_string($transfer, 'state');
         return array(
@@ -4048,7 +4060,7 @@ class okx extends Exchange {
         $this->load_markets();
         $market = $this->market($symbol);
         if (!$market['swap']) {
-            throw new ExchangeError($this->id . ' fetchFundingRate is only valid for swap markets');
+            throw new ExchangeError($this->id . ' fetchFundingRate() is only valid for swap markets');
         }
         $request = array(
             'instId' => $market['id'],
@@ -4230,14 +4242,14 @@ class okx extends Exchange {
         // WARNING => THIS WILL INCREASE LIQUIDATION PRICE FOR OPEN ISOLATED LONG POSITIONS
         // AND DECREASE LIQUIDATION PRICE FOR OPEN ISOLATED SHORT POSITIONS
         if (($leverage < 1) || ($leverage > 125)) {
-            throw new BadRequest($this->id . ' setLeverage $leverage should be between 1 and 125');
+            throw new BadRequest($this->id . ' setLeverage() $leverage should be between 1 and 125');
         }
         $this->load_markets();
         $market = $this->market($symbol);
         $marginMode = $this->safe_string_lower($params, 'mgnMode');
         $params = $this->omit($params, array( 'mgnMode' ));
         if (($marginMode !== 'cross') && ($marginMode !== 'isolated')) {
-            throw new BadRequest($this->id . ' setLeverage $params["mgnMode"] must be either cross or isolated');
+            throw new BadRequest($this->id . ' setLeverage() $params["mgnMode"] must be either cross or isolated');
         }
         $request = array(
             'lever' => $leverage,
@@ -4287,26 +4299,26 @@ class okx extends Exchange {
         return $response;
     }
 
-    public function set_margin_mode($marginType, $symbol = null, $params = array ()) {
+    public function set_margin_mode($marginMode, $symbol = null, $params = array ()) {
         if ($symbol === null) {
             throw new ArgumentsRequired($this->id . ' setLeverage() requires a $symbol argument');
         }
         // WARNING => THIS WILL INCREASE LIQUIDATION PRICE FOR OPEN ISOLATED LONG POSITIONS
         // AND DECREASE LIQUIDATION PRICE FOR OPEN ISOLATED SHORT POSITIONS
-        $marginType = strtolower($marginType);
-        if (($marginType !== 'cross') && ($marginType !== 'isolated')) {
-            throw new BadRequest($this->id . ' setMarginMode $marginType must be either cross or isolated');
+        $marginMode = strtolower($marginMode);
+        if (($marginMode !== 'cross') && ($marginMode !== 'isolated')) {
+            throw new BadRequest($this->id . ' setMarginMode() $marginMode must be either cross or isolated');
         }
         $this->load_markets();
         $market = $this->market($symbol);
         $lever = $this->safe_integer($params, 'lever');
         if (($lever === null) || ($lever < 1) || ($lever > 125)) {
-            throw new BadRequest($this->id . ' setMarginMode $params["lever"] should be between 1 and 125');
+            throw new BadRequest($this->id . ' setMarginMode() $params["lever"] should be between 1 and 125');
         }
         $params = $this->omit($params, array( 'lever' ));
         $request = array(
             'lever' => $lever,
-            'mgnMode' => $marginType,
+            'mgnMode' => $marginMode,
             'instId' => $market['id'],
         );
         $response = $this->privatePostAccountSetLeverage (array_merge($request, $params));
@@ -4542,22 +4554,26 @@ class okx extends Exchange {
         //       "msg" => ""
         //     }
         //
-        $data = $this->safe_value($response, 'data', array());
-        $entry = $this->safe_value($data, 0, array());
-        $errorCode = $this->safe_string($response, 'code');
+        return $this->parse_modify_margin($response, $market);
+    }
+
+    public function parse_modify_margin($data, $market = null) {
+        $innerData = $this->safe_value($data, 'data', array());
+        $entry = $this->safe_value($innerData, 0, array());
+        $errorCode = $this->safe_string($data, 'code');
         $status = ($errorCode === '0') ? 'ok' : 'failed';
-        $responseAmount = $this->safe_number($entry, 'amt');
-        $responseType = $this->safe_string($entry, 'type');
+        $amountRaw = $this->safe_number($entry, 'amt');
+        $typeRaw = $this->safe_string($entry, 'type');
+        $type = ($typeRaw === 'reduce') ? 'reduce' : 'add';
         $marketId = $this->safe_string($entry, 'instId');
         $responseMarket = $this->safe_market($marketId, $market);
         $code = $responseMarket['inverse'] ? $responseMarket['base'] : $responseMarket['quote'];
-        $symbol = $responseMarket['symbol'];
         return array(
-            'info' => $response,
-            'type' => $responseType,
-            'amount' => $responseAmount,
+            'info' => $data,
+            'type' => $type,
+            'amount' => $amountRaw,
             'code' => $code,
-            'symbol' => $symbol,
+            'symbol' => $responseMarket['symbol'],
             'status' => $status,
         );
     }
@@ -4709,16 +4725,18 @@ class okx extends Exchange {
 
     public function parse_borrow_interest($info, $market = null) {
         $instId = $this->safe_string($info, 'instId');
-        $account = 'cross'; // todo rename it to margin/marginType and separate it from the symbol
+        $account = 'cross'; // todo rename it to margin/marginMode and separate it from the symbol
         if ($instId !== null) {
             $market = $this->safe_market($instId, $market);
             $account = $this->safe_string($market, 'symbol');
         }
         $timestamp = $this->safe_number($info, 'ts');
+        $marginMode = ($instId === null) ? 'cross' : 'isolated';
         return array(
             'account' => $account, // deprecated
             'symbol' => $this->safe_string($market, 'symbol'),
-            'marginType' => ($instId === null) ? 'cross' : 'isolated',
+            'marginType' => $marginMode, // deprecated
+            'marginMode' => $marginMode,
             'currency' => $this->safe_currency_code($this->safe_string($info, 'ccy')),
             'interest' => $this->safe_number($info, 'interest'),
             'interestRate' => $this->safe_number($info, 'interestRate'),

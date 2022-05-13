@@ -37,6 +37,9 @@ class kucoin extends Exchange {
                 'cancelOrder' => true,
                 'createDepositAddress' => true,
                 'createOrder' => true,
+                'createStopLimitOrder' => true,
+                'createStopMarketOrder' => true,
+                'createStopOrder' => true,
                 'fetchAccounts' => true,
                 'fetchBalance' => true,
                 'fetchBorrowRate' => false,
@@ -45,7 +48,6 @@ class kucoin extends Exchange {
                 'fetchCurrencies' => true,
                 'fetchDepositAddress' => true,
                 'fetchDeposits' => true,
-                'fetchFundingFee' => true,
                 'fetchFundingHistory' => false,
                 'fetchFundingRate' => false,
                 'fetchFundingRateHistory' => false,
@@ -69,6 +71,7 @@ class kucoin extends Exchange {
                 'fetchTrades' => true,
                 'fetchTradingFee' => true,
                 'fetchTradingFees' => false,
+                'fetchTransactionFee' => true,
                 'fetchWithdrawals' => true,
                 'transfer' => true,
                 'withdraw' => true,
@@ -77,8 +80,8 @@ class kucoin extends Exchange {
                 'logo' => 'https://user-images.githubusercontent.com/51840849/87295558-132aaf80-c50e-11ea-9801-a2fb0c57c799.jpg',
                 'referral' => 'https://www.kucoin.com/?rcode=E5wkqe',
                 'api' => array(
-                    'public' => 'https://openapi-v2.kucoin.com',
-                    'private' => 'https://openapi-v2.kucoin.com',
+                    'public' => 'https://api.kucoin.com',
+                    'private' => 'https://api.kucoin.com',
                     'futuresPrivate' => 'https://api-futures.kucoin.com',
                     'futuresPublic' => 'https://api-futures.kucoin.com',
                 ),
@@ -305,10 +308,12 @@ class kucoin extends Exchange {
                     '400007' => '\\ccxt\\AuthenticationError',
                     '400008' => '\\ccxt\\NotSupported',
                     '400100' => '\\ccxt\\BadRequest',
+                    '400200' => '\\ccxt\\InvalidOrder', // array("code":"400200","msg":"Forbidden to place an order")
                     '400350' => '\\ccxt\\InvalidOrder', // array("code":"400350","msg":"Upper limit for holding => 10,000USDT, you can still buy 10,000USDT worth of coin.")
                     '400370' => '\\ccxt\\InvalidOrder', // array("code":"400370","msg":"Max. price => 0.02500000000000000000")
                     '400500' => '\\ccxt\\InvalidOrder', // array("code":"400500","msg":"Your located country/region is currently not supported for the trading of this token")
                     '400600' => '\\ccxt\\BadSymbol', // array("code":"400600","msg":"validation.createOrder.symbolNotAvailable")
+                    '400760' => '\\ccxt\\InvalidOrder', // array("code":"400760","msg":"order price should be more than XX")
                     '401000' => '\\ccxt\\BadRequest', // array("code":"401000","msg":"The interface has been deprecated")
                     '411100' => '\\ccxt\\AccountSuspended',
                     '415000' => '\\ccxt\\BadRequest', // array("code":"415000","msg":"Unsupported Media Type")
@@ -385,6 +390,7 @@ class kucoin extends Exchange {
                 'versions' => array(
                     'public' => array(
                         'GET' => array(
+                            'currencies/{currency}' => 'v2',
                             'status' => 'v1',
                             'market/orderbook/level2_20' => 'v1',
                             'market/orderbook/level2_100' => 'v1',
@@ -418,17 +424,12 @@ class kucoin extends Exchange {
                     ),
                 ),
                 'accountsByType' => array(
-                    'trade' => 'trade',
-                    'trading' => 'trade',
                     'spot' => 'trade',
                     'margin' => 'margin',
                     'main' => 'main',
                     'funding' => 'main',
                     'future' => 'contract',
-                    'futures' => 'contract',
-                    'contract' => 'contract',
-                    'pool' => 'pool',
-                    'pool-x' => 'pool',
+                    'mining' => 'pool',
                 ),
                 'networks' => array(
                     'ETH' => 'eth',
@@ -464,22 +465,20 @@ class kucoin extends Exchange {
         //     {
         //         "code":"200000",
         //         "data":{
-        //             "msg":"",
-        //             "status":"open"
+        //             "status":"open", //open, close, cancelonly
+        //             "msg":"upgrade match engine" //remark for operation
         //         }
         //     }
         //
         $data = $this->safe_value($response, 'data', array());
-        $status = $this->safe_value($data, 'status');
-        if ($status !== null) {
-            $status = ($status === 'open') ? 'ok' : 'maintenance';
-            $this->status = array_merge($this->status, array(
-                'status' => $status,
-                'updated' => $this->milliseconds(),
-                'info' => $response,
-            ));
-        }
-        return $this->status;
+        $status = $this->safe_string($data, 'status');
+        return array(
+            'status' => ($status === 'open') ? 'ok' : 'maintenance',
+            'updated' => $this->milliseconds(),
+            'eta' => null,
+            'url' => null,
+            'info' => $response,
+        );
     }
 
     public function fetch_markets($params = array ()) {
@@ -708,7 +707,7 @@ class kucoin extends Exchange {
         return $result;
     }
 
-    public function fetch_funding_fee($code, $params = array ()) {
+    public function fetch_transaction_fee($code, $params = array ()) {
         $this->load_markets();
         $currency = $this->currency($code);
         $request = array(
@@ -738,7 +737,7 @@ class kucoin extends Exchange {
         $type = $this->safe_string($accountsByType, $requestedType);
         if ($type === null) {
             $keys = is_array($accountsByType) ? array_keys($accountsByType) : array();
-            throw new ExchangeError($this->id . ' $type must be one of ' . implode(', ', $keys));
+            throw new ExchangeError($this->id . ' isFuturesMethod() $type must be one of ' . implode(', ', $keys));
         }
         $params = $this->omit($params, 'type');
         return ($type === 'contract') || ($type === 'future') || ($type === 'futures'); // * ($type === 'futures') deprecated, use ($type === 'future')
@@ -998,6 +997,7 @@ class kucoin extends Exchange {
         return array(
             'info' => $response,
             'currency' => $code,
+            'network' => $this->safe_string($data, 'chain'),
             'address' => $address,
             'tag' => $tag,
         );
@@ -1026,6 +1026,9 @@ class kucoin extends Exchange {
         $data = $this->safe_value($response, 'data', array());
         $address = $this->safe_string($data, 'address');
         $tag = $this->safe_string($data, 'memo');
+        if ($tag === '') {
+            $tag = null;
+        }
         if ($code !== 'NIM') {
             // contains spaces
             $this->check_address($address);
@@ -1035,7 +1038,7 @@ class kucoin extends Exchange {
             'currency' => $code,
             'address' => $address,
             'tag' => $tag,
-            'network' => null,
+            'network' => $network,
         );
     }
 
@@ -1054,7 +1057,7 @@ class kucoin extends Exchange {
                     if (($limit === 20) || ($limit === 100)) {
                         $request['limit'] = $limit;
                     } else {
-                        throw new ExchangeError($this->id . ' fetchOrderBook $limit argument must be 20 or 100');
+                        throw new ExchangeError($this->id . ' fetchOrderBook() $limit argument must be 20 or 100');
                     }
                 }
                 $request['limit'] = $limit ? $limit : 100;
@@ -1573,7 +1576,7 @@ class kucoin extends Exchange {
                 $request['startAt'] = intval($since / 1000);
             }
         } else {
-            throw new ExchangeError($this->id . ' invalid fetchClosedOrder method');
+            throw new ExchangeError($this->id . ' fetchMyTradesMethod() invalid method');
         }
         $response = $this->$method (array_merge($request, $params));
         //
@@ -2113,14 +2116,10 @@ class kucoin extends Exchange {
 
     public function fetch_balance($params = array ()) {
         $this->load_markets();
-        $defaultType = $this->safe_string_2($this->options, 'fetchBalance', 'defaultType', 'trade');
+        $defaultType = $this->safe_string_2($this->options, 'fetchBalance', 'defaultType', 'spot');
         $requestedType = $this->safe_string($params, 'type', $defaultType);
         $accountsByType = $this->safe_value($this->options, 'accountsByType');
-        $type = $this->safe_string($accountsByType, $requestedType);
-        if ($type === null) {
-            $keys = is_array($accountsByType) ? array_keys($accountsByType) : array();
-            throw new ExchangeError($this->id . ' $type must be one of ' . implode(', ', $keys));
-        }
+        $type = $this->safe_string($accountsByType, $requestedType, $requestedType);
         $params = $this->omit($params, 'type');
         $request = array(
             'type' => $type,
@@ -2163,19 +2162,11 @@ class kucoin extends Exchange {
         $currency = $this->currency($code);
         $requestedAmount = $this->currency_to_precision($code, $amount);
         $accountsById = $this->safe_value($this->options, 'accountsByType', array());
-        $fromId = $this->safe_string($accountsById, $fromAccount);
-        if ($fromId === null) {
-            $keys = is_array($accountsById) ? array_keys($accountsById) : array();
-            throw new ExchangeError($this->id . ' $fromAccount must be one of ' . implode(', ', $keys));
-        }
-        $toId = $this->safe_string($accountsById, $toAccount);
-        if ($toId === null) {
-            $keys = is_array($accountsById) ? array_keys($accountsById) : array();
-            throw new ExchangeError($this->id . ' $toAccount must be one of ' . implode(', ', $keys));
-        }
+        $fromId = $this->safe_string($accountsById, $fromAccount, $fromAccount);
+        $toId = $this->safe_string($accountsById, $toAccount, $toAccount);
         if ($fromId === 'contract') {
             if ($toId !== 'main') {
-                throw new ExchangeError($this->id . ' only supports transferring from futures account to main account');
+                throw new ExchangeError($this->id . ' transfer() only supports transferring from futures account to main account');
             }
             $request = array(
                 'currency' => $currency['id'],
@@ -2514,7 +2505,7 @@ class kucoin extends Exchange {
         $headers = ($headers !== null) ? $headers : array();
         if ($query) {
             if (($method === 'GET') || ($method === 'DELETE')) {
-                $endpoint .= '?' . $this->urlencode($query);
+                $endpoint .= '?' . $this->rawencode($query);
             } else {
                 $body = $this->json($query);
                 $endpart = $body;

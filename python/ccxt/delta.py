@@ -41,7 +41,9 @@ class delta(Exchange):
                 'fetchBalance': True,
                 'fetchClosedOrders': True,
                 'fetchCurrencies': True,
+                'fetchDeposit': None,
                 'fetchDepositAddress': True,
+                'fetchDeposits': None,
                 'fetchLedger': True,
                 'fetchLeverageTiers': False,  # An infinite number of tiers, see examples/js/delta-maintenance-margin-rate-max-leverage.js
                 'fetchMarketLeverageTiers': False,
@@ -57,6 +59,12 @@ class delta(Exchange):
                 'fetchTickers': True,
                 'fetchTime': True,
                 'fetchTrades': True,
+                'fetchTransfer': None,
+                'fetchTransfers': None,
+                'fetchWithdrawal': None,
+                'fetchWithdrawals': None,
+                'transfer': False,
+                'withdraw': False,
             },
             'timeframes': {
                 '1m': '1m',
@@ -194,35 +202,76 @@ class delta(Exchange):
 
     def fetch_time(self, params={}):
         response = self.publicGetSettings(params)
-        #
-        #     {
-        #         "result":{
-        #             "server_time":1605472733766141,
-        #             "deto_referral_mining_daily_reward":"25000",
-        #             "deto_total_reward_pool":"100000000",
-        #             "deto_trade_mining_daily_reward":"75000",
-        #             "kyc_deposit_limit":"20",
-        #             "kyc_withdrawal_limit":"2",
-        #             "under_maintenance":"false"
-        #         },
-        #         "success":true
-        #     }
-        #
+        # full response sample under `fetchStatus`
         result = self.safe_value(response, 'result', {})
         return self.safe_integer_product(result, 'server_time', 0.001)
 
     def fetch_status(self, params={}):
         response = self.publicGetSettings(params)
+        #
+        #     {
+        #         "result": {
+        #           "deto_liquidity_mining_daily_reward": "40775",
+        #           "deto_msp": "1.0",
+        #           "deto_staking_daily_reward": "23764.08",
+        #           "enabled_wallets": [
+        #             "BTC",
+        #             ...
+        #           ],
+        #           "portfolio_margin_params": {
+        #             "enabled_portfolios": {
+        #               ".DEAVAXUSDT": {
+        #                 "asset_id": 5,
+        #                 "futures_contingency_margin_percent": "1",
+        #                 "interest_rate": "0",
+        #                 "maintenance_margin_multiplier": "0.8",
+        #                 "max_price_shock": "20",
+        #                 "max_short_notional_limit": "2000",
+        #                 "options_contingency_margin_percent": "1",
+        #                 "options_discount_range": "10",
+        #                 "options_liq_band_range_percentage": "25",
+        #                 "settling_asset": "USDT",
+        #                 "sort_priority": 5,
+        #                 "underlying_asset": "AVAX",
+        #                 "volatility_down_shock": "30",
+        #                 "volatility_up_shock": "45"
+        #               },
+        #               ...
+        #             },
+        #             "portfolio_enabled_contracts": [
+        #               "futures",
+        #               "perpetual_futures",
+        #               "call_options",
+        #               "put_options"
+        #             ]
+        #           },
+        #           "server_time": 1650640673500273,
+        #           "trade_farming_daily_reward": "100000",
+        #           "circulating_supply": "140000000",
+        #           "circulating_supply_update_time": "1636752800",
+        #           "deto_referral_mining_daily_reward": "0",
+        #           "deto_total_reward_pool": "100000000",
+        #           "deto_trade_mining_daily_reward": "0",
+        #           "kyc_deposit_limit": "20",
+        #           "kyc_withdrawal_limit": "10000",
+        #           "maintenance_start_time": "1650387600000000",
+        #           "msp_deto_commission_percent": "25",
+        #           "under_maintenance": "false"
+        #         },
+        #         "success": True
+        #     }
+        #
         result = self.safe_value(response, 'result', {})
-        underMaintenance = self.safe_value(result, 'under_maintenance')
+        underMaintenance = self.safe_string(result, 'under_maintenance')
         status = 'maintenance' if (underMaintenance == 'true') else 'ok'
-        updated = self.safe_integer_product(result, 'server_time', 0.001)
-        self.status = self.extend(self.status, {
+        updated = self.safe_integer_product(result, 'server_time', 0.001, self.milliseconds())
+        return {
             'status': status,
             'updated': updated,
+            'eta': None,
+            'url': None,
             'info': response,
-        })
-        return self.status
+        }
 
     def fetch_currencies(self, params={}):
         response = self.publicGetAssets(params)

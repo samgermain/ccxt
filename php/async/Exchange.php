@@ -28,11 +28,11 @@ use Exception;
 
 include 'Throttle.php';
 
-$version = '1.80.32';
+$version = '1.82.28';
 
 class Exchange extends \ccxt\Exchange {
 
-    const VERSION = '1.80.32';
+    const VERSION = '1.82.28';
 
     public static $loop;
     public static $kernel;
@@ -296,6 +296,30 @@ class Exchange extends \ccxt\Exchange {
         return $this->status;
     }
 
+    public function create_limit_order($symbol, $side, $amount, $price, $params = array()) {
+        return yield $this->create_order($symbol, 'limit', $side, $amount, $price, $params);
+    }
+
+    public function create_market_order($symbol, $side, $amount, $price = null, $params = array()) {
+        return yield $this->create_order($symbol, 'market', $side, $amount, $price, $params);
+    }
+
+    public function create_limit_buy_order($symbol, $amount, $price, $params = array()) {
+        return yield $this->create_order($symbol, 'limit', 'buy', $amount, $price, $params);
+    }
+
+    public function create_limit_sell_order($symbol, $amount, $price, $params = array()) {
+        return yield $this->create_order($symbol, 'limit', 'sell', $amount, $price, $params);
+    }
+
+    public function create_market_buy_order($symbol, $amount, $params = array()) {
+        return yield $this->create_order($symbol, 'market', 'buy', $amount, null, $params);
+    }
+
+    public function create_market_sell_order($symbol, $amount, $params = array()) {
+        return yield $this->create_order($symbol, 'market', 'sell', $amount, null, $params);
+    }
+
     public function edit_order($id, $symbol, $type, $side, $amount, $price = null, $params = array()) {
         if (!$this->enableRateLimit) {
             throw new ExchangeError($this->id . ' edit_order() requires enableRateLimit = true');
@@ -351,7 +375,7 @@ class Exchange extends \ccxt\Exchange {
             throw new NotSupported($this->id . ' fetch_market_leverage_tiers() is not supported yet');
         }
     }
-    
+
     public function sleep($milliseconds) {
         $time = $milliseconds / 1000;
         $loop = $this->get_loop();
@@ -370,5 +394,35 @@ class Exchange extends \ccxt\Exchange {
         $array = array('postOnly' => true);
         $query = $this->extend($params, $array);
         return yield $this->create_order($symbol, $type, $side, $amount, $price, $params);
+    }
+
+    public function create_stop_order($symbol, $type, $side, $amount, $price = null, $stopPrice = null, $params = array()) {
+        if (!$this->has['createStopOrder']) {
+            throw new NotSupported($this->id . ' create_stop_order() is not supported yet');
+        }
+        if ($stopPrice === null) {
+            throw new ArgumentsRequired($this->id . ' create_stop_order() requires a stopPrice argument');
+        }
+        $array = array('stopPrice' => $stopPrice);
+        $query = $this->extend($params, $array);
+        return yield $this->create_order($symbol, $type, $side, $amount, $price, $query);
+    }
+
+    public function create_stop_limit_order($symbol, $side, $amount, $price, $stopPrice, $params = array()) {
+        if (!$this->has['createStopLimitOrder']) {
+            throw new NotSupported($this->id . ' create_stop_limit_order() is not supported yet');
+        }
+        $array = array('stopPrice' => $stopPrice);
+        $query = $this->extend($params, $array);
+        return yield $this->create_order($symbol, 'limit', $side, $amount, $price, $query);
+    }
+
+    public function create_stop_market_order($symbol, $side, $amount, $stopPrice, $params = array()) {
+        if (!$this->has['createStopMarketOrder']) {
+            throw new NotSupported($this->id . ' create_stop_market_order() is not supported yet');
+        }
+        $array = array('stopPrice' => $stopPrice);
+        $query = $this->extend($params, $array);
+        return yield $this->create_order($symbol, 'market', $side, $amount, null, $query);
     }
 }

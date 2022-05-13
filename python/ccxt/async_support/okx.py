@@ -56,6 +56,9 @@ class okx(Exchange):
                 'createDepositAddress': None,
                 'createOrder': True,
                 'createReduceOnlyOrder': None,
+                'createStopLimitOrder': True,
+                'createStopMarketOrder': True,
+                'createStopOrder': True,
                 'fetchAccounts': True,
                 'fetchBalance': True,
                 'fetchBidsAsks': None,
@@ -73,8 +76,6 @@ class okx(Exchange):
                 'fetchDepositAddresses': None,
                 'fetchDepositAddressesByNetwork': True,
                 'fetchDeposits': True,
-                'fetchFundingFee': None,
-                'fetchFundingFees': None,
                 'fetchFundingHistory': True,
                 'fetchFundingRate': True,
                 'fetchFundingRateHistory': True,
@@ -111,6 +112,8 @@ class okx(Exchange):
                 'fetchTradingFee': True,
                 'fetchTradingFees': None,
                 'fetchTradingLimits': None,
+                'fetchTransactionFee': None,
+                'fetchTransactionFees': None,
                 'fetchTransactions': None,
                 'fetchTransfer': True,
                 'fetchTransfers': False,
@@ -280,6 +283,8 @@ class okx(Exchange):
                         'asset/purchase_redempt': 5 / 3,
                         'asset/withdrawal-lightning': 5,
                         'asset/set-lending-rate': 5 / 3,
+                        'asset/cancel-withdrawal': 5 / 3,
+                        'asset/convert-dust-assets': 10,
                         'trade/order': 1 / 3,
                         'trade/batch-orders': 1 / 15,
                         'trade/cancel-order': 1 / 3,
@@ -294,6 +299,7 @@ class okx(Exchange):
                         'users/subaccount/modify-apikey': 10,
                         'users/subaccount/apikey': 10,
                         'asset/subaccount/transfer': 10,
+                        'asset/subaccount/set-transfer-out': 10,
                         # broker
                         'broker/nd/create-subaccount': 10,
                         'broker/nd/delete-subaccount': 10,
@@ -667,9 +673,8 @@ class okx(Exchange):
                     'swap': '9',
                     'option': '12',
                     'trading': '18',  # unified trading account
-                    'unified': '18',
                 },
-                'typesByAccount': {
+                'accountsById': {
                     '1': 'spot',
                     '3': 'future',
                     '5': 'margin',
@@ -722,8 +727,11 @@ class okx(Exchange):
     async def fetch_status(self, params={}):
         response = await self.publicGetSystemStatus(params)
         #
+        # Note, if there is no maintenance around, the 'data' array is empty
+        #
         #     {
         #         "code": "0",
+        #         "msg": "",
         #         "data": [
         #             {
         #                 "begin": "1621328400000",
@@ -735,16 +743,17 @@ class okx(Exchange):
         #                 "system": "classic",  # classic, unified
         #                 "title": "Classic Spot System Upgrade"
         #             },
-        #         ],
-        #         "msg": ""
+        #         ]
         #     }
         #
         data = self.safe_value(response, 'data', [])
+        dataLength = len(data)
         timestamp = self.milliseconds()
         update = {
             'updated': timestamp,
-            'status': 'ok',
+            'status': 'ok' if (dataLength == 0) else 'maintenance',
             'eta': None,
+            'url': None,
             'info': response,
         }
         for i in range(0, len(data)):
@@ -753,8 +762,7 @@ class okx(Exchange):
             if state == 'ongoing':
                 update['eta'] = self.safe_integer(event, 'end')
                 update['status'] = 'maintenance'
-        self.status = self.extend(self.status, update)
-        return self.status
+        return update
 
     async def fetch_time(self, params={}):
         response = await self.publicGetPublicTime(params)
@@ -975,7 +983,7 @@ class okx(Exchange):
             defaultUnderlying = self.safe_value(self.options, 'defaultUnderlying', 'BTC-USD')
             currencyId = self.safe_string_2(params, 'uly', 'marketId', defaultUnderlying)
             if currencyId is None:
-                raise ArgumentsRequired(self.id + ' fetchMarketsByType requires an underlying uly or marketId parameter for options markets')
+                raise ArgumentsRequired(self.id + ' fetchMarketsByType() requires an underlying uly or marketId parameter for options markets')
             else:
                 request['uly'] = currencyId
         response = await self.publicGetPublicInstruments(self.extend(request, params))
@@ -1268,7 +1276,7 @@ class okx(Exchange):
             defaultUnderlying = self.safe_value(self.options, 'defaultUnderlying', 'BTC-USD')
             currencyId = self.safe_string_2(params, 'uly', 'marketId', defaultUnderlying)
             if currencyId is None:
-                raise ArgumentsRequired(self.id + ' fetchTickersByType requires an underlying uly or marketId parameter for options markets')
+                raise ArgumentsRequired(self.id + ' fetchTickersByType() requires an underlying uly or marketId parameter for options markets')
             else:
                 request['uly'] = currencyId
         response = await self.publicGetMarketTickers(self.extend(request, params))
@@ -1611,7 +1619,7 @@ class okx(Exchange):
         elif market['swap'] or market['future'] or market['option']:
             request['uly'] = market['baseId'] + '-' + market['quoteId']
         else:
-            raise NotSupported(self.id + ' fetchTradingFee supports spot, swap, future or option markets only')
+            raise NotSupported(self.id + ' fetchTradingFee() supports spot, swap, future or option markets only')
         response = await self.privateGetAccountTradeFee(self.extend(request, params))
         #
         #     {
@@ -3557,7 +3565,7 @@ class okx(Exchange):
             instrument = self.safe_string(entry, 'instType')
             if (instrument == 'FUTURES') or (instrument == 'SWAP'):
                 result.append(self.parse_position(positions[i]))
-        return result
+        return self.filter_by_array(result, 'symbol', symbols, False)
 
     def parse_position(self, position, market=None):
         #
@@ -3623,17 +3631,17 @@ class okx(Exchange):
         if market['inverse']:
             notionalString = Precise.string_div(Precise.string_mul(contractsAbs, contractSizeString), markPriceString)
         notional = self.parse_number(notionalString)
-        marginType = self.safe_string(position, 'mgnMode')
+        marginMode = self.safe_string(position, 'mgnMode')
         initialMarginString = None
         entryPriceString = self.safe_string(position, 'avgPx')
         unrealizedPnlString = self.safe_string(position, 'upl')
         leverageString = self.safe_string(position, 'lever')
         initialMarginPercentage = None
         collateralString = None
-        if marginType == 'cross':
+        if marginMode == 'cross':
             initialMarginString = self.safe_string(position, 'imr')
             collateralString = Precise.string_add(initialMarginString, unrealizedPnlString)
-        elif marginType == 'isolated':
+        elif marginMode == 'isolated':
             initialMarginPercentage = Precise.string_div('1', leverageString)
             collateralString = self.safe_string(position, 'margin')
         maintenanceMarginString = self.safe_string(position, 'mmr')
@@ -3654,7 +3662,8 @@ class okx(Exchange):
             'info': position,
             'symbol': symbol,
             'notional': notional,
-            'marginType': marginType,
+            'marginMode': marginMode,
+            'marginType': marginMode,  # deprecated
             'liquidationPrice': liquidationPrice,
             'entryPrice': self.parse_number(entryPriceString),
             'unrealizedPnl': self.parse_number(unrealizedPnlString),
@@ -3679,14 +3688,8 @@ class okx(Exchange):
         await self.load_markets()
         currency = self.currency(code)
         accountsByType = self.safe_value(self.options, 'accountsByType', {})
-        fromId = self.safe_string(accountsByType, fromAccount)
-        toId = self.safe_string(accountsByType, toAccount)
-        if fromId is None:
-            keys = list(accountsByType.keys())
-            raise ExchangeError(self.id + ' fromAccount must be one of ' + ', '.join(keys))
-        if toId is None:
-            keys = list(accountsByType.keys())
-            raise ExchangeError(self.id + ' toAccount must be one of ' + ', '.join(keys))
+        fromId = self.safe_string(accountsByType, fromAccount, fromAccount)
+        toId = self.safe_string(accountsByType, toAccount, toAccount)
         request = {
             'ccy': currency['id'],
             'amt': self.currency_to_precision(code, amount),
@@ -3697,6 +3700,16 @@ class okx(Exchange):
             # 'instId': market['id'],  # required when from is 3, 5 or 9, margin trading pair like BTC-USDT or contract underlying like BTC-USD to be transferred out
             # 'toInstId': market['id'],  # required when from is 3, 5 or 9, margin trading pair like BTC-USDT or contract underlying like BTC-USD to be transferred in
         }
+        if fromId == 'master':
+            request['type'] = '1'
+            request['subAcct'] = toId
+            request['from'] = self.safe_string(params, 'from', '6')
+            request['to'] = self.safe_string(params, 'to', '6')
+        elif toId == 'master':
+            request['type'] = '2'
+            request['subAcct'] = fromId
+            request['from'] = self.safe_string(params, 'from', '6')
+            request['to'] = self.safe_string(params, 'to', '6')
         response = await self.privatePostAssetTransfer(self.extend(request, params))
         #
         #     {
@@ -3750,9 +3763,9 @@ class okx(Exchange):
         amount = self.safe_number(transfer, 'amt')
         fromAccountId = self.safe_string(transfer, 'from')
         toAccountId = self.safe_string(transfer, 'to')
-        typesByAccount = self.safe_value(self.options, 'typesByAccount', {})
-        fromAccount = self.safe_string(typesByAccount, fromAccountId)
-        toAccount = self.safe_string(typesByAccount, toAccountId)
+        accountsById = self.safe_value(self.options, 'accountsById', {})
+        fromAccount = self.safe_string(accountsById, fromAccountId)
+        toAccount = self.safe_string(accountsById, toAccountId)
         timestamp = self.milliseconds()
         status = self.safe_string(transfer, 'state')
         return {
@@ -3877,7 +3890,7 @@ class okx(Exchange):
         await self.load_markets()
         market = self.market(symbol)
         if not market['swap']:
-            raise ExchangeError(self.id + ' fetchFundingRate is only valid for swap markets')
+            raise ExchangeError(self.id + ' fetchFundingRate() is only valid for swap markets')
         request = {
             'instId': market['id'],
         }
@@ -4049,13 +4062,13 @@ class okx(Exchange):
         # WARNING: THIS WILL INCREASE LIQUIDATION PRICE FOR OPEN ISOLATED LONG POSITIONS
         # AND DECREASE LIQUIDATION PRICE FOR OPEN ISOLATED SHORT POSITIONS
         if (leverage < 1) or (leverage > 125):
-            raise BadRequest(self.id + ' setLeverage leverage should be between 1 and 125')
+            raise BadRequest(self.id + ' setLeverage() leverage should be between 1 and 125')
         await self.load_markets()
         market = self.market(symbol)
         marginMode = self.safe_string_lower(params, 'mgnMode')
         params = self.omit(params, ['mgnMode'])
         if (marginMode != 'cross') and (marginMode != 'isolated'):
-            raise BadRequest(self.id + ' setLeverage params["mgnMode"] must be either cross or isolated')
+            raise BadRequest(self.id + ' setLeverage() params["mgnMode"] must be either cross or isolated')
         request = {
             'lever': leverage,
             'mgnMode': marginMode,
@@ -4101,23 +4114,23 @@ class okx(Exchange):
         #
         return response
 
-    async def set_margin_mode(self, marginType, symbol=None, params={}):
+    async def set_margin_mode(self, marginMode, symbol=None, params={}):
         if symbol is None:
             raise ArgumentsRequired(self.id + ' setLeverage() requires a symbol argument')
         # WARNING: THIS WILL INCREASE LIQUIDATION PRICE FOR OPEN ISOLATED LONG POSITIONS
         # AND DECREASE LIQUIDATION PRICE FOR OPEN ISOLATED SHORT POSITIONS
-        marginType = marginType.lower()
-        if (marginType != 'cross') and (marginType != 'isolated'):
-            raise BadRequest(self.id + ' setMarginMode marginType must be either cross or isolated')
+        marginMode = marginMode.lower()
+        if (marginMode != 'cross') and (marginMode != 'isolated'):
+            raise BadRequest(self.id + ' setMarginMode() marginMode must be either cross or isolated')
         await self.load_markets()
         market = self.market(symbol)
         lever = self.safe_integer(params, 'lever')
         if (lever is None) or (lever < 1) or (lever > 125):
-            raise BadRequest(self.id + ' setMarginMode params["lever"] should be between 1 and 125')
+            raise BadRequest(self.id + ' setMarginMode() params["lever"] should be between 1 and 125')
         params = self.omit(params, ['lever'])
         request = {
             'lever': lever,
-            'mgnMode': marginType,
+            'mgnMode': marginMode,
             'instId': market['id'],
         }
         response = await self.privatePostAccountSetLeverage(self.extend(request, params))
@@ -4335,22 +4348,25 @@ class okx(Exchange):
         #       "msg": ""
         #     }
         #
-        data = self.safe_value(response, 'data', [])
-        entry = self.safe_value(data, 0, {})
-        errorCode = self.safe_string(response, 'code')
+        return self.parse_modify_margin(response, market)
+
+    def parse_modify_margin(self, data, market=None):
+        innerData = self.safe_value(data, 'data', [])
+        entry = self.safe_value(innerData, 0, {})
+        errorCode = self.safe_string(data, 'code')
         status = 'ok' if (errorCode == '0') else 'failed'
-        responseAmount = self.safe_number(entry, 'amt')
-        responseType = self.safe_string(entry, 'type')
+        amountRaw = self.safe_number(entry, 'amt')
+        typeRaw = self.safe_string(entry, 'type')
+        type = 'reduce' if (typeRaw == 'reduce') else 'add'
         marketId = self.safe_string(entry, 'instId')
         responseMarket = self.safe_market(marketId, market)
         code = responseMarket['base'] if responseMarket['inverse'] else responseMarket['quote']
-        symbol = responseMarket['symbol']
         return {
-            'info': response,
-            'type': responseType,
-            'amount': responseAmount,
+            'info': data,
+            'type': type,
+            'amount': amountRaw,
             'code': code,
-            'symbol': symbol,
+            'symbol': responseMarket['symbol'],
             'status': status,
         }
 
@@ -4489,15 +4505,17 @@ class okx(Exchange):
 
     def parse_borrow_interest(self, info, market=None):
         instId = self.safe_string(info, 'instId')
-        account = 'cross'  # todo rename it to margin/marginType and separate it from the symbol
+        account = 'cross'  # todo rename it to margin/marginMode and separate it from the symbol
         if instId is not None:
             market = self.safe_market(instId, market)
             account = self.safe_string(market, 'symbol')
         timestamp = self.safe_number(info, 'ts')
+        marginMode = 'cross' if (instId is None) else 'isolated'
         return {
             'account': account,  # deprecated
             'symbol': self.safe_string(market, 'symbol'),
-            'marginType': 'cross' if (instId is None) else 'isolated',
+            'marginType': marginMode,  # deprecated
+            'marginMode': marginMode,
             'currency': self.safe_currency_code(self.safe_string(info, 'ccy')),
             'interest': self.safe_number(info, 'interest'),
             'interestRate': self.safe_number(info, 'interestRate'),

@@ -30,6 +30,9 @@ module.exports = class bitvavo extends Exchange {
                 'cancelOrder': true,
                 'createOrder': true,
                 'createReduceOnlyOrder': false,
+                'createStopLimitOrder': true,
+                'createStopMarketOrder': true,
+                'createStopOrder': true,
                 'editOrder': true,
                 'fetchBalance': true,
                 'fetchBorrowRate': false,
@@ -885,10 +888,10 @@ module.exports = class bitvavo extends Exchange {
             let stopPrice = this.safeNumber2 (params, 'stopPrice', 'triggerAmount');
             if (stopPrice === undefined) {
                 if (isStopLimit) {
-                    throw new ArgumentsRequired (this.id + ' createOrder requires a stopPrice parameter for a ' + type + ' order');
+                    throw new ArgumentsRequired (this.id + ' createOrder() requires a stopPrice parameter for a ' + type + ' order');
                 } else if (isStopMarket) {
                     if (price === undefined) {
-                        throw new ArgumentsRequired (this.id + ' createOrder requires a price argument or a stopPrice parameter for a ' + type + ' order');
+                        throw new ArgumentsRequired (this.id + ' createOrder() requires a price argument or a stopPrice parameter for a ' + type + ' order');
                     } else {
                         stopPrice = price;
                     }

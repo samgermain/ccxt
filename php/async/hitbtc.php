@@ -216,13 +216,8 @@ class hitbtc extends Exchange {
                 ),
                 'defaultTimeInForce' => 'FOK',
                 'accountsByType' => array(
-                    'bank' => 'bank',
-                    'exchange' => 'exchange',
-                    'main' => 'bank',  // alias of the above
                     'funding' => 'bank',
                     'spot' => 'exchange',
-                    'trade' => 'exchange',
-                    'trading' => 'exchange',
                 ),
                 'fetchBalanceMethod' => array(
                     'account' => 'account',
@@ -379,17 +374,10 @@ class hitbtc extends Exchange {
         $type = $this->safe_string($params, 'type');
         if ($type === null) {
             $accountsByType = $this->safe_value($this->options, 'accountsByType', array());
-            $fromId = $this->safe_string($accountsByType, $fromAccount);
-            $toId = $this->safe_string($accountsByType, $toAccount);
-            $keys = is_array($accountsByType) ? array_keys($accountsByType) : array();
-            if ($fromId === null) {
-                throw new ExchangeError($this->id . ' $fromAccount must be one of ' . implode(', ', $keys) . ' instead of ' . $fromId);
-            }
-            if ($toId === null) {
-                throw new ExchangeError($this->id . ' $toAccount must be one of ' . implode(', ', $keys) . ' instead of ' . $toId);
-            }
+            $fromId = $this->safe_string($accountsByType, $fromAccount, $fromAccount);
+            $toId = $this->safe_string($accountsByType, $toAccount, $toAccount);
             if ($fromId === $toId) {
-                throw new ExchangeError($this->id . ' from and to cannot be the same account');
+                throw new ExchangeError($this->id . ' $transfer() from and to cannot be the same account');
             }
             $type = $fromId . 'To' . $this->capitalize($toId);
         }
@@ -560,7 +548,7 @@ class hitbtc extends Exchange {
         $fetchBalanceAccounts = $this->safe_value($this->options, 'fetchBalanceMethod', array());
         $typeId = $this->safe_string($fetchBalanceAccounts, $type);
         if ($typeId === null) {
-            throw new ExchangeError($this->id . ' fetchBalance account $type must be either main or trading');
+            throw new ExchangeError($this->id . ' fetchBalance() account $type must be either main or trading');
         }
         $method = 'privateGet' . $this->capitalize($typeId) . 'Balance';
         $query = $this->omit($params, 'type');
@@ -1252,7 +1240,7 @@ class hitbtc extends Exchange {
         $fromNetwork = $this->safe_string($networks, $fromNetwork, $fromNetwork); // handle ETH>ERC20 alias
         $toNetwork = $this->safe_string($networks, $toNetwork, $toNetwork); // handle ETH>ERC20 alias
         if ($fromNetwork === $toNetwork) {
-            throw new ExchangeError($this->id . ' $fromNetwork cannot be the same as toNetwork');
+            throw new ExchangeError($this->id . ' convertCurrencyNetwork() $fromNetwork cannot be the same as toNetwork');
         }
         $request = array(
             'fromCurrency' => $currency['id'] . $fromNetwork,

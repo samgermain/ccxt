@@ -52,6 +52,9 @@ class kucoin(Exchange):
                 'cancelOrder': True,
                 'createDepositAddress': True,
                 'createOrder': True,
+                'createStopLimitOrder': True,
+                'createStopMarketOrder': True,
+                'createStopOrder': True,
                 'fetchAccounts': True,
                 'fetchBalance': True,
                 'fetchBorrowRate': False,
@@ -60,7 +63,6 @@ class kucoin(Exchange):
                 'fetchCurrencies': True,
                 'fetchDepositAddress': True,
                 'fetchDeposits': True,
-                'fetchFundingFee': True,
                 'fetchFundingHistory': False,
                 'fetchFundingRate': False,
                 'fetchFundingRateHistory': False,
@@ -84,6 +86,7 @@ class kucoin(Exchange):
                 'fetchTrades': True,
                 'fetchTradingFee': True,
                 'fetchTradingFees': False,
+                'fetchTransactionFee': True,
                 'fetchWithdrawals': True,
                 'transfer': True,
                 'withdraw': True,
@@ -92,8 +95,8 @@ class kucoin(Exchange):
                 'logo': 'https://user-images.githubusercontent.com/51840849/87295558-132aaf80-c50e-11ea-9801-a2fb0c57c799.jpg',
                 'referral': 'https://www.kucoin.com/?rcode=E5wkqe',
                 'api': {
-                    'public': 'https://openapi-v2.kucoin.com',
-                    'private': 'https://openapi-v2.kucoin.com',
+                    'public': 'https://api.kucoin.com',
+                    'private': 'https://api.kucoin.com',
                     'futuresPrivate': 'https://api-futures.kucoin.com',
                     'futuresPublic': 'https://api-futures.kucoin.com',
                 },
@@ -320,10 +323,12 @@ class kucoin(Exchange):
                     '400007': AuthenticationError,
                     '400008': NotSupported,
                     '400100': BadRequest,
+                    '400200': InvalidOrder,  # {"code":"400200","msg":"Forbidden to place an order"}
                     '400350': InvalidOrder,  # {"code":"400350","msg":"Upper limit for holding: 10,000USDT, you can still buy 10,000USDT worth of coin."}
                     '400370': InvalidOrder,  # {"code":"400370","msg":"Max. price: 0.02500000000000000000"}
                     '400500': InvalidOrder,  # {"code":"400500","msg":"Your located country/region is currently not supported for the trading of self token"}
                     '400600': BadSymbol,  # {"code":"400600","msg":"validation.createOrder.symbolNotAvailable"}
+                    '400760': InvalidOrder,  # {"code":"400760","msg":"order price should be more than XX"}
                     '401000': BadRequest,  # {"code":"401000","msg":"The interface has been deprecated"}
                     '411100': AccountSuspended,
                     '415000': BadRequest,  # {"code":"415000","msg":"Unsupported Media Type"}
@@ -400,6 +405,7 @@ class kucoin(Exchange):
                 'versions': {
                     'public': {
                         'GET': {
+                            'currencies/{currency}': 'v2',
                             'status': 'v1',
                             'market/orderbook/level2_20': 'v1',
                             'market/orderbook/level2_100': 'v1',
@@ -433,17 +439,12 @@ class kucoin(Exchange):
                     },
                 },
                 'accountsByType': {
-                    'trade': 'trade',
-                    'trading': 'trade',
                     'spot': 'trade',
                     'margin': 'margin',
                     'main': 'main',
                     'funding': 'main',
                     'future': 'contract',
-                    'futures': 'contract',
-                    'contract': 'contract',
-                    'pool': 'pool',
-                    'pool-x': 'pool',
+                    'mining': 'pool',
                 },
                 'networks': {
                     'ETH': 'eth',
@@ -476,21 +477,20 @@ class kucoin(Exchange):
         #     {
         #         "code":"200000",
         #         "data":{
-        #             "msg":"",
-        #             "status":"open"
+        #             "status":"open",  #open, close, cancelonly
+        #             "msg":"upgrade match engine"  #remark for operation
         #         }
         #     }
         #
         data = self.safe_value(response, 'data', {})
-        status = self.safe_value(data, 'status')
-        if status is not None:
-            status = 'ok' if (status == 'open') else 'maintenance'
-            self.status = self.extend(self.status, {
-                'status': status,
-                'updated': self.milliseconds(),
-                'info': response,
-            })
-        return self.status
+        status = self.safe_string(data, 'status')
+        return {
+            'status': 'ok' if (status == 'open') else 'maintenance',
+            'updated': self.milliseconds(),
+            'eta': None,
+            'url': None,
+            'info': response,
+        }
 
     async def fetch_markets(self, params={}):
         response = await self.publicGetSymbols(params)
@@ -711,7 +711,7 @@ class kucoin(Exchange):
             })
         return result
 
-    async def fetch_funding_fee(self, code, params={}):
+    async def fetch_transaction_fee(self, code, params={}):
         await self.load_markets()
         currency = self.currency(code)
         request = {
@@ -740,7 +740,7 @@ class kucoin(Exchange):
         type = self.safe_string(accountsByType, requestedType)
         if type is None:
             keys = list(accountsByType.keys())
-            raise ExchangeError(self.id + ' type must be one of ' + ', '.join(keys))
+            raise ExchangeError(self.id + ' isFuturesMethod() type must be one of ' + ', '.join(keys))
         params = self.omit(params, 'type')
         return(type == 'contract') or (type == 'future') or (type == 'futures')  # * (type == 'futures') deprecated, use(type == 'future')
 
@@ -986,6 +986,7 @@ class kucoin(Exchange):
         return {
             'info': response,
             'currency': code,
+            'network': self.safe_string(data, 'chain'),
             'address': address,
             'tag': tag,
         }
@@ -1012,6 +1013,8 @@ class kucoin(Exchange):
         data = self.safe_value(response, 'data', {})
         address = self.safe_string(data, 'address')
         tag = self.safe_string(data, 'memo')
+        if tag == '':
+            tag = None
         if code != 'NIM':
             # contains spaces
             self.check_address(address)
@@ -1020,7 +1023,7 @@ class kucoin(Exchange):
             'currency': code,
             'address': address,
             'tag': tag,
-            'network': None,
+            'network': network,
         }
 
     async def fetch_order_book(self, symbol, limit=None, params={}):
@@ -1038,7 +1041,7 @@ class kucoin(Exchange):
                     if (limit == 20) or (limit == 100):
                         request['limit'] = limit
                     else:
-                        raise ExchangeError(self.id + ' fetchOrderBook limit argument must be 20 or 100')
+                        raise ExchangeError(self.id + ' fetchOrderBook() limit argument must be 20 or 100')
                 request['limit'] = limit if limit else 100
                 method = 'publicGetMarketOrderbookLevelLevelLimit'
                 response = await getattr(self, method)(self.extend(request, params))
@@ -1519,7 +1522,7 @@ class kucoin(Exchange):
             if since is not None:
                 request['startAt'] = int(since / 1000)
         else:
-            raise ExchangeError(self.id + ' invalid fetchClosedOrder method')
+            raise ExchangeError(self.id + ' fetchMyTradesMethod() invalid method')
         response = await getattr(self, method)(self.extend(request, params))
         #
         #     {
@@ -2024,13 +2027,10 @@ class kucoin(Exchange):
 
     async def fetch_balance(self, params={}):
         await self.load_markets()
-        defaultType = self.safe_string_2(self.options, 'fetchBalance', 'defaultType', 'trade')
+        defaultType = self.safe_string_2(self.options, 'fetchBalance', 'defaultType', 'spot')
         requestedType = self.safe_string(params, 'type', defaultType)
         accountsByType = self.safe_value(self.options, 'accountsByType')
-        type = self.safe_string(accountsByType, requestedType)
-        if type is None:
-            keys = list(accountsByType.keys())
-            raise ExchangeError(self.id + ' type must be one of ' + ', '.join(keys))
+        type = self.safe_string(accountsByType, requestedType, requestedType)
         params = self.omit(params, 'type')
         request = {
             'type': type,
@@ -2070,17 +2070,11 @@ class kucoin(Exchange):
         currency = self.currency(code)
         requestedAmount = self.currency_to_precision(code, amount)
         accountsById = self.safe_value(self.options, 'accountsByType', {})
-        fromId = self.safe_string(accountsById, fromAccount)
-        if fromId is None:
-            keys = list(accountsById.keys())
-            raise ExchangeError(self.id + ' fromAccount must be one of ' + ', '.join(keys))
-        toId = self.safe_string(accountsById, toAccount)
-        if toId is None:
-            keys = list(accountsById.keys())
-            raise ExchangeError(self.id + ' toAccount must be one of ' + ', '.join(keys))
+        fromId = self.safe_string(accountsById, fromAccount, fromAccount)
+        toId = self.safe_string(accountsById, toAccount, toAccount)
         if fromId == 'contract':
             if toId != 'main':
-                raise ExchangeError(self.id + ' only supports transferring from futures account to main account')
+                raise ExchangeError(self.id + ' transfer() only supports transferring from futures account to main account')
             request = {
                 'currency': currency['id'],
                 'amount': requestedAmount,
@@ -2402,7 +2396,7 @@ class kucoin(Exchange):
         headers = headers if (headers is not None) else {}
         if query:
             if (method == 'GET') or (method == 'DELETE'):
-                endpoint += '?' + self.urlencode(query)
+                endpoint += '?' + self.rawencode(query)
             else:
                 body = self.json(query)
                 endpart = body

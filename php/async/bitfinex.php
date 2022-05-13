@@ -39,7 +39,6 @@ class bitfinex extends Exchange {
                 'fetchClosedOrders' => true,
                 'fetchDepositAddress' => true,
                 'fetchDeposits' => null,
-                'fetchFundingFees' => true,
                 'fetchIndexOHLCV' => false,
                 'fetchLeverageTiers' => false,
                 'fetchMarkets' => true,
@@ -57,6 +56,7 @@ class bitfinex extends Exchange {
                 'fetchTrades' => true,
                 'fetchTradingFee' => false,
                 'fetchTradingFees' => true,
+                'fetchTransactionFees' => true,
                 'fetchTransactions' => true,
                 'fetchWithdrawals' => null,
                 'transfer' => true,
@@ -388,7 +388,7 @@ class bitfinex extends Exchange {
         ));
     }
 
-    public function fetch_funding_fees($params = array ()) {
+    public function fetch_transaction_fees($codes = null, $params = array ()) {
         yield $this->load_markets();
         $response = yield $this->privatePostAccountFees ($params);
         $fees = $response['withdraw'];
@@ -595,10 +595,10 @@ class bitfinex extends Exchange {
         yield $this->load_markets();
         $accountsByType = $this->safe_value($this->options, 'accountsByType', array());
         $requestedType = $this->safe_string($params, 'type', 'exchange');
-        $accountType = $this->safe_string($accountsByType, $requestedType);
+        $accountType = $this->safe_string($accountsByType, $requestedType, $requestedType);
         if ($accountType === null) {
             $keys = is_array($accountsByType) ? array_keys($accountsByType) : array();
-            throw new ExchangeError($this->id . ' fetchBalance $type parameter must be one of ' . implode(', ', $keys));
+            throw new ExchangeError($this->id . ' fetchBalance() $type parameter must be one of ' . implode(', ', $keys));
         }
         $query = $this->omit($params, 'type');
         $response = yield $this->privatePostBalances ($query);

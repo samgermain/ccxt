@@ -56,7 +56,9 @@ class bitget(Exchange):
                 'fetchClosedOrders': True,
                 'fetchCurrencies': True,
                 'fetchDeposits': False,
+                'fetchFundingRate': True,
                 'fetchLedger': True,
+                'fetchLeverage': True,
                 'fetchMarkets': True,
                 'fetchMyTrades': True,
                 'fetchOHLCV': True,
@@ -2063,7 +2065,7 @@ class bitget(Exchange):
         self.load_markets()
         market = self.market(symbol)
         if market['swap']:
-            raise BadSymbol(self.id + ' fetchMyTrades only supports spot markets')
+            raise BadSymbol(self.id + ' fetchMyTrades() only supports spot markets')
         request = {
             'symbol': market['id'],
         }
@@ -2173,7 +2175,8 @@ class bitget(Exchange):
         #       ]
         #     }
         #
-        return response
+        data = self.safe_value(response, 'data', [])
+        return self.parse_position(data[0], market)
 
     def fetch_positions(self, symbols=None, params={}):
         self.load_markets()
@@ -2209,7 +2212,132 @@ class bitget(Exchange):
         #         }
         #       ]
         #     }
-        return response
+        #
+        position = self.safe_value(response, 'data', [])
+        result = []
+        for i in range(0, len(position)):
+            result.append(self.parse_position(position[i]))
+        return self.filter_by_array(result, 'symbol', symbols, False)
+
+    def parse_position(self, position, market=None):
+        #
+        #     {
+        #         marginCoin: 'USDT',
+        #         symbol: 'BTCUSDT_UMCBL',
+        #         holdSide: 'long',
+        #         openDelegateCount: '0',
+        #         margin: '1.921475',
+        #         available: '0.001',
+        #         locked: '0',
+        #         total: '0.001',
+        #         leverage: '20',
+        #         achievedProfits: '0',
+        #         averageOpenPrice: '38429.5',
+        #         marginMode: 'fixed',
+        #         holdMode: 'double_hold',
+        #         unrealizedPL: '0.14869',
+        #         liquidationPrice: '0',
+        #         keepMarginRate: '0.004',
+        #         cTime: '1645922194988'
+        #     }
+        #
+        marketId = self.safe_string(position, 'symbol')
+        market = self.safe_market(marketId, market)
+        timestamp = self.safe_integer(position, 'cTime')
+        marginMode = self.safe_string(position, 'marginMode')
+        if marginMode == 'fixed':
+            marginMode = 'isolated'
+        elif marginMode == 'crossed':
+            marginMode = 'cross'
+        hedged = self.safe_string(position, 'holdMode')
+        if hedged == 'double_hold':
+            hedged = True
+        elif hedged == 'single_hold':
+            hedged = False
+        contracts = self.safe_integer(position, 'openDelegateCount')
+        liquidation = self.safe_number(position, 'liquidationPrice')
+        if contracts == 0:
+            contracts = None
+        if liquidation == 0:
+            liquidation = None
+        return {
+            'info': position,
+            'id': None,
+            'symbol': market['symbol'],
+            'notional': None,
+            'marginMode': marginMode,
+            'marginType': None,  # deprecated
+            'liquidationPrice': liquidation,
+            'entryPrice': self.safe_number(position, 'averageOpenPrice'),
+            'unrealizedPnl': self.safe_number(position, 'unrealizedPL'),
+            'percentage': None,
+            'contracts': contracts,
+            'contractSize': self.safe_number(position, 'total'),
+            'markPrice': None,
+            'side': self.safe_string(position, 'holdSide'),
+            'hedged': hedged,
+            'timestamp': timestamp,
+            'datetime': self.iso8601(timestamp),
+            'maintenanceMargin': None,
+            'maintenanceMarginPercentage': self.safe_number(position, 'keepMarginRate'),
+            'collateral': self.safe_number(position, 'margin'),
+            'initialMargin': None,
+            'initialMarginPercentage': None,
+            'leverage': self.safe_number(position, 'leverage'),
+            'marginRatio': None,
+        }
+
+    def fetch_funding_rate(self, symbol, params={}):
+        self.load_markets()
+        market = self.market(symbol)
+        if not market['swap']:
+            raise BadSymbol(self.id + ' fetchFundingRate() supports swap contracts only')
+        request = {
+            'symbol': market['id'],
+        }
+        response = self.publicMixGetMarketCurrentFundRate(self.extend(request, params))
+        #
+        #     {
+        #         "code": "00000",
+        #         "msg": "success",
+        #         "requestTime": 1652401684275,
+        #         "data": {
+        #             "symbol": "BTCUSDT_UMCBL",
+        #             "fundingRate": "-0.000182"
+        #         }
+        #     }
+        #
+        data = self.safe_value(response, 'data', {})
+        return self.parse_funding_rate(data, market)
+
+    def parse_funding_rate(self, contract, market=None):
+        #
+        #     {
+        #         "symbol": "BTCUSDT_UMCBL",
+        #         "fundingRate": "-0.000182"
+        #     }
+        #
+        marketId = self.safe_string(contract, 'symbol')
+        symbol = self.safe_symbol(marketId, market)
+        return {
+            'info': contract,
+            'symbol': symbol,
+            'markPrice': None,
+            'indexPrice': None,
+            'interestRate': None,
+            'estimatedSettlePrice': None,
+            'timestamp': None,
+            'datetime': None,
+            'fundingRate': self.safe_number(contract, 'fundingRate'),
+            'fundingTimestamp': None,
+            'fundingDatetime': None,
+            'nextFundingRate': None,
+            'nextFundingTimestamp': None,
+            'nextFundingDatetime': None,
+            'previousFundingRate': None,
+            'previousFundingTimestamp': None,
+            'previousFundingDatetime': None,
+        }
 
     def sign(self, path, api=[], method='GET', params={}, headers=None, body=None):
         signed = api[0] == 'private'
@@ -2246,6 +2374,27 @@ class bitget(Exchange):
                 headers['Content-Type'] = 'application/json'
         return {'url': url, 'method': method, 'body': body, 'headers': headers}
 
+    def fetch_leverage(self, symbol, params={}):
+        self.load_markets()
+        market = self.market(symbol)
+        request = {
+            'symbol': market['id'],
+        }
+        response = self.publicMixGetMarketSymbolLeverage(self.extend(request, params))
+        #
+        #     {
+        #         "code": "00000",
+        #         "msg": "success",
+        #         "requestTime": 1652347673483,
+        #         "data": {
+        #             "symbol": "BTCUSDT_UMCBL",
+        #             "minLeverage": "1",
+        #             "maxLeverage": "125"
+        #         }
+        #     }
+        #
+        return response
+
     def set_leverage(self, leverage, symbol=None, params={}):
         if symbol is None:
             raise ArgumentsRequired(self.id + ' setLeverage() requires a symbol argument')
@@ -2262,18 +2411,18 @@ class bitget(Exchange):
         }
         return self.privateMixPostAccountSetLeverage(self.extend(request, params))
 
-    def set_margin_mode(self, marginType, symbol=None, params={}):
+    def set_margin_mode(self, marginMode, symbol=None, params={}):
         if symbol is None:
             raise ArgumentsRequired(self.id + ' setMarginMode() requires a symbol argument')
-        marginType = marginType.lower()
-        if (marginType != 'fixed') and (marginType != 'crossed'):
-            raise ArgumentsRequired(self.id + ' setMarginMode() marginType must be "fixed" or "crossed"')
+        marginMode = marginMode.lower()
+        if (marginMode != 'fixed') and (marginMode != 'crossed'):
+            raise ArgumentsRequired(self.id + ' setMarginMode() marginMode must be "fixed" or "crossed"')
         self.load_markets()
         market = self.market(symbol)
         request = {
             'symbol': market['id'],
             'marginCoin': market['settleId'],
-            'marginMode': marginType,
+            'marginMode': marginMode,
         }
         return self.privateMixPostAccountSetMarginMode(self.extend(request, params))
 

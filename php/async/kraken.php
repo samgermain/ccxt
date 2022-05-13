@@ -40,6 +40,9 @@ class kraken extends Exchange {
                 'cancelOrder' => true,
                 'createDepositAddress' => true,
                 'createOrder' => true,
+                'createStopLimitOrder' => true,
+                'createStopMarketOrder' => true,
+                'createStopOrder' => true,
                 'fetchBalance' => true,
                 'fetchBorrowInterest' => false,
                 'fetchBorrowRate' => false,
@@ -633,7 +636,7 @@ class kraken extends Exchange {
         yield $this->load_markets();
         $market = $this->market($symbol);
         if ($market['darkpool']) {
-            throw new ExchangeError($this->id . ' does not provide an order book for darkpool $symbol ' . $symbol);
+            throw new ExchangeError($this->id . ' fetchOrderBook() does not provide an order book for darkpool $symbol ' . $symbol);
         }
         $request = array(
             'pair' => $market['id'],
@@ -758,7 +761,7 @@ class kraken extends Exchange {
         yield $this->load_markets();
         $darkpool = mb_strpos($symbol, '.d') !== false;
         if ($darkpool) {
-            throw new ExchangeError($this->id . ' does not provide a $ticker for $darkpool $symbol ' . $symbol);
+            throw new ExchangeError($this->id . ' fetchTicker() does not provide a $ticker for $darkpool $symbol ' . $symbol);
         }
         $market = $this->market($symbol);
         $request = array(
@@ -1195,7 +1198,20 @@ class kraken extends Exchange {
                 }
             }
         }
-        $params = $this->omit($params, array( 'price', 'stopPrice', 'price2' ));
+        $close = $this->safe_value($params, 'close');
+        if ($close !== null) {
+            $close = array_merge(array(), $close);
+            $closePrice = $this->safe_value($close, 'price');
+            if ($closePrice !== null) {
+                $close['price'] = $this->price_to_precision($symbol, $closePrice);
+            }
+            $closePrice2 = $this->safe_value($close, 'price2'); // $stopPrice
+            if ($closePrice2 !== null) {
+                $close['price2'] = $this->price_to_precision($symbol, $closePrice2);
+            }
+            $request['close'] = $close;
+        }
+        $params = $this->omit($params, array( 'price', 'stopPrice', 'price2', 'close' ));
         $response = yield $this->privatePostAddOrder (array_merge($request, $params));
         //
         //     {
@@ -2098,12 +2114,14 @@ class kraken extends Exchange {
         $url = '/' . $this->version . '/' . $api . '/' . $path;
         if ($api === 'public') {
             if ($params) {
-                $url .= '?' . $this->urlencode($params);
+                // urlencodeNested is used to address https://github.com/ccxt/ccxt/issues/12872
+                $url .= '?' . $this->urlencode_nested($params);
             }
         } else if ($api === 'private') {
             $this->check_required_credentials();
             $nonce = (string) $this->nonce();
-            $body = $this->urlencode(array_merge(array( 'nonce' => $nonce ), $params));
+            // urlencodeNested is used to address https://github.com/ccxt/ccxt/issues/12872
+            $body = $this->urlencode_nested(array_merge(array( 'nonce' => $nonce ), $params));
             $auth = $this->encode($nonce . $body);
             $hash = $this->hash($auth, 'sha256', 'binary');
             $binary = $this->encode($url);

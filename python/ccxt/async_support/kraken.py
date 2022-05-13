@@ -49,6 +49,9 @@ class kraken(Exchange):
                 'cancelOrder': True,
                 'createDepositAddress': True,
                 'createOrder': True,
+                'createStopLimitOrder': True,
+                'createStopMarketOrder': True,
+                'createStopOrder': True,
                 'fetchBalance': True,
                 'fetchBorrowInterest': False,
                 'fetchBorrowRate': False,
@@ -623,7 +626,7 @@ class kraken(Exchange):
         await self.load_markets()
         market = self.market(symbol)
         if market['darkpool']:
-            raise ExchangeError(self.id + ' does not provide an order book for darkpool symbol ' + symbol)
+            raise ExchangeError(self.id + ' fetchOrderBook() does not provide an order book for darkpool symbol ' + symbol)
         request = {
             'pair': market['id'],
         }
@@ -738,7 +741,7 @@ class kraken(Exchange):
         await self.load_markets()
         darkpool = symbol.find('.d') >= 0
         if darkpool:
-            raise ExchangeError(self.id + ' does not provide a ticker for darkpool symbol ' + symbol)
+            raise ExchangeError(self.id + ' fetchTicker() does not provide a ticker for darkpool symbol ' + symbol)
         market = self.market(symbol)
         request = {
             'pair': market['id'],
@@ -1139,7 +1142,17 @@ class kraken(Exchange):
                 elif limitPriceDefined:
                     request['price'] = self.price_to_precision(symbol, price)
                     request['price2'] = self.price_to_precision(symbol, limitPrice)
-        params = self.omit(params, ['price', 'stopPrice', 'price2'])
+        close = self.safe_value(params, 'close')
+        if close is not None:
+            close = self.extend({}, close)
+            closePrice = self.safe_value(close, 'price')
+            if closePrice is not None:
+                close['price'] = self.price_to_precision(symbol, closePrice)
+            closePrice2 = self.safe_value(close, 'price2')  # stopPrice
+            if closePrice2 is not None:
+                close['price2'] = self.price_to_precision(symbol, closePrice2)
+            request['close'] = close
+        params = self.omit(params, ['price', 'stopPrice', 'price2', 'close'])
         response = await self.privatePostAddOrder(self.extend(request, params))
         #
         #     {
@@ -1968,11 +1981,13 @@ class kraken(Exchange):
         url = '/' + self.version + '/' + api + '/' + path
         if api == 'public':
             if params:
-                url += '?' + self.urlencode(params)
+                # urlencodeNested is used to address https://github.com/ccxt/ccxt/issues/12872
+                url += '?' + self.urlencode_nested(params)
         elif api == 'private':
             self.check_required_credentials()
             nonce = str(self.nonce())
-            body = self.urlencode(self.extend({'nonce': nonce}, params))
+            # urlencodeNested is used to address https://github.com/ccxt/ccxt/issues/12872
+            body = self.urlencode_nested(self.extend({'nonce': nonce}, params))
             auth = self.encode(nonce + body)
             hash = self.hash(auth, 'sha256', 'binary')
             binary = self.encode(url)

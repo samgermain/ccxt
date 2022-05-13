@@ -24,6 +24,7 @@ class hollaex(Exchange):
             # 4 requests per second => 1000ms / 4 = 250 ms between requests
             'rateLimit': 250,
             'version': 'v2',
+            'pro': True,
             'has': {
                 'CORS': None,
                 'spot': True,
@@ -40,6 +41,9 @@ class hollaex(Exchange):
                 'createMarketSellOrder': True,
                 'createOrder': True,
                 'createReduceOnlyOrder': False,
+                'createStopLimitOrder': True,
+                'createStopMarketOrder': True,
+                'createStopOrder': True,
                 'fetchBalance': True,
                 'fetchBorrowRate': False,
                 'fetchBorrowRateHistories': False,
@@ -77,11 +81,15 @@ class hollaex(Exchange):
                 'fetchTradingFee': False,
                 'fetchTradingFees': True,
                 'fetchTransactions': None,
+                'fetchTransfer': False,
+                'fetchTransfers': False,
+                'fetchWithdrawal': True,
                 'fetchWithdrawals': True,
                 'reduceMargin': False,
                 'setLeverage': False,
                 'setMarginMode': False,
                 'setPositionMode': False,
+                'transfer': False,
                 'withdraw': True,
             },
             'timeframes': {
@@ -95,7 +103,9 @@ class hollaex(Exchange):
             },
             'urls': {
                 'logo': 'https://user-images.githubusercontent.com/1294454/75841031-ca375180-5ddd-11ea-8417-b975674c23cb.jpg',
-                'test': 'https://api.sandbox.hollaex.com',
+                'test': {
+                    'rest': 'https://api.sandbox.hollaex.com',
+                },
                 'api': {
                     'rest': 'https://api.hollaex.com',
                 },
@@ -177,6 +187,15 @@ class hollaex(Exchange):
             'options': {
                 # how many seconds before the authenticated request expires
                 'api-expires': int(self.timeout / 1000),
+                'networks': {
+                    'BTC': 'btc',
+                    'ETH': 'eth',
+                    'ERC20': 'eth',
+                    'TRX': 'trx',
+                    'TRC20': 'trx',
+                    'XRP': 'xrp',
+                    'XLM': 'xlm',
+                },
             },
         })
 
@@ -1201,6 +1220,43 @@ class hollaex(Exchange):
         data = self.safe_value(response, 'data', [])
         return self.parse_transactions(data, currency, since, limit)
 
+    def fetch_withdrawal(self, id, code=None, params={}):
+        self.load_markets()
+        request = {
+            'transaction_id': id,
+        }
+        currency = None
+        if code is not None:
+            currency = self.currency(code)
+            request['currency'] = currency['id']
+        response = self.privateGetUserWithdrawals(self.extend(request, params))
+        #
+        #     {
+        #         "count": 1,
+        #         "data": [
+        #             {
+        #                 "id": 539,
+        #                 "amount": 20,
+        #                 "fee": 0,
+        #                 "address": "0x5c0cc98270d7089408fcbcc8e2131287f5be2306",
+        #                 "transaction_id": "0xd4006327a5ec2c41adbdcf566eaaba6597c3d45906abe78ea1a4a022647c2e28",
+        #                 "status": True,
+        #                 "dismissed": False,
+        #                 "rejected": False,
+        #                 "description": "",
+        #                 "type": "withdrawal",
+        #                 "currency": "usdt",
+        #                 "created_at": "2020-03-03T07:56:36.198Z",
+        #                 "updated_at": "2020-03-03T08:00:05.674Z",
+        #                 "user_id": 620
+        #             }
+        #         ]
+        #     }
+        #
+        data = self.safe_value(response, 'data', [])
+        transaction = self.safe_value(data, 0, {})
+        return self.parse_transaction(transaction, currency)
+
     def fetch_withdrawals(self, code=None, since=None, limit=None, params={}):
         self.load_markets()
         request = {
@@ -1312,10 +1368,13 @@ class hollaex(Exchange):
             status = 'pending'
         feeCurrencyId = self.safe_string(transaction, 'fee_coin')
         feeCurrencyCode = self.safe_currency_code(feeCurrencyId, currency)
-        fee = {
-            'currency': feeCurrencyCode,
-            'cost': self.safe_number(transaction, 'fee'),
-        }
+        feeCost = self.safe_number(transaction, 'fee')
+        fee = None
+        if feeCost is not None:
+            fee = {
+                'currency': feeCurrencyCode,
+                'cost': feeCost,
+            }
         return {
             'info': transaction,
             'id': id,
@@ -1344,14 +1403,18 @@ class hollaex(Exchange):
         currency = self.currency(code)
         if tag is not None:
             address += ':' + tag
+        network = self.safe_string(params, 'network')
+        if network is None:
+            raise ArgumentsRequired(self.id + ' withdraw() requires a network parameter')
+        params = self.omit(params, 'network')
+        networks = self.safe_value(self.options, 'networks', {})
+        networkId = self.safe_string_lower_2(networks, network, code, network)
         request = {
             'currency': currency['id'],
             'amount': amount,
             'address': address,
+            'network': networkId,
         }
-        network = self.safe_string(params, 'network')
-        if network is not None:
-            request['network'] = network
         response = self.privatePostUserWithdrawal(self.extend(request, params))
         #
         #     {

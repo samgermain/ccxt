@@ -33,13 +33,15 @@ class whitebit extends Exchange {
                 'createLimitOrder' => null,
                 'createMarketOrder' => null,
                 'createOrder' => true,
+                'createStopLimitOrder' => true,
+                'createStopMarketOrder' => true,
+                'createStopOrder' => true,
                 'editOrder' => null,
                 'fetchBalance' => true,
                 'fetchBidsAsks' => null,
                 'fetchClosedOrders' => true,
                 'fetchCurrencies' => true,
                 'fetchDepositAddress' => true,
-                'fetchFundingFees' => true,
                 'fetchFundingHistory' => false,
                 'fetchFundingRate' => false,
                 'fetchFundingRateHistory' => false,
@@ -58,6 +60,7 @@ class whitebit extends Exchange {
                 'fetchTrades' => true,
                 'fetchTradingFee' => false,
                 'fetchTradingFees' => true,
+                'fetchTransactionFees' => true,
                 'transfer' => true,
                 'withdraw' => true,
             ),
@@ -370,7 +373,7 @@ class whitebit extends Exchange {
         return $result;
     }
 
-    public function fetch_funding_fees($params = array ()) {
+    public function fetch_transaction_fees($codes = null, $params = array ()) {
         yield $this->load_markets();
         $response = yield $this->v4PublicGetFee ($params);
         //
@@ -486,36 +489,35 @@ class whitebit extends Exchange {
     }
 
     public function parse_ticker($ticker, $market = null) {
+        //
         //  FetchTicker (v1)
         //
-        //      {
-        //          "bid":"0.021979",
-        //          "ask":"0.021996",
-        //          "open":"0.02182",
-        //          "high":"0.022039",
-        //          "low":"0.02161",
-        //          "last":"0.021987",
-        //          "volume":"2810.267",
-        //          "deal":"61.383565474",
-        //          "change":"0.76",
-        //      }
+        //    {
+        //        "bid" => "0.021979",
+        //        "ask" => "0.021996",
+        //        "open" => "0.02182",
+        //        "high" => "0.022039",
+        //        "low" => "0.02161",
+        //        "last" => "0.021987",
+        //        "volume" => "2810.267",
+        //        "deal" => "61.383565474",
+        //        "change" => "0.76",
+        //    }
         //
         // FetchTickers (v4)
         //
-        //      "BCH_RUB":array(
-        //          "base_id":1831,
-        //          "quote_id":0,
-        //          "last_price":"32830.21",
-        //          "quote_volume":"1494659.8024096",
-        //          "base_volume":"46.1083",
-        //          "isFrozen":false,
-        //          "change":"2.12" // in percent
-        //      ),
+        //    "BCH_RUB" => {
+        //        "base_id" => 1831,
+        //        "quote_id" => 0,
+        //        "last_price" => "32830.21",
+        //        "quote_volume" => "1494659.8024096",
+        //        "base_volume" => "46.1083",
+        //        "isFrozen" => false,
+        //        "change" => "2.12" // in percent
+        //    }
         //
         $market = $this->safe_market(null, $market);
         $last = $this->safe_string($ticker, 'last_price');
-        $change = $this->safe_string($ticker, 'change');
-        $percentage = Precise::string_mul($change, '0.01');
         return $this->safe_ticker(array(
             'symbol' => $market['symbol'],
             'timestamp' => null,
@@ -532,7 +534,7 @@ class whitebit extends Exchange {
             'last' => $last,
             'previousClose' => null,
             'change' => null,
-            'percentage' => $percentage,
+            'percentage' => $this->safe_string($ticker, 'change'),
             'average' => null,
             'baseVolume' => $this->safe_string_2($ticker, 'base_volume', 'volume'),
             'quoteVolume' => $this->safe_string_2($ticker, 'quote_volume', 'deal'),
@@ -753,14 +755,14 @@ class whitebit extends Exchange {
         //          "pong"
         //      )
         //
-        $status = $this->safe_string($response, 0, null);
-        $status = ($status === null) ? 'maintenance' : 'ok';
-        $this->status = array_merge($this->status, array(
-            'status' => $status,
+        $status = $this->safe_string($response, 0);
+        return array(
+            'status' => ($status === 'pong') ? 'ok' : $status,
             'updated' => $this->milliseconds(),
+            'eta' => null,
+            'url' => null,
             'info' => $response,
-        ));
-        return $this->status;
+        );
     }
 
     public function fetch_time($params = array ()) {
@@ -806,7 +808,7 @@ class whitebit extends Exchange {
         // aggregate common assignments regardless stop or not
         if ($type === 'limit' || $type === 'stopLimit') {
             if ($price === null) {
-                throw new ArgumentsRequired($this->id . ' createOrder requires a $price argument for a stopLimit order');
+                throw new ArgumentsRequired($this->id . ' createOrder() requires a $price argument for a stopLimit order');
             }
             $convertedPrice = $this->price_to_precision($symbol, $price);
             $request['price'] = $convertedPrice;
@@ -830,7 +832,7 @@ class whitebit extends Exchange {
             }
         }
         if ($method === null) {
-            throw new ArgumentsRequired($this->id . ' Invalid $type =>  createOrder() requires one of the following order types => $market, limit, stopLimit or stopMarket');
+            throw new ArgumentsRequired($this->id . ' createOrder() requires one of the following order types => $market, limit, stopLimit or stopMarket');
         }
         $response = yield $this->$method (array_merge($request, $params));
         return $this->parse_order($response);

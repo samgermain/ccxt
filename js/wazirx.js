@@ -22,6 +22,9 @@ module.exports = class wazirx extends Exchange {
                 'cancelAllOrders': true,
                 'cancelOrder': true,
                 'createOrder': true,
+                'createStopLimitOrder': true,
+                'createStopMarketOrder': true,
+                'createStopOrder': true,
                 'fetchBalance': true,
                 'fetchBidsAsks': false,
                 'fetchClosedOrders': false,
@@ -29,7 +32,6 @@ module.exports = class wazirx extends Exchange {
                 'fetchDepositAddress': false,
                 'fetchDepositAddressesByNetwork': false,
                 'fetchDeposits': true,
-                'fetchFundingFees': false,
                 'fetchFundingHistory': false,
                 'fetchFundingRate': false,
                 'fetchFundingRateHistory': false,
@@ -51,6 +53,7 @@ module.exports = class wazirx extends Exchange {
                 'fetchTrades': true,
                 'fetchTradingFee': false,
                 'fetchTradingFees': false,
+                'fetchTransactionFees': false,
                 'fetchTransactions': false,
                 'fetchTransfers': false,
                 'fetchWithdrawals': false,
@@ -376,16 +379,19 @@ module.exports = class wazirx extends Exchange {
     async fetchStatus (params = {}) {
         const response = await this.publicGetSystemStatus (params);
         //
-        //  { "status":"normal","message":"System is running normally." }
+        //     {
+        //         "status":"normal", // normal, system maintenance
+        //         "message":"System is running normally."
+        //     }
         //
-        let status = this.safeString (response, 'status');
-        status = (status === 'normal') ? 'ok' : 'maintenance';
-        this.status = this.extend (this.status, {
-            'status': status,
+        const status = this.safeString (response, 'status');
+        return {
+            'status': (status === 'normal') ? 'ok' : 'maintenance',
             'updated': this.milliseconds (),
+            'eta': undefined,
+            'url': undefined,
             'info': response,
-        });
-        return this.status;
+        };
     }
 
     async fetchTime (params = {}) {
@@ -480,7 +486,7 @@ module.exports = class wazirx extends Exchange {
 
     async fetchOrders (symbol = undefined, since = undefined, limit = undefined, params = {}) {
         if (symbol === undefined) {
-            throw new ArgumentsRequired (this.id + ' fetchOrders requires a `symbol` argument');
+            throw new ArgumentsRequired (this.id + ' fetchOrders() requires a `symbol` argument');
         }
         await this.loadMarkets ();
         const market = this.market (symbol);
@@ -568,7 +574,7 @@ module.exports = class wazirx extends Exchange {
 
     async cancelAllOrders (symbol = undefined, params = {}) {
         if (symbol === undefined) {
-            throw new ArgumentsRequired (this.id + ' cancelAllOrders requires a `symbol` argument');
+            throw new ArgumentsRequired (this.id + ' cancelAllOrders() requires a `symbol` argument');
         }
         await this.loadMarkets ();
         const market = this.market (symbol);
@@ -580,7 +586,7 @@ module.exports = class wazirx extends Exchange {
 
     async cancelOrder (id, symbol = undefined, params = {}) {
         if (symbol === undefined) {
-            throw new ArgumentsRequired (this.id + ' cancelOrder requires a `symbol` argument');
+            throw new ArgumentsRequired (this.id + ' cancelOrder() requires a `symbol` argument');
         }
         await this.loadMarkets ();
         const market = this.market (symbol);
