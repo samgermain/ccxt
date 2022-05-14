@@ -33,8 +33,12 @@ class delta extends Exchange {
                 'fetchBalance' => true,
                 'fetchClosedOrders' => true,
                 'fetchCurrencies' => true,
+                'fetchDeposit' => null,
                 'fetchDepositAddress' => true,
+                'fetchDeposits' => null,
                 'fetchLedger' => true,
+                'fetchLeverageTiers' => false, // An infinite number of tiers, see examples/js/delta-maintenance-margin-rate-max-leverage.js
+                'fetchMarketLeverageTiers' => false,
                 'fetchMarkets' => true,
                 'fetchMyTrades' => true,
                 'fetchOHLCV' => true,
@@ -47,6 +51,12 @@ class delta extends Exchange {
                 'fetchTickers' => true,
                 'fetchTime' => true,
                 'fetchTrades' => true,
+                'fetchTransfer' => null,
+                'fetchTransfers' => null,
+                'fetchWithdrawal' => null,
+                'fetchWithdrawals' => null,
+                'transfer' => false,
+                'withdraw' => false,
             ),
             'timeframes' => array(
                 '1m' => '1m',
@@ -185,35 +195,77 @@ class delta extends Exchange {
 
     public function fetch_time($params = array ()) {
         $response = $this->publicGetSettings ($params);
-        //
-        //     {
-        //         "result":array(
-        //             "server_time":1605472733766141,
-        //             "deto_referral_mining_daily_reward":"25000",
-        //             "deto_total_reward_pool":"100000000",
-        //             "deto_trade_mining_daily_reward":"75000",
-        //             "kyc_deposit_limit":"20",
-        //             "kyc_withdrawal_limit":"2",
-        //             "under_maintenance":"false"
-        //         ),
-        //         "success":true
-        //     }
-        //
+        // full $response sample under `fetchStatus`
         $result = $this->safe_value($response, 'result', array());
         return $this->safe_integer_product($result, 'server_time', 0.001);
     }
 
     public function fetch_status($params = array ()) {
         $response = $this->publicGetSettings ($params);
+        //
+        //     {
+        //         "result" => array(
+        //           "deto_liquidity_mining_daily_reward" => "40775",
+        //           "deto_msp" => "1.0",
+        //           "deto_staking_daily_reward" => "23764.08",
+        //           "enabled_wallets" => array(
+        //             "BTC",
+        //             ...
+        //           ),
+        //           "portfolio_margin_params" => array(
+        //             "enabled_portfolios" => array(
+        //               ".DEAVAXUSDT" => array(
+        //                 "asset_id" => 5,
+        //                 "futures_contingency_margin_percent" => "1",
+        //                 "interest_rate" => "0",
+        //                 "maintenance_margin_multiplier" => "0.8",
+        //                 "max_price_shock" => "20",
+        //                 "max_short_notional_limit" => "2000",
+        //                 "options_contingency_margin_percent" => "1",
+        //                 "options_discount_range" => "10",
+        //                 "options_liq_band_range_percentage" => "25",
+        //                 "settling_asset" => "USDT",
+        //                 "sort_priority" => 5,
+        //                 "underlying_asset" => "AVAX",
+        //                 "volatility_down_shock" => "30",
+        //                 "volatility_up_shock" => "45"
+        //               ),
+        //               ...
+        //             ),
+        //             "portfolio_enabled_contracts" => array(
+        //               "futures",
+        //               "perpetual_futures",
+        //               "call_options",
+        //               "put_options"
+        //             )
+        //           ),
+        //           "server_time" => 1650640673500273,
+        //           "trade_farming_daily_reward" => "100000",
+        //           "circulating_supply" => "140000000",
+        //           "circulating_supply_update_time" => "1636752800",
+        //           "deto_referral_mining_daily_reward" => "0",
+        //           "deto_total_reward_pool" => "100000000",
+        //           "deto_trade_mining_daily_reward" => "0",
+        //           "kyc_deposit_limit" => "20",
+        //           "kyc_withdrawal_limit" => "10000",
+        //           "maintenance_start_time" => "1650387600000000",
+        //           "msp_deto_commission_percent" => "25",
+        //           "under_maintenance" => "false"
+        //         ),
+        //         "success" => true
+        //     }
+        //
         $result = $this->safe_value($response, 'result', array());
-        $underMaintenance = $this->safe_value($result, 'under_maintenance');
+        $underMaintenance = $this->safe_string($result, 'under_maintenance');
         $status = ($underMaintenance === 'true') ? 'maintenance' : 'ok';
-        $updated = $this->safe_integer_product($result, 'server_time', 0.001);
-        $this->status = array_merge($this->status, array(
+        $updated = $this->safe_integer_product($result, 'server_time', 0.001, $this->milliseconds());
+        return array(
             'status' => $status,
             'updated' => $updated,
-        ));
-        return $this->status;
+            'eta' => null,
+            'url' => null,
+            'info' => $response,
+        );
     }
 
     public function fetch_currencies($params = array ()) {
@@ -378,76 +430,105 @@ class delta extends Exchange {
             // $settlingAsset = $this->safe_value($market, 'settling_asset', array());
             $quotingAsset = $this->safe_value($market, 'quoting_asset', array());
             $underlyingAsset = $this->safe_value($market, 'underlying_asset', array());
+            $settlingAsset = $this->safe_value($market, 'settling_asset');
             $baseId = $this->safe_string($underlyingAsset, 'symbol');
             $quoteId = $this->safe_string($quotingAsset, 'symbol');
+            $settleId = $this->safe_string($settlingAsset, 'symbol');
             $id = $this->safe_string($market, 'symbol');
             $numericId = $this->safe_integer($market, 'id');
             $base = $this->safe_currency_code($baseId);
             $quote = $this->safe_currency_code($quoteId);
-            $symbol = $id;
-            $swap = false;
-            $future = false;
-            $option = false;
-            if ($type === 'perpetual_futures') {
-                $type = 'swap';
-                $swap = true;
-                $future = false;
-                $option = false;
-                if (mb_strpos($id, '_') === false) {
-                    $symbol = $base . '/' . $quote;
+            $settle = $this->safe_currency_code($settleId);
+            $callOptions = ($type === 'call_options');
+            $putOptions = ($type === 'put_options');
+            $moveOptions = ($type === 'move_options');
+            $spot = ($type === 'spot');
+            $swap = ($type === 'perpetual_futures');
+            $future = ($type === 'futures');
+            $option = ($callOptions || $putOptions || $moveOptions);
+            $strike = $this->safe_string($market, 'strike_price');
+            $expiryDatetime = $this->safe_string($market, 'settlement_time');
+            $expiry = $this->parse8601($expiryDatetime);
+            $contractSize = $this->safe_number($market, 'contract_value');
+            $linear = ($settle === $base);
+            $optionType = null;
+            $symbol = $base . '/' . $quote;
+            if ($swap || $future || $option) {
+                $symbol = $symbol . ':' . $settle;
+                if ($future || $option) {
+                    $symbol = $symbol . '-' . $this->yymmdd($expiry);
+                    if ($option) {
+                        $type = 'option';
+                        $letter = 'C';
+                        $optionType = 'call';
+                        if ($putOptions) {
+                            $letter = 'P';
+                            $optionType = 'put';
+                        } else if ($moveOptions) {
+                            $letter = 'M';
+                            $optionType = 'move';
+                        }
+                        $symbol = $symbol . ':' . $strike . ':' . $letter;
+                    } else {
+                        $type = 'future';
+                    }
+                } else {
+                    $type = 'swap';
                 }
-            } else if (($type === 'call_options') || ($type === 'put_options') || ($type === 'move_options')) {
-                $type = 'option';
-                $swap = false;
-                $option = true;
-                $future = false;
-            } else if ($type === 'futures') {
-                $type = 'future';
-                $swap = false;
-                $option = false;
-                $future = true;
+            } else {
+                $symbol = $id;
             }
-            $precision = array(
-                'amount' => 1.0, // number of contracts
-                'price' => $this->safe_number($market, 'tick_size'),
-            );
-            $limits = array(
-                'amount' => array(
-                    'min' => 1.0,
-                    'max' => $this->safe_number($market, 'position_size_limit'),
-                ),
-                'price' => array(
-                    'min' => $precision['price'],
-                    'max' => null,
-                ),
-                'cost' => array(
-                    'min' => $this->safe_number($market, 'min_size'),
-                    'max' => null,
-                ),
-            );
             $state = $this->safe_string($market, 'state');
-            $active = ($state === 'live');
-            $maker = $this->safe_number($market, 'maker_commission_rate');
-            $taker = $this->safe_number($market, 'taker_commission_rate');
             $result[] = array(
                 'id' => $id,
                 'numericId' => $numericId,
                 'symbol' => $symbol,
                 'base' => $base,
                 'quote' => $quote,
+                'settle' => $settle,
                 'baseId' => $baseId,
                 'quoteId' => $quoteId,
+                'settleId' => $settleId,
                 'type' => $type,
-                'spot' => false,
-                'option' => $option,
+                'spot' => $spot,
+                'margin' => $spot ? null : false,
                 'swap' => $swap,
                 'future' => $future,
-                'maker' => $maker,
-                'taker' => $taker,
-                'precision' => $precision,
-                'limits' => $limits,
+                'option' => $option,
+                'active' => ($state === 'live'),
+                'contract' => !$spot,
+                'linear' => $spot ? null : $linear,
+                'inverse' => $spot ? null : !$linear,
+                'taker' => $this->safe_number($market, 'taker_commission_rate'),
+                'maker' => $this->safe_number($market, 'maker_commission_rate'),
+                'contractSize' => $contractSize,
+                'expiry' => $expiry,
+                'expiryDatetime' => $expiryDatetime,
+                'strike' => $this->parse_number($strike),
+                'optionType' => $optionType,
+                'precision' => array(
+                    'amount' => $this->parse_number('1'), // number of contracts
+                    'price' => $this->safe_number($market, 'tick_size'),
+                ),
+                'limits' => array(
+                    'leverage' => array(
+                        'min' => null,
+                        'max' => null,
+                    ),
+                    'amount' => array(
+                        'min' => $this->parse_number('1'),
+                        'max' => $this->safe_number($market, 'position_size_limit'),
+                    ),
+                    'price' => array(
+                        'min' => null,
+                        'max' => null,
+                    ),
+                    'cost' => array(
+                        'min' => $this->safe_number($market, 'min_size'),
+                        'max' => null,
+                    ),
+                ),
                 'info' => $market,
-                'active' => $active,
             );
         }
         return $result;
@@ -828,7 +909,7 @@ class delta extends Exchange {
         return $this->parse_balance($response);
     }
 
-    public function fetch_position($symbol, $params = null) {
+    public function fetch_position($symbol, $params = array ()) {
         $this->load_markets();
         $market = $this->market($symbol);
         $request = array(

@@ -22,6 +22,7 @@ module.exports = class qtrade extends Exchange {
                 'www': 'https://qtrade.io',
                 'doc': 'https://qtrade-exchange.github.io/qtrade-docs',
                 'referral': 'https://qtrade.io/?ref=BKOQWVFGRH2C',
+                'fees': 'https://qtrade.io/fees',
             },
             'has': {
                 'CORS': undefined,
@@ -37,6 +38,7 @@ module.exports = class qtrade extends Exchange {
                 'createReduceOnlyOrder': false,
                 'fetchBalance': true,
                 'fetchBorrowRate': false,
+                'fetchBorrowRateHistories': false,
                 'fetchBorrowRateHistory': false,
                 'fetchBorrowRates': false,
                 'fetchBorrowRatesPerSymbol': false,
@@ -50,8 +52,8 @@ module.exports = class qtrade extends Exchange {
                 'fetchFundingRateHistory': false,
                 'fetchFundingRates': false,
                 'fetchIndexOHLCV': false,
-                'fetchIsolatedPositions': false,
                 'fetchLeverage': false,
+                'fetchLeverageTiers': false,
                 'fetchMarkets': true,
                 'fetchMarkOHLCV': false,
                 'fetchMyTrades': true,
@@ -67,13 +69,18 @@ module.exports = class qtrade extends Exchange {
                 'fetchTicker': true,
                 'fetchTickers': true,
                 'fetchTrades': true,
+                'fetchTradingFee': true,
+                'fetchTradingFees': false,
                 'fetchTransactions': undefined,
+                'fetchTransfer': false,
+                'fetchTransfers': true,
                 'fetchWithdrawal': true,
                 'fetchWithdrawals': true,
                 'reduceMargin': false,
                 'setLeverage': false,
                 'setMarginMode': false,
                 'setPositionMode': false,
+                'transfer': false,
                 'withdraw': true,
             },
             'timeframes': {
@@ -129,8 +136,8 @@ module.exports = class qtrade extends Exchange {
                     'feeSide': 'quote',
                     'tierBased': true,
                     'percentage': true,
-                    'taker': 0.005,
-                    'maker': 0.0,
+                    'taker': this.parseNumber ('0.005'),
+                    'maker': this.parseNumber ('0.0'),
                 },
                 'funding': {
                     'withdraw': {},
@@ -227,8 +234,8 @@ module.exports = class qtrade extends Exchange {
                 'strike': undefined,
                 'optionType': undefined,
                 'precision': {
-                    'price': this.safeInteger (market, 'base_precision'),
                     'amount': this.safeInteger (market, 'market_precision'),
+                    'price': this.safeInteger (market, 'base_precision'),
                 },
                 'limits': {
                     'leverage': {
@@ -707,6 +714,48 @@ module.exports = class qtrade extends Exchange {
             'cost': cost,
             'fee': fee,
         }, market);
+    }
+
+    async fetchTradingFee (symbol, params = {}) {
+        await this.loadMarkets ();
+        const market = this.market (symbol);
+        const request = {
+            'market_string': market['id'],
+        };
+        const response = await this.publicGetMarketMarketString (this.extend (request, params));
+        //
+        //     {
+        //         data: {
+        //             market: {
+        //                 id: '41',
+        //                 market_currency: 'ETH',
+        //                 base_currency: 'BTC',
+        //                 maker_fee: '0',
+        //                 taker_fee: '0.005',
+        //                 metadata: {},
+        //                 can_trade: true,
+        //                 can_cancel: true,
+        //                 can_view: true,
+        //                 market_string: 'ETH_BTC',
+        //                 minimum_sell_amount: '0.001',
+        //                 minimum_buy_value: '0.0001',
+        //                 market_precision: '18',
+        //                 base_precision: '8'
+        //             },
+        //             recent_trades: []
+        //         }
+        //     }
+        //
+        const data = this.safeValue (response, 'data', {});
+        const marketData = this.safeValue (data, 'market', {});
+        return {
+            'info': marketData,
+            'symbol': symbol,
+            'maker': this.safeNumber (marketData, 'maker_fee'),
+            'taker': this.safeNumber (marketData, 'taker_fee'),
+            'percentage': true,
+            'tierBased': true,
+        };
     }
 
     parseBalance (response) {
@@ -1196,6 +1245,68 @@ module.exports = class qtrade extends Exchange {
         const data = this.safeValue (response, 'data', {});
         const deposits = this.safeValue (data, 'deposits', []);
         return this.parseTransactions (deposits, currency, since, limit);
+    }
+
+    async fetchTransfers (code = undefined, since = undefined, limit = undefined, params = {}) {
+        await this.loadMarkets ();
+        let currency = undefined;
+        if (code !== undefined) {
+            currency = this.currency (code);
+        }
+        const response = await this.privateGetTransfers (params);
+        //
+        //     {
+        //         "data": {
+        //             "transfers": [
+        //                 {
+        //                     "amount": "0.5",
+        //                     "created_at": "2018-12-10T00:06:41.066665Z",
+        //                     "currency": "BTC",
+        //                     "id": 9,
+        //                     "reason_code": "referral_payout",
+        //                     "reason_metadata": {
+        //                         "note": "January referral earnings"
+        //                     },
+        //                     "sender_email": "qtrade",
+        //                     "sender_id": 218
+        //                 }
+        //             ]
+        //         }
+        //     }
+        //
+        const data = this.safeValue (response, 'data', {});
+        const transfers = this.safeValue (data, 'transfers', []);
+        return this.parseTransfers (transfers, currency, since, limit);
+    }
+
+    parseTransfer (transfer, currency = undefined) {
+        //
+        //     {
+        //         "amount": "0.5",
+        //         "created_at": "2018-12-10T00:06:41.066665Z",
+        //         "currency": "BTC",
+        //         "id": 9,
+        //         "reason_code": "referral_payout",
+        //         "reason_metadata": {
+        //             "note": "January referral earnings"
+        //         },
+        //         "sender_email": "qtrade",
+        //         "sender_id": 218
+        //     }
+        //
+        const currencyId = this.safeString (transfer, 'currency');
+        const dateTime = this.safeString (transfer, 'created_at');
+        return {
+            'info': transfer,
+            'id': this.safeString (transfer, 'id'),
+            'timestamp': this.parse8601 (dateTime),
+            'datetime': dateTime,
+            'currency': this.safeCurrencyCode (currencyId, currency),
+            'amount': this.safeNumber (transfer, 'amount'),
+            'fromAccount': this.safeString (transfer, 'sender_id'),
+            'toAccount': undefined,
+            'status': 'ok',
+        };
     }
 
     async fetchWithdrawal (id, code = undefined, params = {}) {

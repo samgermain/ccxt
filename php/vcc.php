@@ -32,9 +32,13 @@ class vcc extends Exchange {
                 'cancelOrder' => true,
                 'createOrder' => true,
                 'createReduceOnlyOrder' => false,
+                'createStopLimitOrder' => true,
+                'createStopMarketOrder' => true,
+                'createStopOrder' => true,
                 'editOrder' => null,
                 'fetchBalance' => true,
                 'fetchBorrowRate' => false,
+                'fetchBorrowRateHistories' => false,
                 'fetchBorrowRateHistory' => false,
                 'fetchBorrowRates' => false,
                 'fetchBorrowRatesPerSymbol' => false,
@@ -47,8 +51,8 @@ class vcc extends Exchange {
                 'fetchFundingRateHistory' => false,
                 'fetchFundingRates' => false,
                 'fetchIndexOHLCV' => false,
-                'fetchIsolatedPositions' => false,
                 'fetchLeverage' => false,
+                'fetchLeverageTiers' => false,
                 'fetchMarkets' => true,
                 'fetchMarkOHLCV' => false,
                 'fetchMyTrades' => true,
@@ -67,11 +71,15 @@ class vcc extends Exchange {
                 'fetchTradingFee' => true,
                 'fetchTradingFees' => null,
                 'fetchTransactions' => true,
+                'fetchTransfer' => false,
+                'fetchTransfers' => false,
                 'fetchWithdrawals' => true,
                 'reduceMargin' => false,
                 'setLeverage' => false,
                 'setMarginMode' => false,
                 'setPositionMode' => false,
+                'transfer' => false,
+                'withdraw' => false,
             ),
             'timeframes' => array(
                 '1m' => '60000',
@@ -237,8 +245,8 @@ class vcc extends Exchange {
                 'strike' => null,
                 'optionType' => null,
                 'precision' => array(
-                    'price' => $this->safe_integer($precision, 'price'),
                     'amount' => $this->safe_integer($precision, 'amount'),
+                    'price' => $this->safe_integer($precision, 'price'),
                     'cost' => $this->safe_integer($precision, 'cost'),
                 ),
                 'limits' => array(
@@ -441,7 +449,7 @@ class vcc extends Exchange {
         );
         if ($limit !== null) {
             if (($limit !== 0) && ($limit !== 5) && ($limit !== 10) && ($limit !== 20) && ($limit !== 50) && ($limit !== 100) && ($limit !== 500)) {
-                throw new BadRequest($this->id . ' fetchOrderBook $limit must be 0, 5, 10, 20, 50, 100, 500 if specified');
+                throw new BadRequest($this->id . ' fetchOrderBook() $limit must be 0, 5, 10, 20, 50, 100, 500 if specified');
             }
             $request['depth'] = $limit;
         }

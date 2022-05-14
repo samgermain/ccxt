@@ -4,13 +4,6 @@
 # https://github.com/ccxt/ccxt/blob/master/CONTRIBUTING.md#how-to-contribute-code
 
 from ccxt.base.exchange import Exchange
-
-# -----------------------------------------------------------------------------
-
-try:
-    basestring  # Python 3
-except NameError:
-    basestring = str  # Python 2
 from ccxt.base.errors import ExchangeError
 from ccxt.base.errors import AuthenticationError
 from ccxt.base.errors import BadSymbol
@@ -35,6 +28,7 @@ class qtrade(Exchange):
                 'www': 'https://qtrade.io',
                 'doc': 'https://qtrade-exchange.github.io/qtrade-docs',
                 'referral': 'https://qtrade.io/?ref=BKOQWVFGRH2C',
+                'fees': 'https://qtrade.io/fees',
             },
             'has': {
                 'CORS': None,
@@ -50,6 +44,7 @@ class qtrade(Exchange):
                 'createReduceOnlyOrder': False,
                 'fetchBalance': True,
                 'fetchBorrowRate': False,
+                'fetchBorrowRateHistories': False,
                 'fetchBorrowRateHistory': False,
                 'fetchBorrowRates': False,
                 'fetchBorrowRatesPerSymbol': False,
@@ -63,8 +58,8 @@ class qtrade(Exchange):
                 'fetchFundingRateHistory': False,
                 'fetchFundingRates': False,
                 'fetchIndexOHLCV': False,
-                'fetchIsolatedPositions': False,
                 'fetchLeverage': False,
+                'fetchLeverageTiers': False,
                 'fetchMarkets': True,
                 'fetchMarkOHLCV': False,
                 'fetchMyTrades': True,
@@ -80,13 +75,18 @@ class qtrade(Exchange):
                 'fetchTicker': True,
                 'fetchTickers': True,
                 'fetchTrades': True,
+                'fetchTradingFee': True,
+                'fetchTradingFees': False,
                 'fetchTransactions': None,
+                'fetchTransfer': False,
+                'fetchTransfers': True,
                 'fetchWithdrawal': True,
                 'fetchWithdrawals': True,
                 'reduceMargin': False,
                 'setLeverage': False,
                 'setMarginMode': False,
                 'setPositionMode': False,
+                'transfer': False,
                 'withdraw': True,
             },
             'timeframes': {
@@ -142,8 +142,8 @@ class qtrade(Exchange):
                     'feeSide': 'quote',
                     'tierBased': True,
                     'percentage': True,
-                    'taker': 0.005,
-                    'maker': 0.0,
+                    'taker': self.parse_number('0.005'),
+                    'maker': self.parse_number('0.0'),
                 },
                 'funding': {
                     'withdraw': {},
@@ -239,8 +239,8 @@ class qtrade(Exchange):
                 'strike': None,
                 'optionType': None,
                 'precision': {
-                    'price': self.safe_integer(market, 'base_precision'),
                     'amount': self.safe_integer(market, 'market_precision'),
+                    'price': self.safe_integer(market, 'base_precision'),
                 },
                 'limits': {
                     'leverage': {
@@ -701,6 +701,47 @@ class qtrade(Exchange):
             'cost': cost,
             'fee': fee,
         }, market)
+
+    def fetch_trading_fee(self, symbol, params={}):
+        self.load_markets()
+        market = self.market(symbol)
+        request = {
+            'market_string': market['id'],
+        }
+        response = self.publicGetMarketMarketString(self.extend(request, params))
+        #
+        #     {
+        #         data: {
+        #             market: {
+        #                 id: '41',
+        #                 market_currency: 'ETH',
+        #                 base_currency: 'BTC',
+        #                 maker_fee: '0',
+        #                 taker_fee: '0.005',
+        #                 metadata: {},
+        #                 can_trade: True,
+        #                 can_cancel: True,
+        #                 can_view: True,
+        #                 market_string: 'ETH_BTC',
+        #                 minimum_sell_amount: '0.001',
+        #                 minimum_buy_value: '0.0001',
+        #                 market_precision: '18',
+        #                 base_precision: '8'
+        #             },
+        #             recent_trades: []
+        #         }
+        #     }
+        #
+        data = self.safe_value(response, 'data', {})
+        marketData = self.safe_value(data, 'market', {})
+        return {
+            'info': marketData,
+            'symbol': symbol,
+            'maker': self.safe_number(marketData, 'maker_fee'),
+            'taker': self.safe_number(marketData, 'taker_fee'),
+            'percentage': True,
+            'tierBased': True,
+        }
 
     def parse_balance(self, response):
         data = self.safe_value(response, 'data', {})
@@ -1170,6 +1211,65 @@ class qtrade(Exchange):
         deposits = self.safe_value(data, 'deposits', [])
         return self.parse_transactions(deposits, currency, since, limit)
 
+    def fetch_transfers(self, code=None, since=None, limit=None, params={}):
+        self.load_markets()
+        currency = None
+        if code is not None:
+            currency = self.currency(code)
+        response = self.privateGetTransfers(params)
+        #
+        #     {
+        #         "data": {
+        #             "transfers": [
+        #                 {
+        #                     "amount": "0.5",
+        #                     "created_at": "2018-12-10T00:06:41.066665Z",
+        #                     "currency": "BTC",
+        #                     "id": 9,
+        #                     "reason_code": "referral_payout",
+        #                     "reason_metadata": {
+        #                         "note": "January referral earnings"
+        #                     },
+        #                     "sender_email": "qtrade",
+        #                     "sender_id": 218
+        #                 }
+        #             ]
+        #         }
+        #     }
+        #
+        data = self.safe_value(response, 'data', {})
+        transfers = self.safe_value(data, 'transfers', [])
+        return self.parse_transfers(transfers, currency, since, limit)
+
+    def parse_transfer(self, transfer, currency=None):
+        #
+        #     {
+        #         "amount": "0.5",
+        #         "created_at": "2018-12-10T00:06:41.066665Z",
+        #         "currency": "BTC",
+        #         "id": 9,
+        #         "reason_code": "referral_payout",
+        #         "reason_metadata": {
+        #             "note": "January referral earnings"
+        #         },
+        #         "sender_email": "qtrade",
+        #         "sender_id": 218
+        #     }
+        #
+        currencyId = self.safe_string(transfer, 'currency')
+        dateTime = self.safe_string(transfer, 'created_at')
+        return {
+            'info': transfer,
+            'id': self.safe_string(transfer, 'id'),
+            'timestamp': self.parse8601(dateTime),
+            'datetime': dateTime,
+            'currency': self.safe_currency_code(currencyId, currency),
+            'amount': self.safe_number(transfer, 'amount'),
+            'fromAccount': self.safe_string(transfer, 'sender_id'),
+            'toAccount': None,
+            'status': 'ok',
+        }
+
     def fetch_withdrawal(self, id, code=None, params={}):
         self.load_markets()
         request = {
@@ -1460,7 +1560,7 @@ class qtrade(Exchange):
             ])  # eslint-disable-line quotes
             hash = self.hash(self.encode(auth), 'sha256', 'base64')
             key = self.apiKey
-            if not isinstance(key, basestring):
+            if not isinstance(key, str):
                 key = str(key)
             signature = 'HMAC-SHA256 ' + key + ':' + hash
             headers = {

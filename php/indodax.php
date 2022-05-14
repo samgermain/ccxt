@@ -16,6 +16,9 @@ class indodax extends Exchange {
             'id' => 'indodax',
             'name' => 'INDODAX',
             'countries' => array( 'ID' ), // Indonesia
+            // 10 requests per second for making trades => 1000ms / 10 = 100ms
+            // 180 requests per minute (public endpoints) = 2 requests per second => cost = (1000ms / rateLimit) / 2 = 5
+            'rateLimit' => 100,
             'has' => array(
                 'CORS' => null,
                 'spot' => true,
@@ -40,8 +43,8 @@ class indodax extends Exchange {
                 'fetchFundingRateHistory' => false,
                 'fetchFundingRates' => false,
                 'fetchIndexOHLCV' => false,
-                'fetchIsolatedPositions' => false,
                 'fetchLeverage' => false,
+                'fetchLeverageTiers' => false,
                 'fetchMarkets' => true,
                 'fetchMarkOHLCV' => false,
                 'fetchMyTrades' => null,
@@ -57,6 +60,8 @@ class indodax extends Exchange {
                 'fetchTickers' => null,
                 'fetchTime' => true,
                 'fetchTrades' => true,
+                'fetchTradingFee' => false,
+                'fetchTradingFees' => false,
                 'reduceMargin' => false,
                 'setLeverage' => false,
                 'setMarginMode' => false,
@@ -77,24 +82,31 @@ class indodax extends Exchange {
             'api' => array(
                 'public' => array(
                     'get' => array(
-                        'server_time',
-                        'pairs',
-                        '{pair}/ticker',
-                        '{pair}/trades',
-                        '{pair}/depth',
+                        'server_time' => 5,
+                        'pairs' => 5,
+                        'price_increments' => 5,
+                        'summaries' => 5,
+                        'ticker_all' => 5,
+                        '{pair}/ticker' => 5,
+                        '{pair}/trades' => 5,
+                        '{pair}/depth' => 5,
                     ),
                 ),
                 'private' => array(
                     'post' => array(
-                        'getInfo',
-                        'transHistory',
-                        'trade',
-                        'tradeHistory',
-                        'getOrder',
-                        'openOrders',
-                        'cancelOrder',
-                        'orderHistory',
-                        'withdrawCoin',
+                        'getInfo' => 4,
+                        'transHistory' => 4, // TODO add fetchDeposits, fetchWithdrawals, fetchTransactionsbyType
+                        'trade' => 1,
+                        'tradeHistory' => 4, // TODO add fetchMyTrades
+                        'openOrders' => 4,
+                        'orderHistory' => 4,
+                        'getOrder' => 4,
+                        'cancelOrder' => 4,
+                        'withdrawFee' => 4,
+                        'withdrawCoin' => 4,
+                        'listDownline' => 4,
+                        'checkDownline' => 4,
+                        'createVoucher' => 4, // partner only
                     ),
                 ),
             ),
@@ -199,8 +211,8 @@ class indodax extends Exchange {
                 'type' => 'spot',
                 'spot' => true,
                 'margin' => false,
-                'future' => false,
                 'swap' => false,
+                'future' => false,
                 'option' => false,
                 'active' => $isMaintenance ? false : true,
                 'contract' => false,
@@ -214,7 +226,7 @@ class indodax extends Exchange {
                 'optionType' => null,
                 'percentage' => true,
                 'precision' => array(
-                    'amount' => 8,
+                    'amount' => intval('8'),
                     'price' => $this->safe_integer($market, 'price_round'),
                 ),
                 'limits' => array(
@@ -308,6 +320,48 @@ class indodax extends Exchange {
         return $this->parse_order_book($orderbook, $symbol, null, 'buy', 'sell');
     }
 
+    public function parse_ticker($ticker, $market = null) {
+        //
+        //     {
+        //         "high":"0.01951",
+        //         "low":"0.01877",
+        //         "vol_eth":"39.38839319",
+        //         "vol_btc":"0.75320886",
+        //         "last":"0.01896",
+        //         "buy":"0.01896",
+        //         "sell":"0.019",
+        //         "server_time":1565248908
+        //     }
+        //
+        $symbol = $this->safe_symbol(null, $market);
+        $timestamp = $this->safe_timestamp($ticker, 'server_time');
+        $baseVolume = 'vol_' . strtolower($market['baseId']);
+        $quoteVolume = 'vol_' . strtolower($market['quoteId']);
+        $last = $this->safe_string($ticker, 'last');
+        return $this->safe_ticker(array(
+            'symbol' => $symbol,
+            'timestamp' => $timestamp,
+            'datetime' => $this->iso8601($timestamp),
+            'high' => $this->safe_string($ticker, 'high'),
+            'low' => $this->safe_string($ticker, 'low'),
+            'bid' => $this->safe_string($ticker, 'buy'),
+            'bidVolume' => null,
+            'ask' => $this->safe_string($ticker, 'sell'),
+            'askVolume' => null,
+            'vwap' => null,
+            'open' => null,
+            'close' => $last,
+            'last' => $last,
+            'previousClose' => null,
+            'change' => null,
+            'percentage' => null,
+            'average' => null,
+            'baseVolume' => $this->safe_string($ticker, $baseVolume),
+            'quoteVolume' => $this->safe_string($ticker, $quoteVolume),
+            'info' => $ticker,
+        ), $market, false);
+    }
+
     public function fetch_ticker($symbol, $params = array ()) {
         $this->load_markets();
         $market = $this->market($symbol);
@@ -329,64 +383,27 @@ class indodax extends Exchange {
         //         }
         //     }
         //
-        $ticker = $response['ticker'];
-        $timestamp = $this->safe_timestamp($ticker, 'server_time');
-        $baseVolume = 'vol_' . strtolower($market['baseId']);
-        $quoteVolume = 'vol_' . strtolower($market['quoteId']);
-        $last = $this->safe_number($ticker, 'last');
-        return array(
-            'symbol' => $symbol,
-            'timestamp' => $timestamp,
-            'datetime' => $this->iso8601($timestamp),
-            'high' => $this->safe_number($ticker, 'high'),
-            'low' => $this->safe_number($ticker, 'low'),
-            'bid' => $this->safe_number($ticker, 'buy'),
-            'bidVolume' => null,
-            'ask' => $this->safe_number($ticker, 'sell'),
-            'askVolume' => null,
-            'vwap' => null,
-            'open' => null,
-            'close' => $last,
-            'last' => $last,
-            'previousClose' => null,
-            'change' => null,
-            'percentage' => null,
-            'average' => null,
-            'baseVolume' => $this->safe_number($ticker, $baseVolume),
-            'quoteVolume' => $this->safe_number($ticker, $quoteVolume),
-            'info' => $ticker,
-        );
+        $ticker = $this->safe_value($response, 'ticker', array());
+        return $this->parse_ticker($ticker, $market);
     }
 
     public function parse_trade($trade, $market = null) {
         $timestamp = $this->safe_timestamp($trade, 'date');
-        $id = $this->safe_string($trade, 'tid');
-        $symbol = null;
-        if ($market !== null) {
-            $symbol = $market['symbol'];
-        }
-        $type = null;
-        $side = $this->safe_string($trade, 'type');
-        $priceString = $this->safe_string($trade, 'price');
-        $amountString = $this->safe_string($trade, 'amount');
-        $price = $this->parse_number($priceString);
-        $amount = $this->parse_number($amountString);
-        $cost = $this->parse_number(Precise::string_mul($priceString, $amountString));
-        return array(
-            'id' => $id,
+        return $this->safe_trade(array(
+            'id' => $this->safe_string($trade, 'tid'),
             'info' => $trade,
             'timestamp' => $timestamp,
             'datetime' => $this->iso8601($timestamp),
-            'symbol' => $symbol,
-            'type' => $type,
-            'side' => $side,
+            'symbol' => $this->safe_symbol(null, $market),
+            'type' => null,
+            'side' => $this->safe_string($trade, 'type'),
             'order' => null,
             'takerOrMaker' => null,
-            'price' => $price,
-            'amount' => $amount,
-            'cost' => $cost,
+            'price' => $this->safe_string($trade, 'price'),
+            'amount' => $this->safe_string($trade, 'amount'),
+            'cost' => null,
             'fee' => null,
-        );
+        ), $market);
     }
 
     public function fetch_trades($symbol, $since = null, $limit = null, $params = array ()) {
@@ -542,6 +559,7 @@ class indodax extends Exchange {
         $market = null;
         if ($symbol !== null) {
             $market = $this->market($symbol);
+            $symbol = $market['symbol'];
             $request['pair'] = $market['id'];
         }
         $response = $this->privatePostOrderHistory (array_merge($request, $params));
@@ -552,7 +570,7 @@ class indodax extends Exchange {
 
     public function create_order($symbol, $type, $side, $amount, $price = null, $params = array ()) {
         if ($type !== 'limit') {
-            throw new ExchangeError($this->id . ' allows limit orders only');
+            throw new ExchangeError($this->id . ' createOrder() allows limit orders only');
         }
         $this->load_markets();
         $market = $this->market($symbol);
@@ -632,13 +650,48 @@ class indodax extends Exchange {
         //         "withdraw_memo" => "123123"
         //     }
         //
-        $id = null;
-        if ((is_array($response) && array_key_exists('txid', $response)) && (strlen($response['txid']) > 0)) {
-            $id = $response['txid'];
-        }
+        return $this->parse_transaction($response, $currency);
+    }
+
+    public function parse_transaction($transaction, $currency = null) {
+        //
+        // withdraw
+        //
+        //     {
+        //         "success" => 1,
+        //         "status" => "approved",
+        //         "withdraw_currency" => "xrp",
+        //         "withdraw_address" => "rwWr7KUZ3ZFwzgaDGjKBysADByzxvohQ3C",
+        //         "withdraw_amount" => "10000.00000000",
+        //         "fee" => "2.00000000",
+        //         "amount_after_fee" => "9998.00000000",
+        //         "submit_time" => "1509469200",
+        //         "withdraw_id" => "xrp-12345",
+        //         "txid" => "",
+        //         "withdraw_memo" => "123123"
+        //     }
+        //
+        $currency = $this->safe_currency(null, $currency);
         return array(
-            'info' => $response,
-            'id' => $id,
+            'id' => $this->safe_string($transaction, 'withdraw_id'),
+            'txid' => $this->safe_string($transaction, 'txid'),
+            'timestamp' => null,
+            'datetime' => null,
+            'network' => null,
+            'addressFrom' => null,
+            'address' => null,
+            'addressTo' => null,
+            'amount' => null,
+            'type' => null,
+            'currency' => $currency['code'],
+            'status' => null,
+            'updated' => null,
+            'tagFrom' => null,
+            'tag' => null,
+            'tagTo' => null,
+            'comment' => null,
+            'fee' => null,
+            'info' => $transaction,
         );
     }
 

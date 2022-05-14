@@ -22,10 +22,10 @@ module.exports = class bitbns extends Exchange {
             'has': {
                 'CORS': undefined,
                 'spot': true,
-                'margin': undefined,
+                'margin': undefined, // has but unimplemented
                 'swap': false,
                 'future': false,
-                'option': false,
+                'option': undefined, // coming soon
                 'cancelOrder': true,
                 'createOrder': true,
                 'fetchBalance': true,
@@ -36,8 +36,6 @@ module.exports = class bitbns extends Exchange {
                 'fetchFundingRateHistory': false,
                 'fetchFundingRates': false,
                 'fetchIndexOHLCV': false,
-                'fetchIsolatedPositions': false,
-                'fetchLeverage': false,
                 'fetchMarkets': true,
                 'fetchMarkOHLCV': false,
                 'fetchMyTrades': true,
@@ -45,17 +43,19 @@ module.exports = class bitbns extends Exchange {
                 'fetchOpenOrders': true,
                 'fetchOrder': true,
                 'fetchOrderBook': true,
-                'fetchPositions': false,
-                'fetchPositionsRisk': false,
                 'fetchPremiumIndexOHLCV': false,
                 'fetchStatus': true,
                 'fetchTicker': 'emulated',
                 'fetchTickers': true,
                 'fetchTrades': true,
+                'fetchTradingFee': false,
+                'fetchTradingFees': false,
+                'fetchTransfer': false,
+                'fetchTransfers': false,
+                'fetchWithdrawal': false,
                 'fetchWithdrawals': true,
-                'reduceMargin': false,
-                'setLeverage': false,
-                'setPositionMode': false,
+                'transfer': false,
+                'withdraw': false,
             },
             'timeframes': {
             },
@@ -161,15 +161,14 @@ module.exports = class bitbns extends Exchange {
         //         "code":200
         //     }
         //
-        let status = this.safeString (response, 'status');
-        if (status !== undefined) {
-            status = (status === '1') ? 'ok' : 'maintenance';
-            this.status = this.extend (this.status, {
-                'status': status,
-                'updated': this.milliseconds (),
-            });
-        }
-        return this.status;
+        const statusRaw = this.safeString (response, 'status');
+        return {
+            'status': this.safeString ({ '1': 'ok' }, statusRaw, statusRaw),
+            'updated': this.milliseconds (),
+            'eta': undefined,
+            'url': undefined,
+            'info': response,
+        };
     }
 
     async fetchMarkets (params = {}) {
@@ -229,11 +228,11 @@ module.exports = class bitbns extends Exchange {
                 'swap': false,
                 'future': false,
                 'option': false,
+                'active': undefined,
                 'contract': false,
                 'linear': undefined,
                 'inverse': undefined,
                 'contractSize': undefined,
-                'active': undefined,
                 'expiry': undefined,
                 'expiryDatetime': undefined,
                 'strike': undefined,
@@ -294,7 +293,7 @@ module.exports = class bitbns extends Exchange {
         //     }
         //
         const timestamp = this.safeInteger (response, 'timestamp');
-        return this.parseOrderBook (response, timestamp);
+        return this.parseOrderBook (response, symbol, timestamp);
     }
 
     parseTicker (ticker, market = undefined) {

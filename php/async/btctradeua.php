@@ -8,6 +8,7 @@ namespace ccxt\async;
 use Exception; // a common import
 use \ccxt\ExchangeError;
 use \ccxt\ArgumentsRequired;
+use \ccxt\Precise;
 
 class btctradeua extends Exchange {
 
@@ -31,6 +32,7 @@ class btctradeua extends Exchange {
                 'createReduceOnlyOrder' => false,
                 'fetchBalance' => true,
                 'fetchBorrowRate' => false,
+                'fetchBorrowRateHistories' => false,
                 'fetchBorrowRateHistory' => false,
                 'fetchBorrowRates' => false,
                 'fetchBorrowRatesPerSymbol' => false,
@@ -39,7 +41,6 @@ class btctradeua extends Exchange {
                 'fetchFundingRateHistory' => false,
                 'fetchFundingRates' => false,
                 'fetchIndexOHLCV' => false,
-                'fetchIsolatedPositions' => false,
                 'fetchLeverage' => false,
                 'fetchMarkOHLCV' => false,
                 'fetchOpenOrders' => true,
@@ -50,6 +51,8 @@ class btctradeua extends Exchange {
                 'fetchPremiumIndexOHLCV' => false,
                 'fetchTicker' => true,
                 'fetchTrades' => true,
+                'fetchTradingFee' => false,
+                'fetchTradingFees' => false,
                 'reduceMargin' => false,
                 'setLeverage' => false,
                 'setMarginMode' => false,
@@ -171,13 +174,14 @@ class btctradeua extends Exchange {
         return $this->parse_order_book($orderbook, $symbol, null, 'bids', 'asks', 'price', 'currency_trade');
     }
 
-    public function fetch_ticker($symbol, $params = array ()) {
-        yield $this->load_markets();
-        $request = array(
-            'symbol' => $this->market_id($symbol),
-        );
-        $response = yield $this->publicGetJapanStatHighSymbol (array_merge($request, $params));
-        $ticker = $this->safe_value($response, 'trades');
+    public function parse_ticker($ticker, $market = null) {
+        //
+        // [
+        //     [1640789101000, 1292663.0, 1311823.61303, 1295794.252, 1311823.61303, 0.030175],
+        //     [1640790902000, 1311823.61303, 1310820.96, 1290000.0, 1290000.0, 0.042533],
+        // ],
+        //
+        $symbol = $this->safe_symbol(null, $market);
         $timestamp = $this->milliseconds();
         $result = array(
             'symbol' => $symbol,
@@ -207,28 +211,49 @@ class btctradeua extends Exchange {
             for ($i = $start; $i < count($ticker); $i++) {
                 $candle = $ticker[$i];
                 if ($result['open'] === null) {
-                    $result['open'] = $this->safe_number($candle, 1);
+                    $result['open'] = $this->safe_string($candle, 1);
                 }
-                $high = $this->safe_number($candle, 2);
-                if (($result['high'] === null) || (($high !== null) && ($result['high'] < $high))) {
+                $high = $this->safe_string($candle, 2);
+                if (($result['high'] === null) || (($high !== null) && Precise::string_lt($result['high'], $high))) {
                     $result['high'] = $high;
                 }
-                $low = $this->safe_number($candle, 3);
-                if (($result['low'] === null) || (($low !== null) && ($result['low'] > $low))) {
+                $low = $this->safe_string($candle, 3);
+                if (($result['low'] === null) || (($low !== null) && Precise::string_lt($result['low'], $low))) {
                     $result['low'] = $low;
                 }
-                $baseVolume = $this->safe_number($candle, 5);
+                $baseVolume = $this->safe_string($candle, 5);
                 if ($result['baseVolume'] === null) {
                     $result['baseVolume'] = $baseVolume;
                 } else {
-                    $result['baseVolume'] = $this->sum($result['baseVolume'], $baseVolume);
+                    $result['baseVolume'] = Precise::string_add($result['baseVolume'], $baseVolume);
                 }
             }
             $last = $tickerLength - 1;
-            $result['last'] = $this->safe_number($ticker[$last], 4);
+            $result['last'] = $this->safe_string($ticker[$last], 4);
             $result['close'] = $result['last'];
         }
-        return $result;
+        return $this->safe_ticker($result, $market, false);
+    }
+
+    public function fetch_ticker($symbol, $params = array ()) {
+        yield $this->load_markets();
+        $market = $this->market($symbol);
+        $request = array(
+            'symbol' => $market['id'],
+        );
+        $response = yield $this->publicGetJapanStatHighSymbol (array_merge($request, $params));
+        $ticker = $this->safe_value($response, 'trades');
+        //
+        // {
+        //     "status" => true,
+        //     "volume_trade" => "0.495703",
+        //     "trades" => [
+        //         [1640789101000, 1292663.0, 1311823.61303, 1295794.252, 1311823.61303, 0.030175],
+        //         [1640790902000, 1311823.61303, 1310820.96, 1290000.0, 1290000.0, 0.042533],
+        //     ],
+        // }
+        //
+        return $this->parse_ticker($ticker, $market);
     }
 
     public function convert_month_name_to_string($cyrillic) {
@@ -308,16 +333,13 @@ class btctradeua extends Exchange {
         $side = $this->safe_string($trade, 'type');
         $priceString = $this->safe_string($trade, 'price');
         $amountString = $this->safe_string($trade, 'amnt_trade');
-        $symbol = null;
-        if ($market !== null) {
-            $symbol = $market['symbol'];
-        }
+        $market = $this->safe_market(null, $market);
         return $this->safe_trade(array(
             'id' => $id,
             'info' => $trade,
             'timestamp' => $timestamp,
             'datetime' => $this->iso8601($timestamp),
-            'symbol' => $symbol,
+            'symbol' => $market['symbol'],
             'type' => $type,
             'side' => $side,
             'order' => null,
@@ -350,7 +372,7 @@ class btctradeua extends Exchange {
 
     public function create_order($symbol, $type, $side, $amount, $price = null, $params = array ()) {
         if ($type === 'market') {
-            throw new ExchangeError($this->id . ' allows limit orders only');
+            throw new ExchangeError($this->id . ' createOrder() allows limit orders only');
         }
         yield $this->load_markets();
         $market = $this->market($symbol);

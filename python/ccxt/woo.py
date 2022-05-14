@@ -29,18 +29,19 @@ class woo(Exchange):
             'has': {
                 'CORS': None,
                 'spot': True,
-                'margin': None,
-                'swap': None,
-                'future': None,
-                'option': None,
-                'addMargin': False,
+                'margin': True,
+                'swap': False,
+                'future': False,
+                'option': False,
                 'cancelAllOrders': False,
                 'cancelOrder': True,
                 'cancelOrders': True,
                 'cancelWithdraw': False,  # exchange have that endpoint disabled atm, but was once implemented in ccxt per old docs: https://kronosresearch.github.io/wootrade-documents/#cancel-withdraw-request
                 'createMarketOrder': False,
                 'createOrder': True,
-                'deposit': False,
+                'createStopLimitOrder': False,
+                'createStopMarketOrder': False,
+                'createStopOrder': False,
                 'fetchBalance': True,
                 'fetchCanceledOrders': False,
                 'fetchClosedOrder': False,
@@ -48,9 +49,14 @@ class woo(Exchange):
                 'fetchCurrencies': True,
                 'fetchDepositAddress': False,
                 'fetchDeposits': True,
+                'fetchFundingHistory': False,
+                'fetchFundingRate': False,
                 'fetchFundingRateHistory': False,
+                'fetchFundingRates': False,
+                'fetchIndexOHLCV': False,
                 'fetchLedger': True,
                 'fetchMarkets': True,
+                'fetchMarkOHLCV': False,
                 'fetchMyTrades': True,
                 'fetchOHLCV': True,
                 'fetchOpenOrder': False,
@@ -59,18 +65,18 @@ class woo(Exchange):
                 'fetchOrderBook': True,
                 'fetchOrders': True,
                 'fetchOrderTrades': True,
-                'fetchPosition': False,
-                'fetchPositions': False,
+                'fetchPremiumIndexOHLCV': False,
                 'fetchStatus': False,
                 'fetchTicker': False,
                 'fetchTickers': False,
                 'fetchTime': False,
                 'fetchTrades': True,
+                'fetchTradingFee': False,
+                'fetchTradingFees': True,
                 'fetchTransactions': True,
                 'fetchTransfers': True,
                 'fetchWithdrawals': True,
-                'reduceMargin': False,
-                'setLeverage': False,
+                'transfer': True,
                 'withdraw': False,  # exchange have that endpoint disabled atm, but was once implemented in ccxt per old docs: https://kronosresearch.github.io/wootrade-documents/#token-withdraw
             },
             'timeframes': {
@@ -138,6 +144,7 @@ class woo(Exchange):
                         },
                         'post': {
                             'order': 5,  # 2 requests per 1 second per symbol
+                            'asset/main_sub_transfer': 30,  # 20 requests per 60 seconds
                             'asset/withdraw': 120,  # implemented in ccxt, disabled on the exchange side https://kronosresearch.github.io/wootrade-documents/#token-withdraw
                         },
                         'delete': {
@@ -160,8 +167,8 @@ class woo(Exchange):
                 'trading': {
                     'tierBased': True,
                     'percentage': True,
-                    'maker': 0.2 / 100,
-                    'taker': 0.5 / 100,
+                    'maker': self.parse_number('0.0002'),
+                    'taker': self.parse_number('0.0005'),
                 },
             },
             'options': {
@@ -217,6 +224,9 @@ class woo(Exchange):
                 'defaultNetworkCodeForCurrencies': {
                     # 'USDT': 'TRC20',
                     # 'BTC': 'BTC',
+                },
+                'transfer': {
+                    'fillResponseFromRequest': True,
                 },
             },
             'commonCurrencies': {},
@@ -311,14 +321,14 @@ class woo(Exchange):
                 'settleId': None,
                 'type': marketTypeVal,
                 'spot': isSpot,
-                'margin': False,
+                'margin': True,
                 'swap': False,
                 'future': False,
                 'option': False,
                 'active': None,
                 'contract': isSwap or isFuture or isOption,
-                'linear': False,
-                'inverse': False,
+                'linear': None,
+                'inverse': None,
                 'contractSize': None,
                 'expiry': None,
                 'expiryDatetime': None,
@@ -475,6 +485,46 @@ class woo(Exchange):
                 'currency': feeCurrencyCode,
             }
         return fee
+
+    def fetch_trading_fees(self, params={}):
+        self.load_markets()
+        response = self.v1PrivateGetClientInfo(params)
+        #
+        #     {
+        #         "application":{
+        #             "id":45585,
+        #             "leverage":3.00,
+        #             "otpauth":false,
+        #             "alias":"email@address.com",
+        #             "application_id":"c2cc4d74-c8cb-4e10-84db-af2089b8c68a",
+        #             "account":"email@address.com",
+        #             "account_mode":"PURE_SPOT",
+        #             "taker_fee_rate":5.00,
+        #             "maker_fee_rate":2.00,
+        #             "interest_rate":0.00,
+        #             "futures_leverage":1.00,
+        #             "futures_taker_fee_rate":5.00,
+        #             "futures_maker_fee_rate":2.00
+        #         },
+        #         "margin_rate":1000,
+        #         "success":true
+        #     }
+        #
+        application = self.safe_value(response, 'application', {})
+        maker = self.safe_string(application, 'maker_fee_rate')
+        taker = self.safe_string(application, 'taker_fee_rate')
+        result = {}
+        for i in range(0, len(self.symbols)):
+            symbol = self.symbols[i]
+            result[symbol] = {
+                'info': response,
+                'symbol': symbol,
+                'maker': self.parse_number(Precise.string_div(maker, '10000')),
+                'taker': self.parse_number(Precise.string_div(taker, '10000')),
+                'percentage': True,
+                'tierBased': True,
+            }
+        return result
 
     def fetch_currencies(self, params={}):
         method = None
@@ -1266,6 +1316,31 @@ class woo(Exchange):
         }
         return self.safe_string(statuses, status, status)
 
+    def transfer(self, code, amount, fromAccount, toAccount, params={}):
+        self.load_markets()
+        currency = self.currency(code)
+        request = {
+            'token': currency['id'],
+            'amount': self.parse_number(amount),
+            'from_application_id': fromAccount,
+            'to_application_id': toAccount,
+        }
+        response = self.v1PrivatePostAssetMainSubTransfer(self.extend(request, params))
+        #
+        #     {
+        #         "success": True,
+        #         "id": 200
+        #     }
+        #
+        transfer = self.parse_transfer(response, currency)
+        transferOptions = self.safe_value(self.options, 'transfer', {})
+        fillResponseFromRequest = self.safe_value(transferOptions, 'fillResponseFromRequest', True)
+        if fillResponseFromRequest:
+            transfer['amount'] = amount
+            transfer['fromAccount'] = fromAccount
+            transfer['toAccount'] = toAccount
+        return transfer
+
     def fetch_transfers(self, code=None, since=None, limit=None, params={}):
         request = {
             'type': 'COLLATERAL',
@@ -1274,7 +1349,33 @@ class woo(Exchange):
         return self.parse_transfers(rows, currency, since, limit, params)
 
     def parse_transfer(self, transfer, currency=None):
-        # example is "fetchTransactions"
+        #
+        #    getAssetHistoryRows
+        #        {
+        #            "created_time": "1579399877.041",  # Unix epoch time in seconds
+        #            "updated_time": "1579399877.041",  # Unix epoch time in seconds
+        #            "id": "202029292829292",
+        #            "external_id": "202029292829292",
+        #            "application_id": null,
+        #            "token": "ETH",
+        #            "target_address": "0x31d64B3230f8baDD91dE1710A65DF536aF8f7cDa",
+        #            "source_address": "0x70fd25717f769c7f9a46b319f0f9103c0d887af0",
+        #            "extra": "",
+        #            "type": "BALANCE",
+        #            "token_side": "DEPOSIT",
+        #            "amount": 1000,
+        #            "tx_id": "0x8a74c517bc104c8ebad0c3c3f64b1f302ed5f8bca598ae4459c63419038106b6",
+        #            "fee_token": null,
+        #            "fee_amount": null,
+        #            "status": "CONFIRMING"
+        #        }
+        #
+        #    v1PrivatePostAssetMainSubTransfer
+        #        {
+        #            "success": True,
+        #            "id": 200
+        #        }
+        #
         networkizedCode = self.safe_string(transfer, 'token')
         currencyDefined = self.get_currency_from_chaincode(networkizedCode, currency)
         code = currencyDefined['code']
@@ -1286,10 +1387,14 @@ class woo(Exchange):
         if movementDirection == 'withdraw':
             fromAccount = None
             toAccount = 'spot'
-        else:
+        elif movementDirection == 'deposit':
             fromAccount = 'spot'
             toAccount = None
         timestamp = self.safe_timestamp(transfer, 'created_time')
+        success = self.safe_value(transfer, 'success')
+        status = None
+        if success is not None:
+            status = 'ok' if success else 'failed'
         return {
             'id': self.safe_string(transfer, 'id'),
             'timestamp': timestamp,
@@ -1298,12 +1403,19 @@ class woo(Exchange):
             'amount': self.safe_number(transfer, 'amount'),
             'fromAccount': fromAccount,
             'toAccount': toAccount,
-            'status': self.parse_transfer_status(self.safe_string(transfer, 'status')),
+            'status': self.parse_transfer_status(self.safe_string(transfer, 'status', status)),
             'info': transfer,
         }
 
     def parse_transfer_status(self, status):
-        return self.parse_transaction_status(status)
+        statuses = {
+            'NEW': 'pending',
+            'CONFIRMING': 'pending',
+            'PROCESSING': 'pending',
+            'COMPLETED': 'ok',
+            'CANCELED': 'canceled',
+        }
+        return self.safe_string(statuses, status, status)
 
     def nonce(self):
         return self.milliseconds()

@@ -23,26 +23,39 @@ module.exports = class coinbase extends Exchange {
             'has': {
                 'CORS': true,
                 'spot': true,
-                'margin': undefined,
-                'swap': undefined,
-                'future': undefined,
-                'option': undefined,
+                'margin': false,
+                'swap': false,
+                'future': false,
+                'option': false,
+                'addMargin': false,
                 'cancelOrder': undefined,
                 'createDepositAddress': true,
                 'createOrder': undefined,
-                'deposit': undefined,
+                'createReduceOnlyOrder': false,
+                'createStopLimitOrder': false,
+                'createStopMarketOrder': false,
+                'createStopOrder': false,
                 'fetchAccounts': true,
                 'fetchBalance': true,
                 'fetchBidsAsks': undefined,
                 'fetchBorrowRate': false,
+                'fetchBorrowRateHistories': false,
+                'fetchBorrowRateHistory': false,
                 'fetchBorrowRates': false,
+                'fetchBorrowRatesPerSymbol': false,
                 'fetchClosedOrders': undefined,
                 'fetchCurrencies': true,
                 'fetchDepositAddress': undefined,
                 'fetchDeposits': true,
+                'fetchFundingHistory': false,
+                'fetchFundingRate': false,
+                'fetchFundingRateHistory': false,
+                'fetchFundingRates': false,
                 'fetchIndexOHLCV': false,
                 'fetchL2OrderBook': false,
                 'fetchLedger': true,
+                'fetchLeverage': false,
+                'fetchLeverageTiers': false,
                 'fetchMarkets': true,
                 'fetchMarkOHLCV': false,
                 'fetchMyBuys': true,
@@ -53,13 +66,22 @@ module.exports = class coinbase extends Exchange {
                 'fetchOrder': undefined,
                 'fetchOrderBook': false,
                 'fetchOrders': undefined,
+                'fetchPosition': false,
+                'fetchPositions': false,
+                'fetchPositionsRisk': false,
                 'fetchPremiumIndexOHLCV': false,
                 'fetchTicker': true,
                 'fetchTickers': true,
                 'fetchTime': true,
                 'fetchTrades': undefined,
+                'fetchTradingFee': false,
+                'fetchTradingFees': false,
                 'fetchTransactions': undefined,
                 'fetchWithdrawals': true,
+                'reduceMargin': false,
+                'setLeverage': false,
+                'setMarginMode': false,
+                'setPositionMode': false,
                 'withdraw': undefined,
             },
             'urls': {
@@ -256,7 +278,7 @@ module.exports = class coinbase extends Exchange {
             }
         }
         if (accountId === undefined) {
-            throw new ExchangeError (this.id + ' createDepositAddress could not find the account with matching currency code, specify an `account_id` extra param');
+            throw new ExchangeError (this.id + ' createDepositAddress() could not find the account with matching currency code, specify an `account_id` extra param');
         }
         const request = {
             'account_id': accountId,
@@ -556,38 +578,39 @@ module.exports = class coinbase extends Exchange {
                     const quoteCurrency = data[j];
                     const quoteId = this.safeString (quoteCurrency, 'id');
                     const quote = this.safeCurrencyCode (quoteId);
-                    const symbol = base + '/' + quote;
-                    const id = baseId + '-' + quoteId;
                     result.push ({
-                        'id': id,
-                        'symbol': symbol,
+                        'id': baseId + '-' + quoteId,
+                        'symbol': base + '/' + quote,
                         'base': base,
                         'quote': quote,
+                        'settle': undefined,
                         'baseId': baseId,
                         'quoteId': quoteId,
+                        'settleId': undefined,
                         'type': 'spot',
                         'spot': true,
                         'margin': false,
-                        'future': false,
                         'swap': false,
+                        'future': false,
                         'option': false,
-                        'optionType': undefined,
-                        'strike': undefined,
+                        'active': undefined,
+                        'contract': false,
                         'linear': undefined,
                         'inverse': undefined,
-                        'contract': false,
                         'contractSize': undefined,
-                        'settle': undefined,
-                        'settleId': undefined,
                         'expiry': undefined,
                         'expiryDatetime': undefined,
-                        'active': undefined,
-                        'info': quoteCurrency,
+                        'strike': undefined,
+                        'optionType': undefined,
                         'precision': {
                             'amount': undefined,
                             'price': undefined,
                         },
                         'limits': {
+                            'leverage': {
+                                'min': undefined,
+                                'max': undefined,
+                            },
                             'amount': {
                                 'min': undefined,
                                 'max': undefined,
@@ -600,10 +623,8 @@ module.exports = class coinbase extends Exchange {
                                 'min': this.safeNumber (quoteCurrency, 'min_size'),
                                 'max': undefined,
                             },
-                            'leverage': {
-                                'max': 1,
-                            },
                         },
+                        'info': quoteCurrency,
                     });
                 }
             }
@@ -1200,7 +1221,7 @@ module.exports = class coinbase extends Exchange {
     prepareAccountRequest (limit = undefined, params = {}) {
         const accountId = this.safeString2 (params, 'account_id', 'accountId');
         if (accountId === undefined) {
-            throw new ArgumentsRequired (this.id + ' method requires an account_id (or accountId) parameter');
+            throw new ArgumentsRequired (this.id + ' prepareAccountRequest() method requires an account_id (or accountId) parameter');
         }
         const request = {
             'account_id': accountId,
@@ -1215,11 +1236,11 @@ module.exports = class coinbase extends Exchange {
         let accountId = this.safeString2 (params, 'account_id', 'accountId');
         if (accountId === undefined) {
             if (code === undefined) {
-                throw new ArgumentsRequired (this.id + ' method requires an account_id (or accountId) parameter OR a currency code argument');
+                throw new ArgumentsRequired (this.id + ' prepareAccountRequestWithCurrencyCode() method requires an account_id (or accountId) parameter OR a currency code argument');
             }
             accountId = await this.findAccountId (code);
             if (accountId === undefined) {
-                throw new ExchangeError (this.id + ' could not find account id for ' + code);
+                throw new ExchangeError (this.id + ' prepareAccountRequestWithCurrencyCode() could not find account id for ' + code);
             }
         }
         const request = {

@@ -4,13 +4,6 @@
 # https://github.com/ccxt/ccxt/blob/master/CONTRIBUTING.md#how-to-contribute-code
 
 from ccxt.async_support.base.exchange import Exchange
-
-# -----------------------------------------------------------------------------
-
-try:
-    basestring  # Python 3
-except NameError:
-    basestring = str  # Python 2
 import hashlib
 import math
 from ccxt.base.errors import ExchangeError
@@ -52,13 +45,15 @@ class kraken(Exchange):
                 'swap': False,
                 'future': False,
                 'option': False,
-                'addMargin': False,
                 'cancelAllOrders': True,
                 'cancelOrder': True,
                 'createDepositAddress': True,
                 'createOrder': True,
-                'createReduceOnlyOrder': False,
+                'createStopLimitOrder': True,
+                'createStopMarketOrder': True,
+                'createStopOrder': True,
                 'fetchBalance': True,
+                'fetchBorrowInterest': False,
                 'fetchBorrowRate': False,
                 'fetchBorrowRateHistories': False,
                 'fetchBorrowRateHistory': False,
@@ -72,9 +67,9 @@ class kraken(Exchange):
                 'fetchFundingRateHistory': False,
                 'fetchFundingRates': False,
                 'fetchIndexOHLCV': False,
-                'fetchIsolatedPositions': False,
                 'fetchLedger': True,
                 'fetchLedgerEntry': True,
+                'fetchLeverageTiers': False,
                 'fetchMarkets': True,
                 'fetchMarkOHLCV': False,
                 'fetchMyTrades': True,
@@ -84,18 +79,16 @@ class kraken(Exchange):
                 'fetchOrderBook': True,
                 'fetchOrderTrades': 'emulated',
                 'fetchPositions': True,
-                'fetchPositionsRisk': False,
                 'fetchPremiumIndexOHLCV': False,
                 'fetchTicker': True,
                 'fetchTickers': True,
                 'fetchTime': True,
                 'fetchTrades': True,
-                'fetchTradingFees': True,
+                'fetchTradingFee': True,
+                'fetchTradingFees': False,
                 'fetchWithdrawals': True,
-                'reduceMargin': False,
                 'setLeverage': False,
                 'setMarginMode': False,  # Kraken only supports cross margin
-                'setPositionMode': False,
                 'withdraw': True,
             },
             'marketsByAltname': {},
@@ -150,58 +143,6 @@ class kraken(Exchange):
                             [5000000, 0.0002],
                             [10000000, 0.0],
                         ],
-                    },
-                },
-                # self is a bad way of hardcoding fees that change on daily basis
-                # hardcoding is now considered obsolete, we will remove all of it eventually
-                'funding': {
-                    'tierBased': False,
-                    'percentage': False,
-                    'withdraw': {
-                        'BTC': 0.001,
-                        'ETH': 0.005,
-                        'XRP': 0.02,
-                        'XLM': 0.00002,
-                        'LTC': 0.02,
-                        'DOGE': 2,
-                        'ZEC': 0.00010,
-                        'ICN': 0.02,
-                        'REP': 0.01,
-                        'ETC': 0.005,
-                        'MLN': 0.003,
-                        'XMR': 0.05,
-                        'DASH': 0.005,
-                        'GNO': 0.01,
-                        'EOS': 0.5,
-                        'BCH': 0.001,
-                        'XTZ': 0.05,
-                        'USD': 5,  # if domestic wire
-                        'EUR': 5,  # if domestic wire
-                        'CAD': 10,  # CAD EFT Withdrawal
-                        'JPY': 300,  # if domestic wire
-                    },
-                    'deposit': {
-                        'BTC': 0,
-                        'ETH': 0,
-                        'XRP': 0,
-                        'XLM': 0,
-                        'LTC': 0,
-                        'DOGE': 0,
-                        'ZEC': 0,
-                        'ICN': 0,
-                        'REP': 0,
-                        'ETC': 0,
-                        'MLN': 0,
-                        'XMR': 0,
-                        'DASH': 0,
-                        'GNO': 0,
-                        'EOS': 0,
-                        'BCH': 0,
-                        'XTZ': 0.05,
-                        'USD': 5,  # if domestic wire
-                        'EUR': 0,  # free deposit if EUR SEPA Deposit
-                        'CAD': 5,  # if domestic wire
-                        'JPY': 0,  # Domestic Deposit(Free, ¥5,000 deposit minimum)
                     },
                 },
             },
@@ -504,28 +445,28 @@ class kraken(Exchange):
                 'contract': False,
                 'linear': None,
                 'inverse': None,
-                'maker': maker,
                 'taker': taker,
+                'maker': maker,
                 'contractSize': None,
                 'expiry': None,
                 'expiryDatetime': None,
                 'strike': None,
                 'optionType': None,
                 'precision': {
-                    'price': self.safe_integer(market, 'pair_decimals'),
                     'amount': self.safe_integer(market, 'lot_decimals'),
+                    'price': self.safe_integer(market, 'pair_decimals'),
                 },
                 'limits': {
                     'leverage': {
                         'min': self.parse_number('1'),
-                        'max': self.safe_value(leverageBuy, leverageBuyLength - 1, 1),
+                        'max': self.safe_number(leverageBuy, leverageBuyLength - 1, 1),
                     },
                     'amount': {
                         'min': self.safe_number(market, 'ordermin'),
                         'max': None,
                     },
                     'price': {
-                        'min': self.parse_precision(precisionPrice),
+                        'min': self.parse_number(self.parse_precision(precisionPrice)),
                         'max': None,
                     },
                     'cost': {
@@ -621,23 +562,58 @@ class kraken(Exchange):
             }
         return result
 
-    async def fetch_trading_fees(self, params={}):
+    async def fetch_trading_fee(self, symbol, params={}):
         await self.load_markets()
-        response = await self.privatePostTradeVolume(params)
-        tradedVolume = self.safe_number(response['result'], 'volume')
-        tiers = self.fees['trading']['tiers']
-        taker = tiers['taker'][1]
-        maker = tiers['maker'][1]
-        for i in range(0, len(tiers['taker'])):
-            if tradedVolume >= tiers['taker'][i][0]:
-                taker = tiers['taker'][i][1]
-        for i in range(0, len(tiers['maker'])):
-            if tradedVolume >= tiers['maker'][i][0]:
-                maker = tiers['maker'][i][1]
+        market = self.market(symbol)
+        request = {
+            'pair': market['id'],
+            'fee-info': True,
+        }
+        response = await self.privatePostTradeVolume(self.extend(request, params))
+        #
+        #     {
+        #        error: [],
+        #        result: {
+        #          currency: 'ZUSD',
+        #          volume: '0.0000',
+        #          fees: {
+        #            XXBTZUSD: {
+        #              fee: '0.2600',
+        #              minfee: '0.1000',
+        #              maxfee: '0.2600',
+        #              nextfee: '0.2400',
+        #              tiervolume: '0.0000',
+        #              nextvolume: '50000.0000'
+        #            }
+        #          },
+        #          fees_maker: {
+        #            XXBTZUSD: {
+        #              fee: '0.1600',
+        #              minfee: '0.0000',
+        #              maxfee: '0.1600',
+        #              nextfee: '0.1400',
+        #              tiervolume: '0.0000',
+        #              nextvolume: '50000.0000'
+        #            }
+        #          }
+        #        }
+        #     }
+        #
+        result = self.safe_value(response, 'result', {})
+        return self.parse_trading_fee(result, market)
+
+    def parse_trading_fee(self, response, market):
+        makerFees = self.safe_value(response, 'fees_maker', {})
+        takerFees = self.safe_value(response, 'fees', {})
+        symbolMakerFee = self.safe_value(makerFees, market['id'], {})
+        symbolTakerFee = self.safe_value(takerFees, market['id'], {})
         return {
             'info': response,
-            'maker': maker,
-            'taker': taker,
+            'symbol': market['symbol'],
+            'maker': self.safe_number(symbolMakerFee, 'fee'),
+            'taker': self.safe_number(symbolTakerFee, 'fee'),
+            'percentage': True,
+            'tierBased': True,
         }
 
     def parse_bid_ask(self, bidask, priceKey=0, amountKey=1):
@@ -650,7 +626,7 @@ class kraken(Exchange):
         await self.load_markets()
         market = self.market(symbol)
         if market['darkpool']:
-            raise ExchangeError(self.id + ' does not provide an order book for darkpool symbol ' + symbol)
+            raise ExchangeError(self.id + ' fetchOrderBook() does not provide an order book for darkpool symbol ' + symbol)
         request = {
             'pair': market['id'],
         }
@@ -765,7 +741,7 @@ class kraken(Exchange):
         await self.load_markets()
         darkpool = symbol.find('.d') >= 0
         if darkpool:
-            raise ExchangeError(self.id + ' does not provide a ticker for darkpool symbol ' + symbol)
+            raise ExchangeError(self.id + ' fetchTicker() does not provide a ticker for darkpool symbol ' + symbol)
         market = self.market(symbol)
         request = {
             'pair': market['id'],
@@ -1002,7 +978,7 @@ class kraken(Exchange):
             tradeLength = len(trade)
             if tradeLength > 6:
                 id = self.safe_string(trade, 6)  # artificially added as per  #1794
-        elif isinstance(trade, basestring):
+        elif isinstance(trade, str):
             id = trade
         elif 'ordertxid' in trade:
             marketId = self.safe_string(trade, 'pair')
@@ -1166,7 +1142,17 @@ class kraken(Exchange):
                 elif limitPriceDefined:
                     request['price'] = self.price_to_precision(symbol, price)
                     request['price2'] = self.price_to_precision(symbol, limitPrice)
-        params = self.omit(params, ['price', 'stopPrice', 'price2'])
+        close = self.safe_value(params, 'close')
+        if close is not None:
+            close = self.extend({}, close)
+            closePrice = self.safe_value(close, 'price')
+            if closePrice is not None:
+                close['price'] = self.price_to_precision(symbol, closePrice)
+            closePrice2 = self.safe_value(close, 'price2')  # stopPrice
+            if closePrice2 is not None:
+                close['price2'] = self.price_to_precision(symbol, closePrice2)
+            request['close'] = close
+        params = self.omit(params, ['price', 'stopPrice', 'price2', 'close'])
         response = await self.privatePostAddOrder(self.extend(request, params))
         #
         #     {
@@ -1251,6 +1237,12 @@ class kraken(Exchange):
         #         "descr":{"order":"sell 167.28002676 ADAXBT @ stop loss 0.00003280 -> limit 0.00003212"}
         #     }
         #
+        #
+        #     {
+        #         "txid":["OVHMJV-BZW2V-6NZFWF"],
+        #         "descr":{"order":"sell 0.00100000 ETHUSD @ stop loss 2677.00 -> limit 2577.00 with 5:1 leverage"}
+        #     }
+        #
         description = self.safe_value(order, 'descr', {})
         orderDescription = self.safe_string(description, 'order')
         side = None
@@ -1258,15 +1250,18 @@ class kraken(Exchange):
         marketId = None
         price = None
         amount = None
+        stopPrice = None
         if orderDescription is not None:
             parts = orderDescription.split(' ')
-            partsLength = len(parts)
             side = self.safe_string(parts, 0)
             amount = self.safe_string(parts, 1)
             marketId = self.safe_string(parts, 2)
             type = self.safe_string(parts, 4)
-            if (type == 'limit') or (type == 'stop'):
-                price = self.safe_string(parts, partsLength - 1)
+            if type == 'stop':
+                stopPrice = self.safe_string(parts, 6)
+                price = self.safe_string(parts, 9)
+            elif type == 'limit':
+                price = self.safe_string(parts, 5)
         side = self.safe_string(description, 'type', side)
         type = self.safe_string(description, 'ordertype', type)
         marketId = self.safe_string(description, 'pair', marketId)
@@ -1309,7 +1304,7 @@ class kraken(Exchange):
             id = self.safe_string(txid, 0)
         clientOrderId = self.safe_string(order, 'userref')
         rawTrades = self.safe_value(order, 'trades')
-        stopPrice = self.safe_number(order, 'stopprice')
+        stopPrice = self.safe_number(order, 'stopprice', stopPrice)
         return self.safe_order({
             'id': id,
             'clientOrderId': clientOrderId,
@@ -1400,7 +1395,7 @@ class kraken(Exchange):
         else:
             for i in range(0, len(orderTrades)):
                 orderTrade = orderTrades[i]
-                if isinstance(orderTrade, basestring):
+                if isinstance(orderTrade, str):
                     tradeIds.append(orderTrade)
                 else:
                     tradeIds.append(orderTrade['id'])
@@ -1625,29 +1620,60 @@ class kraken(Exchange):
         #
         # fetchDeposits
         #
-        #     {method: "Ether(Hex)",
-        #       aclass: "currency",
-        #        asset: "XETH",
-        #        refid: "Q2CANKL-LBFVEE-U4Y2WQ",
+        #     {
+        #         method: "Ether(Hex)",
+        #         aclass: "currency",
+        #         asset: "XETH",
+        #         refid: "Q2CANKL-LBFVEE-U4Y2WQ",
         #         txid: "0x57fd704dab1a73c20e24c8696099b695d596924b401b261513cfdab23…",
         #         info: "0x615f9ba7a9575b0ab4d571b2b36b1b324bd83290",
-        #       amount: "7.9999257900",
-        #          fee: "0.0000000000",
+        #         amount: "7.9999257900",
+        #         fee: "0.0000000000",
         #         time:  1529223212,
-        #       status: "Success"                                                       }
+        #         status: "Success"
+        #     }
+        #
+        # there can be an additional 'status-prop' field present
+        # deposit pending review by exchange => 'on-hold'
+        # the deposit is initiated by the exchange => 'return'
+        #
+        #      {
+        #          type: 'deposit',
+        #          method: 'Fidor Bank AG(Wire Transfer)',
+        #          aclass: 'currency',
+        #          asset: 'ZEUR',
+        #          refid: 'xxx-xxx-xxx',
+        #          txid: '12341234',
+        #          info: 'BANKCODEXXX',
+        #          amount: '38769.08',
+        #          fee: '0.0000',
+        #          time: 1644306552,
+        #          status: 'Success',
+        #          status-prop: 'on-hold'
+        #      }
+        #
         #
         # fetchWithdrawals
         #
-        #     {method: "Ether",
-        #       aclass: "currency",
-        #        asset: "XETH",
-        #        refid: "A2BF34S-O7LBNQ-UE4Y4O",
+        #     {
+        #         method: "Ether",
+        #         aclass: "currency",
+        #         asset: "XETH",
+        #         refid: "A2BF34S-O7LBNQ-UE4Y4O",
         #         txid: "0x288b83c6b0904d8400ef44e1c9e2187b5c8f7ea3d838222d53f701a15b5c274d",
         #         info: "0x7cb275a5e07ba943fee972e165d80daa67cb2dd0",
-        #       amount: "9.9950000000",
-        #          fee: "0.0050000000",
+        #         amount: "9.9950000000",
+        #         fee: "0.0050000000",
         #         time:  1530481750,
-        #       status: "Success"                                                             }
+        #         status: "Success"
+        #         status-prop: 'on-hold'  # self field might not be present in some cases
+        #     }
+        #
+        # withdraw
+        #
+        #     {
+        #         "refid": "AGBSO6T-UFMTTQ-I7KGS6"
+        #     }
         #
         id = self.safe_string(transaction, 'refid')
         txid = self.safe_string(transaction, 'txid')
@@ -1657,6 +1683,12 @@ class kraken(Exchange):
         address = self.safe_string(transaction, 'info')
         amount = self.safe_number(transaction, 'amount')
         status = self.parse_transaction_status(self.safe_string(transaction, 'status'))
+        statusProp = self.safe_string(transaction, 'status-prop')
+        isOnHoldDeposit = statusProp == 'on-hold'
+        isCancellationRequest = statusProp == 'cancel-pending'
+        isOnHoldWithdrawal = statusProp == 'onhold'
+        if isOnHoldDeposit or isCancellationRequest or isOnHoldWithdrawal:
+            status = 'pending'
         type = self.safe_string(transaction, 'type')  # injected from the outside
         feeCost = self.safe_number(transaction, 'fee')
         if feeCost is None:
@@ -1876,12 +1908,16 @@ class kraken(Exchange):
                 # 'address': address,  # they don't allow withdrawals to direct addresses
             }
             response = await self.privatePostWithdraw(self.extend(request, params))
+            #
+            #     {
+            #         "error": [],
+            #         "result": {
+            #             "refid": "AGBSO6T-UFMTTQ-I7KGS6"
+            #         }
+            #     }
+            #
             result = self.safe_value(response, 'result', {})
-            id = self.safe_string(result, 'refid')
-            return {
-                'info': result,
-                'id': id,
-            }
+            return self.parse_transaction(result, currency)
         raise ExchangeError(self.id + " withdraw() requires a 'key' parameter(withdrawal key name, as set up on your account)")
 
     async def fetch_positions(self, symbols=None, params={}):
@@ -1945,11 +1981,13 @@ class kraken(Exchange):
         url = '/' + self.version + '/' + api + '/' + path
         if api == 'public':
             if params:
-                url += '?' + self.urlencode(params)
+                # urlencodeNested is used to address https://github.com/ccxt/ccxt/issues/12872
+                url += '?' + self.urlencode_nested(params)
         elif api == 'private':
             self.check_required_credentials()
             nonce = str(self.nonce())
-            body = self.urlencode(self.extend({'nonce': nonce}, params))
+            # urlencodeNested is used to address https://github.com/ccxt/ccxt/issues/12872
+            body = self.urlencode_nested(self.extend({'nonce': nonce}, params))
             auth = self.encode(nonce + body)
             hash = self.hash(auth, 'sha256', 'binary')
             binary = self.encode(url)
@@ -1988,7 +2026,7 @@ class kraken(Exchange):
         if response is None:
             return
         if body[0] == '{':
-            if not isinstance(response, basestring):
+            if not isinstance(response, str):
                 if 'error' in response:
                     numErrors = len(response['error'])
                     if numErrors:

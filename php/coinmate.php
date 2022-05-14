@@ -20,22 +20,48 @@ class coinmate extends Exchange {
             'has' => array(
                 'CORS' => true,
                 'spot' => true,
-                'margin' => null,
-                'swap' => null,
-                'future' => null,
-                'option' => null,
+                'margin' => false,
+                'swap' => false,
+                'future' => false,
+                'option' => false,
+                'addMargin' => false,
                 'cancelOrder' => true,
                 'createOrder' => true,
+                'createReduceOnlyOrder' => false,
                 'fetchBalance' => true,
+                'fetchBorrowRate' => false,
+                'fetchBorrowRateHistories' => false,
+                'fetchBorrowRateHistory' => false,
+                'fetchBorrowRates' => false,
+                'fetchBorrowRatesPerSymbol' => false,
+                'fetchFundingHistory' => false,
+                'fetchFundingRate' => false,
+                'fetchFundingRateHistory' => false,
+                'fetchFundingRates' => false,
+                'fetchIndexOHLCV' => false,
+                'fetchLeverage' => false,
+                'fetchLeverageTiers' => false,
                 'fetchMarkets' => true,
+                'fetchMarkOHLCV' => false,
                 'fetchMyTrades' => true,
                 'fetchOpenOrders' => true,
                 'fetchOrder' => true,
                 'fetchOrderBook' => true,
                 'fetchOrders' => true,
+                'fetchPosition' => false,
+                'fetchPositions' => false,
+                'fetchPositionsRisk' => false,
+                'fetchPremiumIndexOHLCV' => false,
                 'fetchTicker' => true,
                 'fetchTrades' => true,
+                'fetchTradingFee' => true,
+                'fetchTradingFees' => false,
                 'fetchTransactions' => true,
+                'reduceMargin' => false,
+                'setLeverage' => false,
+                'setMarginMode' => false,
+                'setPositionMode' => false,
+                'transfer' => false,
             ),
             'urls' => array(
                 'logo' => 'https://user-images.githubusercontent.com/51840849/87460806-1c9f3f00-c616-11ea-8c46-a77018a8f3f4.jpg',
@@ -117,58 +143,27 @@ class coinmate extends Exchange {
                     'taker' => 0.25 / 100,
                     'tiers' => array(
                         'taker' => array(
-                            array( 0, 0.25 / 100 ),
-                            array( 10000, 0.23 / 100 ),
-                            array( 100000, 0.21 / 100 ),
-                            array( 250000, 0.20 / 100 ),
-                            array( 500000, 0.15 / 100 ),
-                            array( 1000000, 0.13 / 100 ),
-                            array( 3000000, 0.10 / 100 ),
-                            array( 15000000, 0.05 / 100 ),
+                            array( $this->parse_number('0'), $this->parse_number('0.0035') ),
+                            array( $this->parse_number('10000'), $this->parse_number('0.0023') ),
+                            array( $this->parse_number('100000'), $this->parse_number('0.0021') ),
+                            array( $this->parse_number('250000'), $this->parse_number('0.0020') ),
+                            array( $this->parse_number('500000'), $this->parse_number('0.0015') ),
+                            array( $this->parse_number('1000000'), $this->parse_number('0.0013') ),
+                            array( $this->parse_number('3000000'), $this->parse_number('0.0010') ),
+                            array( $this->parse_number('15000000'), $this->parse_number('0.0005') ),
                         ),
                         'maker' => array(
-                            array( 0, 0.12 / 100 ),
-                            array( 10000, 0.11 / 100 ),
-                            array( 1000000, 0.10 / 100 ),
-                            array( 250000, 0.08 / 100 ),
-                            array( 500000, 0.05 / 100 ),
-                            array( 1000000, 0.03 / 100 ),
-                            array( 3000000, 0.02 / 100 ),
-                            array( 15000000, 0 ),
+                            array( $this->parse_number('0'), $this->parse_number('0.003') ),
+                            array( $this->parse_number('10000'), $this->parse_number('0.0011') ),
+                            array( $this->parse_number('100000'), $this->parse_number('0.0010') ),
+                            array( $this->parse_number('250000'), $this->parse_number('0.0008') ),
+                            array( $this->parse_number('500000'), $this->parse_number('0.0005') ),
+                            array( $this->parse_number('1000000'), $this->parse_number('0.0003') ),
+                            array( $this->parse_number('3000000'), $this->parse_number('0.0002') ),
+                            array( $this->parse_number('15000000'), $this->parse_number('0') ),
                         ),
                     ),
                 ),
-                'promotional' => array(
-                    'trading' => array(
-                        'maker' => 0.05 / 100,
-                        'taker' => 0.15 / 100,
-                        'tiers' => array(
-                            'taker' => array(
-                                array( 0, 0.15 / 100 ),
-                                array( 10000, 0.14 / 100 ),
-                                array( 100000, 0.13 / 100 ),
-                                array( 250000, 0.12 / 100 ),
-                                array( 500000, 0.11 / 100 ),
-                                array( 1000000, 0.1 / 100 ),
-                                array( 3000000, 0.08 / 100 ),
-                                array( 15000000, 0.05 / 100 ),
-                            ),
-                            'maker' => array(
-                                array( 0, 0.05 / 100 ),
-                                array( 10000, 0.04 / 100 ),
-                                array( 1000000, 0.03 / 100 ),
-                                array( 250000, 0.02 / 100 ),
-                                array( 500000, 0 ),
-                                array( 1000000, 0 ),
-                                array( 3000000, 0 ),
-                                array( 15000000, 0 ),
-                            ),
-                        ),
-                    ),
-                ),
-            ),
-            'options' => array(
-                'promotionalMarkets' => array( 'ETH/EUR', 'ETH/CZK', 'ETH/BTC', 'XRP/EUR', 'XRP/CZK', 'XRP/BTC', 'DASH/EUR', 'DASH/CZK', 'DASH/BTC', 'BCH/EUR', 'BCH/CZK', 'BCH/BTC' ),
             ),
             'exceptions' => array(
                 'exact' => array(
@@ -216,30 +211,39 @@ class coinmate extends Exchange {
             $base = $this->safe_currency_code($baseId);
             $quote = $this->safe_currency_code($quoteId);
             $symbol = $base . '/' . $quote;
-            $promotionalMarkets = $this->safe_value($this->options, 'promotionalMarkets', array());
-            $fees = $this->safe_value($this->fees, 'trading');
-            if ($this->in_array($symbol, $promotionalMarkets)) {
-                $promotionalFees = $this->safe_value($this->fees, 'promotional', array());
-                $fees = $this->safe_value($promotionalFees, 'trading', $fees);
-            }
             $result[] = array(
                 'id' => $id,
                 'symbol' => $symbol,
                 'base' => $base,
                 'quote' => $quote,
+                'settle' => null,
                 'baseId' => $baseId,
                 'quoteId' => $quoteId,
+                'settleId' => null,
                 'type' => 'spot',
                 'spot' => true,
+                'margin' => false,
+                'swap' => false,
+                'future' => false,
+                'option' => false,
                 'active' => null,
-                'maker' => $fees['maker'],
-                'taker' => $fees['taker'],
-                'info' => $market,
+                'contract' => false,
+                'linear' => null,
+                'inverse' => null,
+                'contractSize' => null,
+                'expiry' => null,
+                'expiryDatetime' => null,
+                'strike' => null,
+                'optionType' => null,
                 'precision' => array(
-                    'price' => $this->safe_integer($market, 'priceDecimals'),
                     'amount' => $this->safe_integer($market, 'lotDecimals'),
+                    'price' => $this->safe_integer($market, 'priceDecimals'),
                 ),
                 'limits' => array(
+                    'leverage' => array(
+                        'min' => null,
+                        'max' => null,
+                    ),
                     'amount' => array(
                         'min' => $this->safe_number($market, 'minAmount'),
                         'max' => null,
@@ -253,6 +257,7 @@ class coinmate extends Exchange {
                         'max' => null,
                     ),
                 ),
+                'info' => $market,
             );
         }
         return $result;
@@ -535,6 +540,35 @@ class coinmate extends Exchange {
         //
         $data = $this->safe_value($response, 'data', array());
         return $this->parse_trades($data, $market, $since, $limit);
+    }
+
+    public function fetch_trading_fee($symbol, $params = array ()) {
+        $this->load_markets();
+        $market = $this->market($symbol);
+        $request = array(
+            'currencyPair' => $market['id'],
+        );
+        $response = $this->privatePostTraderFees (array_merge($request, $params));
+        //
+        //     {
+        //         error => false,
+        //         errorMessage => null,
+        //         $data => array( $maker => '0.3', $taker => '0.35', timestamp => '1646253217815' )
+        //     }
+        //
+        $data = $this->safe_value($response, 'data', array());
+        $makerString = $this->safe_string($data, 'maker');
+        $takerString = $this->safe_string($data, 'taker');
+        $maker = $this->parse_number(Precise::string_div($makerString, '100'));
+        $taker = $this->parse_number(Precise::string_div($takerString, '100'));
+        return array(
+            'info' => $data,
+            'symbol' => $symbol,
+            'maker' => $maker,
+            'taker' => $taker,
+            'percentage' => true,
+            'tierBased' => true,
+        );
     }
 
     public function fetch_open_orders($symbol = null, $since = null, $limit = null, $params = array ()) {

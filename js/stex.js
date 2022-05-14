@@ -33,6 +33,7 @@ module.exports = class stex extends Exchange {
                 'createReduceOnlyOrder': false,
                 'fetchBalance': true,
                 'fetchBorrowRate': false,
+                'fetchBorrowRateHistories': false,
                 'fetchBorrowRateHistory': false,
                 'fetchBorrowRates': false,
                 'fetchBorrowRatesPerSymbol': false,
@@ -40,14 +41,13 @@ module.exports = class stex extends Exchange {
                 'fetchCurrencies': true,
                 'fetchDepositAddress': true,
                 'fetchDeposits': true,
-                'fetchFundingFees': true,
                 'fetchFundingHistory': false,
                 'fetchFundingRate': false,
                 'fetchFundingRateHistory': false,
                 'fetchFundingRates': false,
                 'fetchIndexOHLCV': false,
-                'fetchIsolatedPositions': false,
                 'fetchLeverage': false,
+                'fetchLeverageTiers': false,
                 'fetchMarkets': true,
                 'fetchMarkOHLCV': false,
                 'fetchMyTrades': true,
@@ -64,6 +64,9 @@ module.exports = class stex extends Exchange {
                 'fetchTickers': true,
                 'fetchTime': true,
                 'fetchTrades': true,
+                'fetchTradingFee': true,
+                'fetchTradingFees': false,
+                'fetchTransactionFees': true,
                 'fetchWithdrawals': true,
                 'reduceMargin': false,
                 'setLeverage': false,
@@ -333,7 +336,10 @@ module.exports = class stex extends Exchange {
                 'fee': fee,
                 'precision': parseInt (precision),
                 'limits': {
-                    'amount': { 'min': this.parseNumber (amountLimit), 'max': undefined },
+                    'amount': {
+                        'min': this.parseNumber (amountLimit),
+                        'max': undefined,
+                    },
                     'deposit': {
                         'min': this.safeNumber (currency, 'minimum_deposit_amount'),
                         'max': undefined,
@@ -430,8 +436,8 @@ module.exports = class stex extends Exchange {
                 'strike': undefined,
                 'optionType': undefined,
                 'precision': {
-                    'price': this.safeInteger (market, 'market_precision'),
                     'amount': this.safeInteger (market, 'currency_precision'),
+                    'price': this.safeInteger (market, 'market_precision'),
                 },
                 'limits': {
                     'leverage': {
@@ -779,15 +785,12 @@ module.exports = class stex extends Exchange {
         const timestamp = this.safeTimestamp (trade, 'timestamp');
         const priceString = this.safeString (trade, 'price');
         const amountString = this.safeString (trade, 'amount');
-        const price = this.parseNumber (priceString);
-        const amount = this.parseNumber (amountString);
-        const cost = this.parseNumber (Precise.stringMul (priceString, amountString));
         let symbol = undefined;
         if ((symbol === undefined) && (market !== undefined)) {
             symbol = market['symbol'];
         }
         const side = this.safeStringLower2 (trade, 'type', 'trade_type');
-        return {
+        return this.safeTrade ({
             'info': trade,
             'timestamp': timestamp,
             'datetime': this.iso8601 (timestamp),
@@ -797,11 +800,11 @@ module.exports = class stex extends Exchange {
             'type': undefined,
             'takerOrMaker': undefined,
             'side': side,
-            'price': price,
-            'amount': amount,
-            'cost': cost,
+            'price': priceString,
+            'amount': amountString,
+            'cost': undefined,
             'fee': undefined,
-        };
+        }, market);
     }
 
     async fetchTrades (symbol, since = undefined, limit = undefined, params = {}) {
@@ -839,6 +842,31 @@ module.exports = class stex extends Exchange {
         //
         const trades = this.safeValue (response, 'data', []);
         return this.parseTrades (trades, market, since, limit);
+    }
+
+    async fetchTradingFee (symbol, params = {}) {
+        await this.loadMarkets ();
+        const market = this.market (symbol);
+        const request = {
+            'currencyPairId': market['id'],
+        };
+        const response = await this.tradingGetFeesCurrencyPairId (this.extend (request, params));
+        //
+        //     {
+        //         success: true,
+        //         data: { buy_fee: '0.00200000', sell_fee: '0.00200000' },
+        //         unified_message: { message_id: 'operation_successful', substitutions: [] }
+        //      }
+        //
+        const data = this.safeValue (response, 'data');
+        return {
+            'info': response,
+            'symbol': market['symbol'],
+            'maker': this.safeNumber (data, 'sell_fee'),
+            'taker': this.safeNumber (data, 'buy_fee'),
+            'percentage': true,
+            'tierBased': true,
+        };
     }
 
     parseBalance (response) {
@@ -1047,7 +1075,7 @@ module.exports = class stex extends Exchange {
 
     async createOrder (symbol, type, side, amount, price = undefined, params = {}) {
         if (type === 'market') {
-            throw new ExchangeError (this.id + ' createOrder allows limit orders only');
+            throw new ExchangeError (this.id + ' createOrder() allows limit orders only');
         }
         await this.loadMarkets ();
         const market = this.market (symbol);
@@ -1267,7 +1295,7 @@ module.exports = class stex extends Exchange {
         const numRejectedOrders = rejectedOrders.length;
         if (numAcceptedOrders < 1) {
             if (numRejectedOrders < 1) {
-                throw new OrderNotFound (this.id + ' cancelOrder received an empty response: ' + this.json (response));
+                throw new OrderNotFound (this.id + ' cancelOrder() received an empty response: ' + this.json (response));
             } else {
                 return this.parseOrder (rejectedOrders[0]);
             }
@@ -1275,7 +1303,7 @@ module.exports = class stex extends Exchange {
             if (numRejectedOrders < 1) {
                 return this.parseOrder (acceptedOrders[0]);
             } else {
-                throw new OrderNotFound (this.id + ' cancelOrder received an empty response: ' + this.json (response));
+                throw new OrderNotFound (this.id + ' cancelOrder() received an empty response: ' + this.json (response));
             }
         }
     }
@@ -1818,7 +1846,7 @@ module.exports = class stex extends Exchange {
         return this.parseTransaction (data, currency);
     }
 
-    async fetchFundingFees (codes = undefined, params = {}) {
+    async fetchTransactionFees (codes = undefined, params = {}) {
         await this.loadMarkets ();
         const response = await this.publicGetCurrencies (params);
         //

@@ -8,7 +8,6 @@ import hashlib
 from ccxt.base.errors import ExchangeError
 from ccxt.base.errors import ArgumentsRequired
 from ccxt.base.errors import InvalidOrder
-from ccxt.base.precise import Precise
 
 
 class mercado(Exchange):
@@ -23,10 +22,10 @@ class mercado(Exchange):
             'has': {
                 'CORS': True,
                 'spot': True,
-                'margin': None,
-                'swap': None,
-                'future': None,
-                'option': None,
+                'margin': False,
+                'swap': False,
+                'future': False,
+                'option': False,
                 'addMargin': False,
                 'cancelOrder': True,
                 'createMarketOrder': True,
@@ -42,8 +41,8 @@ class mercado(Exchange):
                 'fetchFundingRateHistory': False,
                 'fetchFundingRates': False,
                 'fetchIndexOHLCV': False,
-                'fetchIsolatedPositions': False,
                 'fetchLeverage': False,
+                'fetchLeverageTiers': False,
                 'fetchMarkets': True,
                 'fetchMarkOHLCV': False,
                 'fetchMyTrades': 'emulated',
@@ -59,6 +58,8 @@ class mercado(Exchange):
                 'fetchTicker': True,
                 'fetchTickers': None,
                 'fetchTrades': True,
+                'fetchTradingFee': False,
+                'fetchTradingFees': False,
                 'reduceMargin': False,
                 'setLeverage': False,
                 'setMarginMode': False,
@@ -200,8 +201,8 @@ class mercado(Exchange):
                 'strike': None,
                 'optionType': None,
                 'precision': {
-                    'amount': 8,
-                    'price': 5,
+                    'amount': int('8'),
+                    'price': int('5'),
                 },
                 'limits': {
                     'leverage': {
@@ -236,16 +237,16 @@ class mercado(Exchange):
 
     def parse_ticker(self, ticker, market=None):
         #
-        # {
-        #     "high":"103.96000000",
-        #     "low":"95.00000000",
-        #     "vol":"2227.67806598",
-        #     "last":"97.91591000",
-        #     "buy":"95.52760000",
-        #     "sell":"97.91475000",
-        #     "open":"99.79955000",
-        #     "date":1643382606
-        # }
+        #     {
+        #         "high":"103.96000000",
+        #         "low":"95.00000000",
+        #         "vol":"2227.67806598",
+        #         "last":"97.91591000",
+        #         "buy":"95.52760000",
+        #         "sell":"97.91475000",
+        #         "open":"99.79955000",
+        #         "date":1643382606
+        #     }
         #
         symbol = self.safe_symbol(None, market)
         timestamp = self.safe_timestamp(ticker, 'date')
@@ -282,54 +283,51 @@ class mercado(Exchange):
         response = await self.publicGetCoinTicker(self.extend(request, params))
         ticker = self.safe_value(response, 'ticker', {})
         #
-        # {
-        #     "high":"103.96000000",
-        #     "low":"95.00000000",
-        #     "vol":"2227.67806598",
-        #     "last":"97.91591000",
-        #     "buy":"95.52760000",
-        #     "sell":"97.91475000",
-        #     "open":"99.79955000",
-        #     "date":1643382606
-        # }
+        #     {
+        #         "ticker": {
+        #             "high":"1549.82293000",
+        #             "low":"1503.00011000",
+        #             "vol":"81.82827101",
+        #             "last":"1533.15000000",
+        #             "buy":"1533.21018000",
+        #             "sell":"1540.09000000",
+        #             "open":"1524.71089000",
+        #             "date":1643691671
+        #         }
+        #     }
         #
         return self.parse_ticker(ticker, market)
 
     def parse_trade(self, trade, market=None):
         timestamp = self.safe_timestamp_2(trade, 'date', 'executed_timestamp')
-        symbol = None
-        if market is not None:
-            symbol = market['symbol']
+        market = self.safe_market(None, market)
         id = self.safe_string_2(trade, 'tid', 'operation_id')
         type = None
         side = self.safe_string(trade, 'type')
-        priceString = self.safe_string(trade, 'price')
-        amountString = self.safe_string_2(trade, 'amount', 'quantity')
-        price = self.parse_number(priceString)
-        amount = self.parse_number(amountString)
-        cost = self.parse_number(Precise.string_mul(priceString, amountString))
-        feeCost = self.safe_number(trade, 'fee_rate')
+        price = self.safe_string(trade, 'price')
+        amount = self.safe_string_2(trade, 'amount', 'quantity')
+        feeCost = self.safe_string(trade, 'fee_rate')
         fee = None
         if feeCost is not None:
             fee = {
                 'cost': feeCost,
                 'currency': None,
             }
-        return {
+        return self.safe_trade({
             'id': id,
             'info': trade,
             'timestamp': timestamp,
             'datetime': self.iso8601(timestamp),
-            'symbol': symbol,
+            'symbol': market['symbol'],
             'order': None,
             'type': type,
             'side': side,
             'takerOrMaker': None,
             'price': price,
             'amount': amount,
-            'cost': cost,
+            'cost': None,
             'fee': fee,
-        }
+        }, market)
 
     async def fetch_trades(self, symbol, since=None, limit=None, params={}):
         await self.load_markets()
@@ -547,9 +545,64 @@ class mercado(Exchange):
                 else:
                     request['destination_tag'] = tag
         response = await self.privatePostWithdrawCoin(self.extend(request, params))
+        #
+        #     {
+        #         "response_data": {
+        #             "withdrawal": {
+        #                 "id": 1,
+        #                 "coin": "BRL",
+        #                 "quantity": "300.56",
+        #                 "net_quantity": "291.68",
+        #                 "fee": "8.88",
+        #                 "account": "bco: 341, ag: 1111, cta: 23456-X",
+        #                 "status": 1,
+        #                 "created_timestamp": "1453912088",
+        #                 "updated_timestamp": "1453912088"
+        #             }
+        #         },
+        #         "status_code": 100,
+        #         "server_unix_timestamp": "1453912088"
+        #     }
+        #
+        responseData = self.safe_value(response, 'response_data', {})
+        withdrawal = self.safe_value(responseData, 'withdrawal')
+        return self.parse_transaction(withdrawal, currency)
+
+    def parse_transaction(self, transaction, currency=None):
+        #
+        #     {
+        #         "id": 1,
+        #         "coin": "BRL",
+        #         "quantity": "300.56",
+        #         "net_quantity": "291.68",
+        #         "fee": "8.88",
+        #         "account": "bco: 341, ag: 1111, cta: 23456-X",
+        #         "status": 1,
+        #         "created_timestamp": "1453912088",
+        #         "updated_timestamp": "1453912088"
+        #     }
+        #
+        currency = self.safe_currency(None, currency)
         return {
-            'info': response,
-            'id': response['response_data']['withdrawal']['id'],
+            'id': self.safe_string(transaction, 'id'),
+            'txid': None,
+            'timestamp': None,
+            'datetime': None,
+            'network': None,
+            'addressFrom': None,
+            'address': None,
+            'addressTo': None,
+            'amount': None,
+            'type': None,
+            'currency': currency['code'],
+            'status': None,
+            'updated': None,
+            'tagFrom': None,
+            'tag': None,
+            'tagTo': None,
+            'comment': None,
+            'fee': None,
+            'info': transaction,
         }
 
     def parse_ohlcv(self, ohlcv, market=None):
@@ -623,7 +676,7 @@ class mercado(Exchange):
         ordersRaw = self.safe_value(responseData, 'orders', [])
         orders = self.parse_orders(ordersRaw, market, since, limit)
         trades = self.orders_to_trades(orders)
-        return self.filter_by_symbol_since_limit(trades, symbol, since, limit)
+        return self.filter_by_symbol_since_limit(trades, market['symbol'], since, limit)
 
     def orders_to_trades(self, orders):
         result = []

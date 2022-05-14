@@ -29,29 +29,54 @@ class bytetrade(Exchange):
             'has': {
                 'CORS': None,
                 'spot': True,
-                'margin': None,
-                'swap': None,
-                'future': None,
-                'option': None,
+                'margin': False,
+                'swap': False,
+                'future': False,
+                'option': False,
+                'addMargin': False,
                 'cancelOrder': True,
                 'createOrder': True,
+                'createReduceOnlyOrder': False,
                 'fetchBalance': True,
                 'fetchBidsAsks': True,
+                'fetchBorrowRate': False,
+                'fetchBorrowRateHistories': False,
+                'fetchBorrowRateHistory': False,
+                'fetchBorrowRates': False,
+                'fetchBorrowRatesPerSymbol': False,
                 'fetchClosedOrders': True,
                 'fetchCurrencies': True,
                 'fetchDepositAddress': True,
                 'fetchDeposits': True,
+                'fetchFundingHistory': False,
+                'fetchFundingRate': False,
+                'fetchFundingRateHistory': False,
+                'fetchFundingRates': False,
+                'fetchIndexOHLCV': False,
+                'fetchLeverage': False,
+                'fetchLeverageTiers': False,
                 'fetchMarkets': True,
+                'fetchMarkOHLCV': False,
                 'fetchMyTrades': True,
                 'fetchOHLCV': True,
                 'fetchOpenOrders': True,
                 'fetchOrder': True,
                 'fetchOrderBook': True,
                 'fetchOrders': True,
+                'fetchPosition': False,
+                'fetchPositions': False,
+                'fetchPositionsRisk': False,
+                'fetchPremiumIndexOHLCV': False,
                 'fetchTicker': True,
                 'fetchTickers': True,
                 'fetchTrades': True,
+                'fetchTradingFee': False,
+                'fetchTradingFees': True,
                 'fetchWithdrawals': True,
+                'reduceMargin': False,
+                'setLeverage': False,
+                'setMarginMode': False,
+                'setPositionMode': False,
                 'withdraw': None,
             },
             'timeframes': {
@@ -202,12 +227,12 @@ class bytetrade(Exchange):
             limits = self.safe_value(currency, 'limits')
             deposit = self.safe_value(limits, 'deposit')
             amountPrecision = self.safe_integer(currency, 'basePrecision')
-            maxDeposit = self.safe_number(deposit, 'max')
-            if maxDeposit == -1.0:
+            maxDeposit = self.safe_string(deposit, 'max')
+            if Precise.string_equals(maxDeposit, '-1'):
                 maxDeposit = None
             withdraw = self.safe_value(limits, 'withdraw')
-            maxWithdraw = self.safe_number(withdraw, 'max')
-            if maxWithdraw == -1.0:
+            maxWithdraw = self.safe_string(withdraw, 'max')
+            if Precise.string_equals(maxWithdraw, '-1'):
                 maxWithdraw = None
             result[code] = {
                 'id': id,
@@ -222,11 +247,11 @@ class bytetrade(Exchange):
                     'amount': {'min': None, 'max': None},
                     'deposit': {
                         'min': self.safe_number(deposit, 'min'),
-                        'max': maxDeposit,
+                        'max': self.parse_number(maxDeposit),
                     },
                     'withdraw': {
                         'min': self.safe_number(withdraw, 'min'),
-                        'max': maxWithdraw,
+                        'max': self.parse_number(maxWithdraw),
                     },
                 },
                 'info': currency,
@@ -235,6 +260,37 @@ class bytetrade(Exchange):
 
     def fetch_markets(self, params={}):
         markets = self.publicGetSymbols(params)
+        #
+        #     [
+        #         {
+        #             "symbol": "122406567911",
+        #             "name": "BTC/USDT",
+        #             "base": "32",
+        #             "quote": "57",
+        #             "marketStatus": 0,
+        #             "baseName": "BTC",
+        #             "quoteName": "USDT",
+        #             "active": True,
+        #             "maker": "0.0008",
+        #             "taker": "0.0008",
+        #             "precision": {
+        #                 "amount": 6,
+        #                 "price": 2,
+        #                 "minPrice":1
+        #             },
+        #             "limits": {
+        #                 "amount": {
+        #                     "min": "0.000001",
+        #                     "max": "-1"
+        #                 },
+        #                 "price": {
+        #                     "min": "0.01",
+        #                     "max": "-1"
+        #                 }
+        #             }
+        #        }
+        #    ]
+        #
         result = []
         for i in range(0, len(markets)):
             market = markets[i]
@@ -252,42 +308,66 @@ class bytetrade(Exchange):
                 base = self.commonCurrencies[baseId]
             if quoteId in self.commonCurrencies:
                 quote = self.commonCurrencies[quoteId]
-            symbol = base + '/' + quote
             limits = self.safe_value(market, 'limits', {})
             amount = self.safe_value(limits, 'amount', {})
             price = self.safe_value(limits, 'price', {})
             precision = self.safe_value(market, 'precision', {})
-            active = self.safe_string(market, 'active')
+            maxAmount = self.safe_string(amount, 'max')
+            if Precise.string_equals(maxAmount, '-1'):
+                maxAmount = None
+            maxPrice = self.safe_string(price, 'max')
+            if Precise.string_equals(maxPrice, '-1'):
+                maxPrice = None
             entry = {
                 'id': id,
-                'symbol': symbol,
+                'symbol': base + '/' + quote,
+                'normalSymbol': normalSymbol,
                 'base': base,
                 'quote': quote,
+                'settle': None,
                 'baseId': baseId,
                 'quoteId': quoteId,
-                'info': market,
+                'settleId': None,
                 'type': 'spot',
                 'spot': True,
-                'active': active,
+                'margin': False,
+                'swap': False,
+                'future': False,
+                'option': False,
+                'active': self.safe_string(market, 'active'),
+                'contract': False,
+                'linear': None,
+                'inverse': None,
+                'taker': self.safe_number(market, 'taker'),
+                'maker': self.safe_number(market, 'maker'),
+                'contractSize': None,
+                'expiry': None,
+                'expiryDatetime': None,
+                'strike': None,
+                'optionType': None,
                 'precision': {
                     'amount': self.safe_integer(precision, 'amount'),
                     'price': self.safe_integer(precision, 'price'),
                 },
-                'normalSymbol': normalSymbol,
                 'limits': {
+                    'leverage': {
+                        'min': None,
+                        'max': None,
+                    },
                     'amount': {
                         'min': self.safe_number(amount, 'min'),
-                        'max': self.safe_number(amount, 'max'),
+                        'max': self.parse_number(maxAmount),
                     },
                     'price': {
                         'min': self.safe_number(price, 'min'),
-                        'max': self.safe_number(price, 'max'),
+                        'max': self.parse_number(maxPrice),
                     },
                     'cost': {
                         'min': None,
                         'max': None,
                     },
                 },
+                'info': market,
             }
             result.append(entry)
         return result
@@ -509,12 +589,8 @@ class bytetrade(Exchange):
         side = self.safe_string(trade, 'side')
         datetime = self.iso8601(timestamp)  # self.safe_string(trade, 'datetime')
         order = self.safe_string(trade, 'order')
-        symbol = None
-        if market is None:
-            marketId = self.safe_string(trade, 'symbol')
-            market = self.safe_value(self.markets_by_id, marketId)
-        if market is not None:
-            symbol = market['symbol']
+        marketId = self.safe_string(trade, 'symbol')
+        market = self.safe_market(marketId, market)
         feeData = self.safe_value(trade, 'fee')
         feeCostString = self.safe_string(feeData, 'cost')
         feeRateString = self.safe_string(feeData, 'rate')
@@ -529,7 +605,7 @@ class bytetrade(Exchange):
             'info': trade,
             'timestamp': timestamp,
             'datetime': datetime,
-            'symbol': symbol,
+            'symbol': market['symbol'],
             'id': id,
             'order': order,
             'type': type,
@@ -553,6 +629,55 @@ class bytetrade(Exchange):
             request['limit'] = limit  # default = 100, maximum = 500
         response = self.marketGetTrades(self.extend(request, params))
         return self.parse_trades(response, market, since, limit)
+
+    def fetch_trading_fees(self, params={}):
+        self.load_markets()
+        response = self.publicGetSymbols(params)
+        #
+        #     [
+        #         {
+        #             "symbol": "122406567911",
+        #             "name": "BTC/USDT",
+        #             "base": "32",
+        #             "quote": "57",
+        #             "marketStatus": 0,
+        #             "baseName": "BTC",
+        #             "quoteName": "USDT",
+        #             "active": True,
+        #             "maker": "0.0008",
+        #             "taker": "0.0008",
+        #             "precision": {
+        #                 "amount": 6,
+        #                 "price": 2,
+        #                 "minPrice":1
+        #             },
+        #             "limits": {
+        #                 "amount": {
+        #                     "min": "0.000001",
+        #                     "max": "-1"
+        #                 },
+        #                 "price": {
+        #                     "min": "0.01",
+        #                     "max": "-1"
+        #                 }
+        #             }
+        #        }
+        #        ...
+        #    ]
+        #
+        result = {}
+        for i in range(0, len(response)):
+            symbolInfo = response[i]
+            marketId = self.safe_string(symbolInfo, 'name')
+            symbol = self.safe_symbol(marketId)
+            result[symbol] = {
+                'info': symbolInfo,
+                'symbol': symbol,
+                'maker': self.safe_number(symbolInfo, 'maker'),
+                'taker': self.safe_number(symbolInfo, 'taker'),
+                'percentage': True,
+            }
+        return result
 
     def parse_order(self, order, market=None):
         status = self.safe_string(order, 'status')

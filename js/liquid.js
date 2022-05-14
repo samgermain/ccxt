@@ -20,10 +20,10 @@ module.exports = class liquid extends Exchange {
             'has': {
                 'CORS': undefined,
                 'spot': true,
-                'margin': undefined,
-                'swap': undefined,
-                'future': undefined,
-                'option': undefined,
+                'margin': undefined, // has but not fully implemented
+                'swap': undefined, // has but not fully implemented
+                'future': false,
+                'option': false,
                 'cancelOrder': true,
                 'createOrder': true,
                 'editOrder': true,
@@ -39,7 +39,10 @@ module.exports = class liquid extends Exchange {
                 'fetchTicker': true,
                 'fetchTickers': true,
                 'fetchTrades': true,
+                'fetchTradingFee': true,
+                'fetchTradingFees': true,
                 'fetchWithdrawals': true,
+                'transfer': false,
                 'withdraw': true,
             },
             'urls': {
@@ -61,7 +64,7 @@ module.exports = class liquid extends Exchange {
                         'products/{id}/price_levels',
                         'executions',
                         'ir_ladders/{currency}',
-                        'fees', // add fetchFees, fetchTradingFees, fetchFundingFees
+                        'fees', // add fetchFees, fetchTradingFees, fetchTransactionFees
                     ],
                 },
                 'private': {
@@ -209,10 +212,11 @@ module.exports = class liquid extends Exchange {
                 'product_disabled': BadSymbol, // {"errors":{"order":["product_disabled"]}}
             },
             'commonCurrencies': {
+                'BIFI': 'BIFIF',
                 'HOT': 'HOT Token',
                 'MIOTA': 'IOTA', // https://github.com/ccxt/ccxt/issues/7487
+                'P-BTC': 'BTC',
                 'TON': 'Tokamak Network',
-                'BIFI': 'Bifrost Finance',
             },
             'options': {
                 'cancelOrderException': true,
@@ -221,6 +225,11 @@ module.exports = class liquid extends Exchange {
                     'TRX': 'TRC20',
                     'XLM': 'Stellar',
                     'ALGO': 'Algorand',
+                },
+                'swap': {
+                    'fetchMarkets': {
+                        'settlementCurrencies': [ 'BTC', 'ETH', 'XRP', 'QASH', 'USD', 'JPY', 'EUR', 'SGD', 'AUD' ],
+                    },
                 },
             },
         });
@@ -388,35 +397,13 @@ module.exports = class liquid extends Exchange {
             const baseId = this.safeString (market, 'base_currency');
             const quoteId = this.safeString (market, 'quoted_currency');
             const productType = this.safeString (market, 'product_type');
-            let type = 'spot';
-            let spot = true;
-            let swap = false;
-            if (productType === 'Perpetual') {
-                spot = false;
-                swap = true;
-                type = 'swap';
-            }
+            const swap = (productType === 'Perpetual');
+            const type = swap ? 'swap' : 'spot';
+            const spot = !swap;
             const base = this.safeCurrencyCode (baseId);
             const quote = this.safeCurrencyCode (quoteId);
-            let symbol = undefined;
-            if (swap) {
-                symbol = this.safeString (market, 'currency_pair_code');
-            } else {
-                symbol = base + '/' + quote;
-            }
-            let maker = this.fees['trading']['maker'];
-            let taker = this.fees['trading']['taker'];
-            if (type === 'swap') {
-                maker = this.safeNumber (market, 'maker_fee', this.fees['trading']['maker']);
-                taker = this.safeNumber (market, 'taker_fee', this.fees['trading']['taker']);
-            }
             const disabled = this.safeValue (market, 'disabled', false);
-            const active = !disabled;
             const baseCurrency = this.safeValue (currenciesByCode, base);
-            const precision = {
-                'amount': 0.00000001,
-                'price': this.safeNumber (market, 'tick_size'),
-            };
             let minAmount = undefined;
             if (baseCurrency !== undefined) {
                 minAmount = this.safeNumber (baseCurrency['info'], 'minimum_order_quantity');
@@ -434,37 +421,76 @@ module.exports = class liquid extends Exchange {
                     maxPrice = lastPrice * multiplierUp;
                 }
             }
-            const limits = {
-                'amount': {
-                    'min': minAmount,
-                    'max': undefined,
-                },
-                'price': {
-                    'min': minPrice,
-                    'max': maxPrice,
-                },
-                'cost': {
-                    'min': undefined,
-                    'max': undefined,
-                },
-            };
-            result.push ({
+            const margin = this.safeValue (market, 'margin_enabled');
+            const symbol = base + '/' + quote;
+            const maker = this.fees['trading']['maker'];
+            const taker = this.fees['trading']['taker'];
+            const parsedMarket = {
                 'id': id,
                 'symbol': symbol,
                 'base': base,
                 'quote': quote,
+                'settle': undefined,
                 'baseId': baseId,
                 'quoteId': quoteId,
+                'settleId': undefined,
                 'type': type,
                 'spot': spot,
+                'margin': spot && margin,
                 'swap': swap,
-                'maker': maker,
+                'future': false,
+                'option': false,
+                'active': !disabled,
+                'contract': swap,
+                'linear': undefined,
+                'inverse': undefined,
                 'taker': taker,
-                'limits': limits,
-                'precision': precision,
-                'active': active,
+                'maker': maker,
+                'contractSize': undefined,
+                'expiry': undefined,
+                'expiryDatetime': undefined,
+                'strike': undefined,
+                'optionType': undefined,
+                'precision': {
+                    'amount': this.parseNumber ('0.00000001'),
+                    'price': this.safeNumber (market, 'tick_size'),
+                },
+                'limits': {
+                    'leverage': {
+                        'min': undefined,
+                        'max': undefined,
+                    },
+                    'amount': {
+                        'min': minAmount,
+                        'max': undefined,
+                    },
+                    'price': {
+                        'min': minPrice,
+                        'max': maxPrice,
+                    },
+                    'cost': {
+                        'min': undefined,
+                        'max': undefined,
+                    },
+                },
                 'info': market,
-            });
+            };
+            if (swap) {
+                const settlementCurrencies = this.options['fetchMarkets']['settlementCurrencies'];
+                for (let i = 0; i < settlementCurrencies.length; i++) {
+                    const settle = settlementCurrencies[i];
+                    parsedMarket['settle'] = settle;
+                    parsedMarket['symbol'] = symbol + ':' + settle;
+                    parsedMarket['linear'] = quote === settle;
+                    parsedMarket['inverse'] = base === settle;
+                    parsedMarket['taker'] = this.safeNumber (market, 'taker_fee', taker);
+                    parsedMarket['maker'] = this.safeNumber (market, 'maker_fee', maker);
+                    parsedMarket['contractSize'] = this.parseNumber ('1');
+                    result.push (parsedMarket);
+                }
+            } else {
+                result.push (parsedMarket);
+            }
         }
         return result;
     }
@@ -558,23 +584,13 @@ module.exports = class liquid extends Exchange {
                 }
             }
         }
-        let symbol = undefined;
-        if (market === undefined) {
-            const marketId = this.safeString (ticker, 'id');
-            if (marketId in this.markets_by_id) {
-                market = this.markets_by_id[marketId];
-            } else {
-                const baseId = this.safeString (ticker, 'base_currency');
-                const quoteId = this.safeString (ticker, 'quoted_currency');
-                if (symbol in this.markets) {
-                    market = this.markets[symbol];
-                } else {
-                    symbol = this.safeCurrencyCode (baseId) + '/' + this.safeCurrencyCode (quoteId);
-                }
-            }
-        }
-        if (market !== undefined) {
-            symbol = market['symbol'];
+        const marketId = this.safeString (ticker, 'id');
+        market = this.safeMarket (marketId, market);
+        let symbol = market['symbol'];
+        const baseId = this.safeString (ticker, 'base_currency');
+        const quoteId = this.safeString (ticker, 'quoted_currency');
+        if ((baseId !== undefined) && (quoteId !== undefined)) {
+            symbol = this.safeCurrencyCode (baseId) + '/' + this.safeCurrencyCode (quoteId);
         }
         const open = this.safeString (ticker, 'last_price_24h');
         return this.safeTicker ({
@@ -641,31 +657,25 @@ module.exports = class liquid extends Exchange {
         if (mySide !== undefined) {
             takerOrMaker = (takerSide === mySide) ? 'taker' : 'maker';
         }
-        const priceString = this.safeString (trade, 'price');
-        const amountString = this.safeString (trade, 'quantity');
-        const price = this.parseNumber (priceString);
-        const amount = this.parseNumber (amountString);
-        const cost = this.parseNumber (Precise.stringMul (priceString, amountString));
+        const price = this.safeString (trade, 'price');
+        const amount = this.safeString (trade, 'quantity');
         const id = this.safeString (trade, 'id');
-        let symbol = undefined;
-        if (market !== undefined) {
-            symbol = market['symbol'];
-        }
-        return {
+        market = this.safeMarket (undefined, market);
+        return this.safeTrade ({
             'info': trade,
             'id': id,
             'order': orderId,
             'timestamp': timestamp,
             'datetime': this.iso8601 (timestamp),
-            'symbol': symbol,
+            'symbol': market['symbol'],
             'type': undefined,
             'side': side,
             'takerOrMaker': takerOrMaker,
             'price': price,
             'amount': amount,
-            'cost': cost,
+            'cost': undefined,
             'fee': undefined,
-        };
+        }, market);
     }
 
     async fetchTrades (symbol, since = undefined, limit = undefined, params = {}) {
@@ -684,6 +694,166 @@ module.exports = class liquid extends Exchange {
         const response = await this.publicGetExecutions (this.extend (request, params));
         const result = (since !== undefined) ? response : response['models'];
         return this.parseTrades (result, market, since, limit);
+    }
+
+    async fetchTradingFee (symbol, params = {}) {
+        await this.loadMarkets ();
+        const market = this.market (symbol);
+        const request = {
+            'id': market['id'],
+        };
+        const response = await this.publicGetProductsId (this.extend (request, params));
+        //
+        //     {
+        //         "id":"637",
+        //         "product_type":"CurrencyPair",
+        //         "code":"CASH",
+        //         "name":null,
+        //         "market_ask":"0.00000797",
+        //         "market_bid":"0.00000727",
+        //         "indicator":null,
+        //         "currency":"BTC",
+        //         "currency_pair_code":"TFTBTC",
+        //         "symbol":null,
+        //         "btc_minimum_withdraw":null,
+        //         "fiat_minimum_withdraw":null,
+        //         "pusher_channel":"product_cash_tftbtc_637",
+        //         "taker_fee":"0.0",
+        //         "maker_fee":"0.0",
+        //         "low_market_bid":"0.00000685",
+        //         "high_market_ask":"0.00000885",
+        //         "volume_24h":"3696.0755956",
+        //         "last_price_24h":"0.00000716",
+        //         "last_traded_price":"0.00000766",
+        //         "last_traded_quantity":"1748.0377978",
+        //         "average_price":null,
+        //         "quoted_currency":"BTC",
+        //         "base_currency":"TFT",
+        //         "tick_size":"0.00000001",
+        //         "disabled":false,
+        //         "margin_enabled":false,
+        //         "cfd_enabled":false,
+        //         "perpetual_enabled":false,
+        //         "last_event_timestamp":"1596962820.000797146",
+        //         "timestamp":"1596962820.000797146",
+        //         "multiplier_up":"9.0",
+        //         "multiplier_down":"0.1",
+        //         "average_time_interval":null
+        //     }
+        //
+        return this.parseTradingFee (response, market);
+    }
+
+    parseTradingFee (fee, market = undefined) {
+        const marketId = this.safeString (fee, 'id');
+        const symbol = this.safeSymbol (marketId, market);
+        return {
+            'info': fee,
+            'symbol': symbol,
+            'maker': this.safeNumber (fee, 'maker_fee'),
+            'taker': this.safeNumber (fee, 'taker_fee'),
+            'percentage': true,
+            'tierBased': true,
+        };
+    }
+
+    async fetchTradingFees (params = {}) {
+        await this.loadMarkets ();
+        const spot = await this.publicGetProducts (params);
+        //
+        //     [
+        //         {
+        //             "id":"637",
+        //             "product_type":"CurrencyPair",
+        //             "code":"CASH",
+        //             "name":null,
+        //             "market_ask":"0.00000797",
+        //             "market_bid":"0.00000727",
+        //             "indicator":null,
+        //             "currency":"BTC",
+        //             "currency_pair_code":"TFTBTC",
+        //             "symbol":null,
+        //             "btc_minimum_withdraw":null,
+        //             "fiat_minimum_withdraw":null,
+        //             "pusher_channel":"product_cash_tftbtc_637",
+        //             "taker_fee":"0.0",
+        //             "maker_fee":"0.0",
+        //             "low_market_bid":"0.00000685",
+        //             "high_market_ask":"0.00000885",
+        //             "volume_24h":"3696.0755956",
+        //             "last_price_24h":"0.00000716",
+        //             "last_traded_price":"0.00000766",
+        //             "last_traded_quantity":"1748.0377978",
+        //             "average_price":null,
+        //             "quoted_currency":"BTC",
+        //             "base_currency":"TFT",
+        //             "tick_size":"0.00000001",
+        //             "disabled":false,
+        //             "margin_enabled":false,
+        //             "cfd_enabled":false,
+        //             "perpetual_enabled":false,
+        //             "last_event_timestamp":"1596962820.000797146",
+        //             "timestamp":"1596962820.000797146",
+        //             "multiplier_up":"9.0",
+        //             "multiplier_down":"0.1",
+        //             "average_time_interval":null
+        //         },
+        //     ]
+        //
+        const perpetual = await this.publicGetProducts ({ 'perpetual': '1' });
+        //
+        //     [
+        //         {
+        //             "id":"604",
+        //             "product_type":"Perpetual",
+        //             "code":"CASH",
+        //             "name":null,
+        //             "market_ask":"11721.5",
+        //             "market_bid":"11719.0",
+        //             "indicator":null,
+        //             "currency":"USD",
+        //             "currency_pair_code":"P-BTCUSD",
+        //             "symbol":"$",
+        //             "btc_minimum_withdraw":null,
+        //             "fiat_minimum_withdraw":null,
+        //             "pusher_channel":"product_cash_p-btcusd_604",
+        //             "taker_fee":"0.0012",
+        //             "maker_fee":"0.0",
+        //             "low_market_bid":"11624.5",
+        //             "high_market_ask":"11859.0",
+        //             "volume_24h":"0.271",
+        //             "last_price_24h":"11621.5",
+        //             "last_traded_price":"11771.5",
+        //             "last_traded_quantity":"0.09",
+        //             "average_price":"11771.5",
+        //             "quoted_currency":"USD",
+        //             "base_currency":"P-BTC",
+        //             "tick_size":"0.5",
+        //             "disabled":false,
+        //             "margin_enabled":false,
+        //             "cfd_enabled":false,
+        //             "perpetual_enabled":true,
+        //             "last_event_timestamp":"1596963309.418853092",
+        //             "timestamp":"1596963309.418853092",
+        //             "multiplier_up":null,
+        //             "multiplier_down":"0.1",
+        //             "average_time_interval":300,
+        //             "index_price":"11682.8124",
+        //             "mark_price":"11719.96781",
+        //             "funding_rate":"0.00273",
+        //             "fair_price":"11720.2745"
+        //         },
+        //     ]
+        //
+        const markets = this.arrayConcat (spot, perpetual);
+        const result = {};
+        for (let i = 0; i < markets.length; i++) {
+            const market = markets[i];
+            const marketId = this.safeString (market, 'id');
+            const symbol = this.safeSymbol (marketId, market);
+            result[symbol] = this.parseTradingFee (market);
+        }
+        return result;
     }
 
     async fetchMyTrades (symbol = undefined, since = undefined, limit = undefined, params = {}) {
@@ -851,12 +1021,6 @@ module.exports = class liquid extends Exchange {
         const amount = this.safeNumber (order, 'quantity');
         let filled = this.safeNumber (order, 'filled_quantity');
         const price = this.safeNumber (order, 'price');
-        let symbol = undefined;
-        let feeCurrency = undefined;
-        if (market !== undefined) {
-            symbol = market['symbol'];
-            feeCurrency = market['quote'];
-        }
         const type = this.safeString (order, 'order_type');
         let tradeCost = 0;
         let tradeFilled = 0;
@@ -905,7 +1069,7 @@ module.exports = class liquid extends Exchange {
             'timeInForce': undefined,
             'postOnly': undefined,
             'status': status,
-            'symbol': symbol,
+            'symbol': market['symbol'],
             'side': side,
             'price': price,
             'stopPrice': undefined,
@@ -916,7 +1080,7 @@ module.exports = class liquid extends Exchange {
             'average': average,
             'trades': trades,
             'fee': {
-                'currency': feeCurrency,
+                'currency': market['quote'],
                 'cost': this.safeNumber (order, 'order_fee'),
             },
             'info': order,
@@ -1020,11 +1184,15 @@ module.exports = class liquid extends Exchange {
             }
         }
         const networks = this.safeValue (this.options, 'networks', {});
-        const paramsCwArray = this.safeValue (params, 'crypto_withdrawal', {});
-        let network = this.safeStringUpper (paramsCwArray, 'network'); // this line allows the user to specify either ERC20 or ETH
+        let network = this.safeStringUpper (params, 'network'); // this line allows the user to specify either ERC20 or ETH
+        if (network === undefined) {
+            const paramsCwArray = this.safeValue (params, 'crypto_withdrawal', {});
+            network = this.safeStringUpper (paramsCwArray, 'network');
+        }
         network = this.safeString (networks, network, network); // handle ERC20>ETH alias
         if (network !== undefined) {
             request['crypto_withdrawal']['network'] = network;
+            params = this.omit (params, 'network');
             params['crypto_withdrawal'] = this.omit (params['crypto_withdrawal'], 'network');
         }
         const response = await this.privatePostCryptoWithdrawals (this.deepExtend (request, params));

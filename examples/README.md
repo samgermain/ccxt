@@ -73,11 +73,21 @@ php -f path/to/example.php # substitute for actual filename here
 
 [FTX API (Crypto Exchange) and Google Cloud Functions](https://www.youtube.com/watch?v=mtpA3vDg5js) – A video on trading with CCXT and Google Cloud Functions!
 
+[VectorBT Scheduler, Alpaca Crypto API, Stochastic Oscillator](https://www.youtube.com/watch?v=ZffdACbvFjc) – A video tutorial on CCXT + VectorBT Scheduler + Alpaca Crypto API + Stochastic Oscillator.
+
 [Coinbase Pro, TradingView Webhooks, and Google Cloud Functions](https://www.youtube.com/watch?v=3jA2vAJSdAI) – How to automate your trading by connecting Coinbase Pro to Google Cloud Functions using TradingView Webhooks and CCXT!
 
 [CCXT - Crypto Trading](https://www.youtube.com/playlist?list=PLvzuUVysUFOv5XEPHeqefgyHZcDfLxH-W) – An awesome video playlist on CCXT and tons of other cool videos by [Part Time Larry](https://www.youtube.com/c/parttimelarry)!
 
+[Python and CCXT Grid Bot Tutorial](https://www.youtube.com/watch?v=QzqMGX4Qk1A) – A video tutorial on building a Grid Bot with Python and CCXT!
+
+[JavaScript CCXT Grid Bot vs. Python](https://www.youtube.com/watch?v=kLATKNzbUOE) – A video comparison of using CCXT to write a Grid Bot in JavaScript vs Python.
+
+[Crypto Trading Bot In Python](https://medium.com/coinmonks/crypto-trading-bot-on-python-22a245f1a9d) – An article on structuring a basic bot with CCXT and Python.
+
 [Writing a crypto trading bot](https://www.kleemans.ch/writing-a-crypto-trading-bot) – How to write an automated trading bot, for fun and profit.
+
+[Daily Binance Crypto Trade Signals](https://medium.com/coinmonks/daily-binance-us-crypto-trade-signals-fda4e8a205c8) – How to use Kaggle’s schedule feature to build a daily cryptocurrency trade signals webpage.
 
 [graphql-ccxt](https://github.com/fibo/graphql-ccxt) – Joins together GraphQL and CCXT: can fetch prices, read balance, open orders, ... on multiple exchanges at once.
 
@@ -102,6 +112,8 @@ php -f path/to/example.php # substitute for actual filename here
 [Let’s write a cryptocurrency bot](https://medium.com/@joeldg/an-advanced-tutorial-a-new-crypto-currency-trading-bot-boilerplate-framework-e777733607ae) – A multi-part advanced tutorial on a new cryptocurrency trading framework also integrating ccxt.
 
 [Naas.ai CCXT Templates](https://www.naas.ai/tools/ccxt) – Naas notebooks enable you to easily access data, automation and AI.
+
+[How to Buy and Sell Bitcoin with Python](https://python.plainenglish.io/how-to-buy-and-sell-bitcoin-with-python-f83d893c393) – How to Buy and Sell Bitcoin with Python using CCXT.
 
 [Download Cryptocurrency Data with CCXT](https://backtest-rookies.com/2018/03/08/download-cryptocurrency-data-with-ccxt/) – A sample script to download historical data from exchanges with a video overview: [Easy Python script to download crypto currency market data with CCXT package](https://www.youtube.com/watch?v=PTGkJsrF7kQ).
 
@@ -142,6 +154,8 @@ php -f path/to/example.php # substitute for actual filename here
 
 [Cryptocurrencies and APIs](https://jonc.dev/cryptocurrency) – A presentation given to kick off the Bloomberg cryptocurrency hackathon and as a Recurse Center talk.
 
+[How to use CCXT to algo trade](https://www.youtube.com/watch?v=3EQsDdjZTlc) – An easy to watch video tutorial on how to use CCXT for algotrading.
+
 [Perform Currency Conversions And Get Bitcoin Prices In Python](http://www.maxpython.com/packages/perform-currency-conversions-and-get-bitcoin-prices-in-python.php) – an article showing how to use CCXT to get exchange rates, Bitcoin prices and perform currency conversions.
 
 [Using Apache Airflow ETL to fetch and analyze BTC data](https://itnext.io/using-apache-airflow-etl-to-fetch-and-analyze-btc-data-1adab96c410c) – how to use CCXT with Apache Airflow ETL for Bitcoin pricing data analysis.
@@ -162,7 +176,9 @@ php -f path/to/example.php # substitute for actual filename here
 
 https://www.youtube.com/watch?v=K-EZ9QXezZM
 
-[CCXTが便利な理由！CCXTライブラリをインストールしよう](https://ryota-trade.com/?p=476) – An article in Japanese on getting CCXT up and runining.
+[CCXTが便利な理由！CCXTライブラリをインストールしよう](https://ryota-trade.com/?p=476) – An article in Japanese on getting CCXT up and running.
+
+[如何通過CCXT下載比特幣歷史數據? How to download Bitcoin price data with CCXT](https://www.youtube.com/watch?v=Nozqu7WyCDw) – A video tutorial on how to download historical Bitcoin price data using CCXT.
 
 [暗号通貨自動売買 RSI CCXTとpythonで自動売買 プログラミング bitget](https://www.youtube.com/watch?v=BAqnx-XkA_8) – Automatic cryptocurrency trading with CCXT and Python
 

@@ -22,14 +22,15 @@ class bitflyer(Exchange):
             'has': {
                 'CORS': None,
                 'spot': True,
-                'margin': None,
-                'swap': None,
-                'future': None,
-                'option': None,
+                'margin': False,
+                'swap': None,  # has but not fully implemented
+                'future': None,  # has but not fully implemented
+                'option': False,
                 'cancelOrder': True,
                 'createOrder': True,
                 'fetchBalance': True,
                 'fetchClosedOrders': 'emulated',
+                'fetchDeposits': True,
                 'fetchMarkets': True,
                 'fetchMyTrades': True,
                 'fetchOpenOrders': 'emulated',
@@ -39,6 +40,12 @@ class bitflyer(Exchange):
                 'fetchPositions': True,
                 'fetchTicker': True,
                 'fetchTrades': True,
+                'fetchTradingFee': True,
+                'fetchTradingFees': False,
+                'fetchTransfer': False,
+                'fetchTransfers': False,
+                'fetchWithdrawals': True,
+                'transfer': False,
                 'withdraw': True,
             },
             'urls': {
@@ -101,10 +108,58 @@ class bitflyer(Exchange):
             },
         })
 
+    def parse_expiry_date(self, expiry):
+        day = expiry[0:2]
+        monthName = expiry[2:5]
+        year = expiry[5:9]
+        months = {
+            'JAN': '01',
+            'FEB': '02',
+            'MAR': '03',
+            'APR': '04',
+            'MAY': '05',
+            'JUN': '06',
+            'JUL': '07',
+            'AUG': '08',
+            'SEP': '09',
+            'OCT': '10',
+            'NOV': '11',
+            'DEC': '12',
+        }
+        month = self.safe_string(months, monthName)
+        return self.parse8601(year + '-' + month + '-' + day + 'T00:00:00Z')
+
     async def fetch_markets(self, params={}):
         jp_markets = await self.publicGetGetmarkets(params)
+        #
+        #     [
+        #         # spot
+        #         {"product_code": "BTC_JPY", "market_type": "Spot"},
+        #         {"product_code": "BCH_BTC", "market_type": "Spot"},
+        #         # forex swap
+        #         {"product_code": "FX_BTC_JPY", "market_type": "FX"},
+        #         # future
+        #         {
+        #             "product_code": "BTCJPY11FEB2022",
+        #             "alias": "BTCJPY_MAT1WK",
+        #             "market_type": "Futures",
+        #         },
+        #     ]
+        #
         us_markets = await self.publicGetGetmarketsUsa(params)
+        #
+        #     [
+        #         {"product_code": "BTC_USD", "market_type": "Spot"},
+        #         {"product_code": "BTC_JPY", "market_type": "Spot"},
+        #     ]
+        #
         eu_markets = await self.publicGetGetmarketsEu(params)
+        #
+        #     [
+        #         {"product_code": "BTC_EUR", "market_type": "Spot"},
+        #         {"product_code": "BTC_JPY", "market_type": "Spot"},
+        #     ]
+        #
         markets = self.array_concat(jp_markets, us_markets)
         markets = self.array_concat(markets, eu_markets)
         result = []
@@ -112,47 +167,103 @@ class bitflyer(Exchange):
             market = markets[i]
             id = self.safe_string(market, 'product_code')
             currencies = id.split('_')
+            marketType = self.safe_string(market, 'market_type')
+            swap = (marketType == 'FX')
+            future = (marketType == 'Futures')
+            spot = not swap and not future
+            type = 'spot'
+            settle = None
             baseId = None
             quoteId = None
-            base = None
-            quote = None
-            numCurrencies = len(currencies)
-            if numCurrencies == 1:
-                baseId = id[0:3]
-                quoteId = id[3:6]
-            elif numCurrencies == 2:
-                baseId = currencies[0]
-                quoteId = currencies[1]
-            else:
-                baseId = currencies[1]
-                quoteId = currencies[2]
+            expiry = None
+            if spot:
+                baseId = self.safe_string(currencies, 0)
+                quoteId = self.safe_string(currencies, 1)
+            elif swap:
+                type = 'swap'
+                baseId = self.safe_string(currencies, 1)
+                quoteId = self.safe_string(currencies, 2)
+            elif future:
+                alias = self.safe_string(market, 'alias')
+                if alias is None:
+                    # no alias:
+                    # {product_code: 'BTCJPY11MAR2022', market_type: 'Futures'}
+                    # TODO self will break if there are products with 4 chars
+                    baseId = id[0:3]
+                    quoteId = id[3:6]
+                    # last 9 chars are expiry date
+                    expiryDate = id[-9:]
+                    expiry = self.parse_expiry_date(expiryDate)
+                else:
+                    splitAlias = alias.split('_')
+                    currencyIds = self.safe_string(splitAlias, 0)
+                    baseId = currencyIds[0:-3]
+                    quoteId = currencyIds[-3:]
+                    splitId = id.split(currencyIds)
+                    expiryDate = self.safe_string(splitId, 1)
+                    expiry = self.parse_expiry_date(expiryDate)
+                type = 'future'
             base = self.safe_currency_code(baseId)
             quote = self.safe_currency_code(quoteId)
-            symbol = (base + '/' + quote) if (numCurrencies == 2) else id
-            fees = self.safe_value(self.fees, symbol, self.fees['trading'])
-            maker = self.safe_value(fees, 'maker', self.fees['trading']['maker'])
-            taker = self.safe_value(fees, 'taker', self.fees['trading']['taker'])
-            spot = True
-            future = False
-            type = 'spot'
-            if ('alias' in market) or (currencies[0] == 'FX'):
-                type = 'future'
-                future = True
-                spot = False
+            symbol = base + '/' + quote
+            taker = self.fees['trading']['taker']
+            maker = self.fees['trading']['maker']
+            contract = swap or future
+            if contract:
                 maker = 0.0
                 taker = 0.0
+                settle = 'JPY'
+                symbol = symbol + ':' + settle
+                if future:
+                    symbol = symbol + '-' + self.yymmdd(expiry)
             result.append({
                 'id': id,
                 'symbol': symbol,
                 'base': base,
                 'quote': quote,
+                'settle': settle,
                 'baseId': baseId,
                 'quoteId': quoteId,
-                'maker': maker,
-                'taker': taker,
+                'settleId': None,
                 'type': type,
                 'spot': spot,
+                'margin': False,
+                'swap': swap,
                 'future': future,
+                'option': False,
+                'active': True,
+                'contract': contract,
+                'linear': None if spot else True,
+                'inverse': None if spot else False,
+                'taker': taker,
+                'maker': maker,
+                'contractSize': None,
+                'expiry': expiry,
+                'expiryDatetime': self.iso8601(expiry),
+                'strike': None,
+                'optionType': None,
+                'precision': {
+                    'amount': None,
+                    'price': None,
+                },
+                'limits': {
+                    'leverage': {
+                        'min': None,
+                        'max': None,
+                    },
+                    'amount': {
+                        'min': None,
+                        'max': None,
+                    },
+                    'price': {
+                        'min': None,
+                        'max': None,
+                    },
+                    'cost': {
+                        'min': None,
+                        'max': None,
+                    },
+                },
                 'info': market,
             })
         return result
@@ -277,15 +388,13 @@ class bitflyer(Exchange):
         priceString = self.safe_string(trade, 'price')
         amountString = self.safe_string(trade, 'size')
         id = self.safe_string(trade, 'id')
-        symbol = None
-        if market is not None:
-            symbol = market['symbol']
+        market = self.safe_market(None, market)
         return self.safe_trade({
             'id': id,
             'info': trade,
             'timestamp': timestamp,
             'datetime': self.iso8601(timestamp),
-            'symbol': symbol,
+            'symbol': market['symbol'],
             'order': order,
             'type': None,
             'side': side,
@@ -304,6 +413,26 @@ class bitflyer(Exchange):
         }
         response = await self.publicGetGetexecutions(self.extend(request, params))
         return self.parse_trades(response, market, since, limit)
+
+    async def fetch_trading_fee(self, symbol, params={}):
+        await self.load_markets()
+        market = self.market(symbol)
+        request = {
+            'product_code': market['id'],
+        }
+        response = await self.privateGetGettradingcommission(self.extend(request, params))
+        #
+        #   {
+        #       commission_rate: '0.0020'
+        #   }
+        #
+        fee = self.safe_number(response, 'commission_rate')
+        return {
+            'info': response,
+            'symbol': symbol,
+            'maker': fee,
+            'taker': fee,
+        }
 
     async def create_order(self, symbol, type, side, amount, price=None, params={}):
         await self.load_markets()
@@ -475,10 +604,155 @@ class bitflyer(Exchange):
             # 'bank_account_id': 1234,
         }
         response = await self.privatePostWithdraw(self.extend(request, params))
-        id = self.safe_string(response, 'message_id')
+        #
+        #     {
+        #         "message_id": "69476620-5056-4003-bcbe-42658a2b041b"
+        #     }
+        #
+        return self.parse_transaction(response, currency)
+
+    async def fetch_deposits(self, code=None, since=None, limit=None, params={}):
+        await self.load_markets()
+        currency = None
+        request = {}
+        if code is not None:
+            currency = self.currency(code)
+        if limit is not None:
+            request['count'] = limit  # default 100
+        response = await self.privateGetGetcoinins(self.extend(request, params))
+        #
+        #     [
+        #         {
+        #             "id": 100,
+        #             "order_id": "CDP20151227-024141-055555",
+        #             "currency_code": "BTC",
+        #             "amount": 0.00002,
+        #             "address": "1WriteySQufKZ2pVuM1oMhPrTtTVFq35j",
+        #             "tx_hash": "9f92ee65a176bb9545f7becb8706c50d07d4cee5ffca34d8be3ef11d411405ae",
+        #             "status": "COMPLETED",
+        #             "event_date": "2015-11-27T08:59:20.301"
+        #         }
+        #     ]
+        #
+        return self.parse_transactions(response, currency, since, limit)
+
+    async def fetch_withdrawals(self, code=None, since=None, limit=None, params={}):
+        await self.load_markets()
+        currency = None
+        request = {}
+        if code is not None:
+            currency = self.currency(code)
+        if limit is not None:
+            request['count'] = limit  # default 100
+        response = await self.privateGetGetcoinouts(self.extend(request, params))
+        #
+        #     [
+        #         {
+        #             "id": 500,
+        #             "order_id": "CWD20151224-014040-077777",
+        #             "currency_code": "BTC",
+        #             "amount": 0.1234,
+        #             "address": "1A1zP1eP5QGefi2DMPTfTL5SLmv7DivfNa",
+        #             "tx_hash": "724c07dfd4044abcb390b0412c3e707dd5c4f373f0a52b3bd295ce32b478c60a",
+        #             "fee": 0.0005,
+        #             "additional_fee": 0.0001,
+        #             "status": "COMPLETED",
+        #             "event_date": "2015-12-24T01:40:40.397"
+        #         }
+        #     ]
+        #
+        return self.parse_transactions(response, currency, since, limit)
+
+    def parse_deposit_status(self, status):
+        statuses = {
+            'PENDING': 'pending',
+            'COMPLETED': 'ok',
+        }
+        return self.safe_string(statuses, status, status)
+
+    def parse_withdrawal_status(self, status):
+        statuses = {
+            'PENDING': 'pending',
+            'COMPLETED': 'ok',
+        }
+        return self.safe_string(statuses, status, status)
+
+    def parse_transaction(self, transaction, currency=None):
+        #
+        # fetchDeposits
+        #
+        #     {
+        #         "id": 100,
+        #         "order_id": "CDP20151227-024141-055555",
+        #         "currency_code": "BTC",
+        #         "amount": 0.00002,
+        #         "address": "1WriteySQufKZ2pVuM1oMhPrTtTVFq35j",
+        #         "tx_hash": "9f92ee65a176bb9545f7becb8706c50d07d4cee5ffca34d8be3ef11d411405ae",
+        #         "status": "COMPLETED",
+        #         "event_date": "2015-11-27T08:59:20.301"
+        #     }
+        #
+        # fetchWithdrawals
+        #
+        #     {
+        #         "id": 500,
+        #         "order_id": "CWD20151224-014040-077777",
+        #         "currency_code": "BTC",
+        #         "amount": 0.1234,
+        #         "address": "1A1zP1eP5QGefi2DMPTfTL5SLmv7DivfNa",
+        #         "tx_hash": "724c07dfd4044abcb390b0412c3e707dd5c4f373f0a52b3bd295ce32b478c60a",
+        #         "fee": 0.0005,
+        #         "additional_fee": 0.0001,
+        #         "status": "COMPLETED",
+        #         "event_date": "2015-12-24T01:40:40.397"
+        #     }
+        #
+        # withdraw
+        #
+        #     {
+        #         "message_id": "69476620-5056-4003-bcbe-42658a2b041b"
+        #     }
+        #
+        id = self.safe_string_2(transaction, 'id', 'message_id')
+        address = self.safe_string(transaction, 'address')
+        currencyId = self.safe_string(transaction, 'currency_code')
+        code = self.safe_currency_code(currencyId, currency)
+        timestamp = self.parse8601(self.safe_string(transaction, 'event_date'))
+        amount = self.safe_number(transaction, 'amount')
+        txId = self.safe_string(transaction, 'tx_hash')
+        rawStatus = self.safe_string(transaction, 'status')
+        type = None
+        status = None
+        fee = None
+        if 'fee' in transaction:
+            type = 'withdrawal'
+            status = self.parse_withdrawal_status(rawStatus)
+            feeCost = self.safe_number(transaction, 'fee')
+            additionalFee = self.safe_number(transaction, 'additional_fee')
+            fee = {'currency': code, 'cost': feeCost + additionalFee}
+        else:
+            type = 'deposit'
+            status = self.parse_deposit_status(rawStatus)
         return {
-            'info': response,
+            'info': transaction,
             'id': id,
+            'txid': txId,
+            'timestamp': timestamp,
+            'datetime': self.iso8601(timestamp),
+            'network': None,
+            'address': address,
+            'addressTo': address,
+            'addressFrom': None,
+            'tag': None,
+            'tagTo': None,
+            'tagFrom': None,
+            'type': type,
+            'amount': amount,
+            'currency': code,
+            'status': status,
+            'updated': None,
+            'internal': None,
+            'fee': fee,
         }
 
     def sign(self, path, api='public', method='GET', params={}, headers=None, body=None):

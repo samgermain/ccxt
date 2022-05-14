@@ -21,8 +21,8 @@ module.exports = class deribit extends Exchange {
             'rateLimit': 50,
             'has': {
                 'CORS': true,
-                'spot': true,
-                'margin': undefined,
+                'spot': false,
+                'margin': false,
                 'swap': undefined,
                 'future': undefined,
                 'option': undefined,
@@ -30,13 +30,22 @@ module.exports = class deribit extends Exchange {
                 'cancelOrder': true,
                 'createDepositAddress': true,
                 'createOrder': true,
+                'createStopLimitOrder': true,
+                'createStopMarketOrder': true,
+                'createStopOrder': true,
                 'editOrder': true,
                 'fetchBalance': true,
+                'fetchBorrowRate': false,
+                'fetchBorrowRateHistories': false,
+                'fetchBorrowRateHistory': false,
+                'fetchBorrowRates': false,
+                'fetchBorrowRatesPerSymbol': false,
                 'fetchClosedOrders': true,
                 'fetchDepositAddress': true,
                 'fetchDeposits': true,
                 'fetchHistoricalVolatility': true,
                 'fetchIndexOHLCV': false,
+                'fetchLeverageTiers': false,
                 'fetchMarkets': true,
                 'fetchMarkOHLCV': false,
                 'fetchMyTrades': true,
@@ -54,6 +63,8 @@ module.exports = class deribit extends Exchange {
                 'fetchTickers': true,
                 'fetchTime': true,
                 'fetchTrades': true,
+                'fetchTradingFee': false,
+                'fetchTradingFees': true,
                 'fetchTransactions': undefined,
                 'fetchWithdrawals': true,
                 'withdraw': true,
@@ -380,25 +391,29 @@ module.exports = class deribit extends Exchange {
     }
 
     async fetchStatus (params = {}) {
-        const request = {
-            // 'expected_result': false, // true will trigger an error for testing purposes
-        };
-        await this.publicGetTest (this.extend (request, params));
+        const response = await this.publicGetStatus (params);
         //
         //     {
-        //         jsonrpc: '2.0',
-        //         result: { version: '1.2.26' },
-        //         usIn: 1583922623964485,
-        //         usOut: 1583922623964487,
-        //         usDiff: 2,
-        //         testnet: false
+        //         "jsonrpc": "2.0",
+        //         "result": {
+        //             "locked": "false" // true, partial, false
+        //         },
+        //         "usIn": 1650641690226788,
+        //         "usOut": 1650641690226836,
+        //         "usDiff": 48,
+        //         "testnet": false
         //     }
         //
-        this.status = this.extend (this.status, {
-            'status': 'ok',
-            'updated': this.milliseconds (),
-        });
-        return this.status;
+        const result = this.safeString (response, 'result');
+        const locked = this.safeString (result, 'locked');
+        const updateTime = this.safeIntegerProduct (response, 'usIn', 0.001, this.milliseconds ());
+        return {
+            'status': (locked === 'false') ? 'ok' : 'maintenance',
+            'updated': updateTime,
+            'eta': undefined,
+            'url': undefined,
+            'info': response,
+        };
     }
 
     async fetchMarkets (params = {}) {
@@ -437,30 +452,75 @@ module.exports = class deribit extends Exchange {
             const instrumentsResponse = await this.publicGetGetInstruments (this.extend (request, params));
             //
             //     {
-            //         jsonrpc: '2.0',
-            //         result: [
+            //         "jsonrpc":"2.0",
+            //         "result":[
             //             {
-            //                 tick_size: 0.0005,
-            //                 taker_commission: 0.0004,
-            //                 strike: 300,
-            //                 settlement_period: 'week',
-            //                 quote_currency: 'USD',
-            //                 option_type: 'call',
-            //                 min_trade_amount: 1,
-            //                 maker_commission: 0.0004,
-            //                 kind: 'option',
-            //                 is_active: true,
-            //                 instrument_name: 'ETH-13MAR20-300-C',
-            //                 expiration_timestamp: 1584086400000,
-            //                 creation_timestamp: 1582790403000,
-            //                 contract_size: 1,
-            //                 base_currency: 'ETH'
+            //                 "tick_size":0.0005,
+            //                 "taker_commission":0.0003,
+            //                 "strike":52000.0,
+            //                 "settlement_period":"month",
+            //                 "settlement_currency":"BTC",
+            //                 "quote_currency":"BTC",
+            //                 "option_type":"put", // put, call
+            //                 "min_trade_amount":0.1,
+            //                 "maker_commission":0.0003,
+            //                 "kind":"option",
+            //                 "is_active":true,
+            //                 "instrument_name":"BTC-24JUN22-52000-P",
+            //                 "expiration_timestamp":1656057600000,
+            //                 "creation_timestamp":1648199543000,
+            //                 "counter_currency":"USD",
+            //                 "contract_size":1.0,
+            //                 "block_trade_commission":0.0003,
+            //                 "base_currency":"BTC"
+            //             },
+            //             {
+            //                 "tick_size":0.5,
+            //                 "taker_commission":0.0005,
+            //                 "settlement_period":"month", // month, week
+            //                 "settlement_currency":"BTC",
+            //                 "quote_currency":"USD",
+            //                 "min_trade_amount":10.0,
+            //                 "max_liquidation_commission":0.0075,
+            //                 "max_leverage":50,
+            //                 "maker_commission":0.0,
+            //                 "kind":"future",
+            //                 "is_active":true,
+            //                 "instrument_name":"BTC-27MAY22",
+            //                 "future_type":"reversed",
+            //                 "expiration_timestamp":1653638400000,
+            //                 "creation_timestamp":1648195209000,
+            //                 "counter_currency":"USD",
+            //                 "contract_size":10.0,
+            //                 "block_trade_commission":0.0001,
+            //                 "base_currency":"BTC"
+            //             },
+            //             {
+            //                 "tick_size":0.5,
+            //                 "taker_commission":0.0005,
+            //                 "settlement_period":"perpetual",
+            //                 "settlement_currency":"BTC",
+            //                 "quote_currency":"USD",
+            //                 "min_trade_amount":10.0,
+            //                 "max_liquidation_commission":0.0075,
+            //                 "max_leverage":50,
+            //                 "maker_commission":0.0,
+            //                 "kind":"future",
+            //                 "is_active":true,
+            //                 "instrument_name":"BTC-PERPETUAL",
+            //                 "future_type":"reversed",
+            //                 "expiration_timestamp":32503708800000,
+            //                 "creation_timestamp":1534242287000,
+            //                 "counter_currency":"USD",
+            //                 "contract_size":10.0,
+            //                 "block_trade_commission":0.0001,
+            //                 "base_currency":"BTC"
             //             },
             //         ],
-            //         usIn: 1583761889500586,
-            //         usOut: 1583761889505066,
-            //         usDiff: 4480,
-            //         testnet: false
+            //         "usIn":1648691472831791,
+            //         "usOut":1648691472831896,
+            //         "usDiff":105,
+            //         "testnet":false
             //     }
             //
             const instrumentsResult = this.safeValue (instrumentsResponse, 'result', []);
@@ -468,8 +528,8 @@ module.exports = class deribit extends Exchange {
                 const market = instrumentsResult[k];
                 const id = this.safeString (market, 'instrument_name');
                 const baseId = this.safeString (market, 'base_currency');
-                const quoteId = this.safeString (market, 'quote_currency');
-                const settleId = quoteId;
+                const quoteId = this.safeString (market, 'counter_currency');
+                const settleId = this.safeString (market, 'settlement_currency');
                 const base = this.safeCurrencyCode (baseId);
                 const quote = this.safeCurrencyCode (quoteId);
                 const settle = this.safeCurrencyCode (settleId);
@@ -478,7 +538,7 @@ module.exports = class deribit extends Exchange {
                 const swap = (settlementPeriod === 'perpetual');
                 const future = !swap && (kind === 'future');
                 const option = (kind === 'option');
-                let symbol = quote + '/' + base + ':' + settle;
+                let symbol = base + '/' + quote + ':' + settle;
                 const expiry = this.safeInteger (market, 'expiration_timestamp');
                 let strike = undefined;
                 let optionType = undefined;
@@ -489,7 +549,8 @@ module.exports = class deribit extends Exchange {
                         type = 'option';
                         strike = this.safeNumber (market, 'strike');
                         optionType = this.safeString (market, 'option_type');
-                        symbol = symbol + ':' + this.numberToString (strike) + ':' + optionType;
+                        const letter = (optionType === 'call') ? 'C' : 'P';
+                        symbol = symbol + ':' + this.numberToString (strike) + ':' + letter;
                     } else {
                         type = 'future';
                     }
@@ -511,13 +572,13 @@ module.exports = class deribit extends Exchange {
                     'swap': swap,
                     'future': future,
                     'option': option,
+                    'active': this.safeValue (market, 'is_active'),
                     'contract': true,
                     'linear': false,
                     'inverse': true,
                     'taker': this.safeNumber (market, 'taker_commission'),
                     'maker': this.safeNumber (market, 'maker_commission'),
                     'contractSize': this.safeNumber (market, 'contract_size'),
-                    'active': this.safeValue (market, 'is_active'),
                     'expiry': expiry,
                     'expiryDatetime': this.iso8601 (expiry),
                     'strike': strike,
@@ -1025,6 +1086,116 @@ module.exports = class deribit extends Exchange {
         return this.parseTrades (trades, market, since, limit);
     }
 
+    async fetchTradingFees (params = {}) {
+        await this.loadMarkets ();
+        const code = this.codeFromOptions ('fetchTradingFees', params);
+        const currency = this.currency (code);
+        const request = {
+            'currency': currency['id'],
+            'extended': true,
+        };
+        const response = await this.privateGetGetAccountSummary (this.extend (request, params));
+        //
+        //     {
+        //         jsonrpc: '2.0',
+        //         result: {
+        //             total_pl: 0,
+        //             session_upl: 0,
+        //             session_rpl: 0,
+        //             session_funding: 0,
+        //             portfolio_margining_enabled: false,
+        //             options_vega: 0,
+        //             options_theta: 0,
+        //             options_session_upl: 0,
+        //             options_session_rpl: 0,
+        //             options_pl: 0,
+        //             options_gamma: 0,
+        //             options_delta: 0,
+        //             margin_balance: 0.00062359,
+        //             maintenance_margin: 0,
+        //             limits: {
+        //                 non_matching_engine_burst: 300,
+        //                 non_matching_engine: 200,
+        //                 matching_engine_burst: 20,
+        //                 matching_engine: 2
+        //             },
+        //             initial_margin: 0,
+        //             futures_session_upl: 0,
+        //             futures_session_rpl: 0,
+        //             futures_pl: 0,
+        //             equity: 0.00062359,
+        //             deposit_address: '13tUtNsJSZa1F5GeCmwBywVrymHpZispzw',
+        //             delta_total: 0,
+        //             currency: 'BTC',
+        //             balance: 0.00062359,
+        //             available_withdrawal_funds: 0.00062359,
+        //             available_funds: 0.00062359,
+        //             fees: [
+        //                 currency: '',
+        //                 instrument_type: 'perpetual',
+        //                 fee_type: 'relative',
+        //                 maker_fee: 0,
+        //                 taker_fee: 0,
+        //             ],
+        //         },
+        //         usIn: 1583775838115975,
+        //         usOut: 1583775838116520,
+        //         usDiff: 545,
+        //         testnet: false
+        //     }
+        //
+        const result = this.safeValue (response, 'result', {});
+        const fees = this.safeValue (result, 'fees', []);
+        let perpetualFee = {};
+        let futureFee = {};
+        let optionFee = {};
+        for (let i = 0; i < fees.length; i++) {
+            const fee = fees[i];
+            const instrumentType = this.safeString (fee, 'instrument_type');
+            if (instrumentType === 'future') {
+                futureFee = {
+                    'info': fee,
+                    'maker': this.safeNumber (fee, 'maker_fee'),
+                    'taker': this.safeNumber (fee, 'taker_fee'),
+                };
+            } else if (instrumentType === 'perpetual') {
+                perpetualFee = {
+                    'info': fee,
+                    'maker': this.safeNumber (fee, 'maker_fee'),
+                    'taker': this.safeNumber (fee, 'taker_fee'),
+                };
+            } else if (instrumentType === 'option') {
+                optionFee = {
+                    'info': fee,
+                    'maker': this.safeNumber (fee, 'maker_fee'),
+                    'taker': this.safeNumber (fee, 'taker_fee'),
+                };
+            }
+        }
+        const parsedFees = {};
+        for (let i = 0; i < this.symbols.length; i++) {
+            const symbol = this.symbols[i];
+            const market = this.market (symbol);
+            let fee = {
+                'info': market,
+                'symbol': symbol,
+                'percentage': true,
+                'tierBased': true,
+                'maker': market['maker'],
+                'taker': market['taker'],
+            };
+            if (market['swap']) {
+                fee = this.extend (fee, perpetualFee);
+            } else if (market['future']) {
+                fee = this.extend (fee, futureFee);
+            } else if (market['option']) {
+                fee = this.extend (fee, optionFee);
+            }
+            parsedFees[symbol] = fee;
+        }
+        return parsedFees;
+    }
+
     async fetchOrderBook (symbol, limit = undefined, params = {}) {
         await this.loadMarkets ();
         const market = this.market (symbol);
@@ -1133,7 +1304,11 @@ module.exports = class deribit extends Exchange {
         const timestamp = this.safeInteger (order, 'creation_timestamp');
         const lastUpdate = this.safeInteger (order, 'last_update_timestamp');
         const id = this.safeString (order, 'order_id');
-        const priceString = this.safeString (order, 'price');
+        let priceString = this.safeString (order, 'price');
+        if (priceString === 'market_price') {
+            // for market orders we get a literal 'market_price' string here
+            priceString = undefined;
+        }
         const averageString = this.safeString (order, 'average_price');
         const amountString = this.safeString (order, 'amount');
         const filledString = this.safeString (order, 'filled_amount');
@@ -1752,7 +1927,8 @@ module.exports = class deribit extends Exchange {
             'liquidationPrice': this.safeNumber (position, 'estimated_liquidation_price'),
             'markPrice': markPrice,
             'collateral': undefined,
-            'marginType': undefined,
+            'marginMode': undefined,
+            'marginType': undefined, // deprecated
             'side': side,
             'percentage': this.parseNumber (percentage),
         };
@@ -1814,7 +1990,7 @@ module.exports = class deribit extends Exchange {
             if (Array.isArray (symbols)) {
                 const length = symbols.length;
                 if (length !== 1) {
-                    throw new BadRequest (this.id + ' fetchPositions symbols argument cannot contain more than 1 symbol');
+                    throw new BadRequest (this.id + ' fetchPositions() symbols argument cannot contain more than 1 symbol');
                 }
                 const market = this.market (symbols[0]);
                 code = market['base'];
@@ -1911,10 +2087,7 @@ module.exports = class deribit extends Exchange {
             request['tfa'] = this.oath ();
         }
         const response = await this.privateGetWithdraw (this.extend (request, params));
-        return {
-            'info': response,
-            'id': this.safeString (response, 'id'),
-        };
+        return this.parseTransaction (response, currency);
     }
 
     nonce () {

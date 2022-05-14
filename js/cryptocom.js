@@ -3,7 +3,7 @@
 //  ---------------------------------------------------------------------------
 
 const Exchange = require ('./base/Exchange');
-const { AuthenticationError, ArgumentsRequired, ExchangeError, InsufficientFunds, DDoSProtection, InvalidNonce, PermissionDenied, BadRequest, BadSymbol, NotSupported } = require ('./base/errors');
+const { AuthenticationError, ArgumentsRequired, ExchangeError, InsufficientFunds, DDoSProtection, InvalidNonce, PermissionDenied, BadRequest, BadSymbol, NotSupported, AccountNotEnabled } = require ('./base/errors');
 const Precise = require ('./base/Precise');
 
 module.exports = class cryptocom extends Exchange {
@@ -17,9 +17,9 @@ module.exports = class cryptocom extends Exchange {
             'has': {
                 'CORS': false,
                 'spot': true,
-                'margin': undefined,
-                'swap': undefined,
-                'future': undefined,
+                'margin': undefined, // has but not fully implemented
+                'swap': undefined, // has but not fully implemented
+                'future': undefined, // has but not fully implemented
                 'option': undefined,
                 'cancelAllOrders': true,
                 'cancelOrder': true,
@@ -31,11 +31,9 @@ module.exports = class cryptocom extends Exchange {
                 'fetchDepositAddress': true,
                 'fetchDepositAddressesByNetwork': true,
                 'fetchDeposits': true,
-                'fetchFundingFees': false,
                 'fetchFundingHistory': false,
                 'fetchFundingRate': false,
                 'fetchFundingRates': false,
-                'fetchIsolatedPositions': false,
                 'fetchMarkets': true,
                 'fetchMyTrades': true,
                 'fetchOHLCV': true,
@@ -51,6 +49,7 @@ module.exports = class cryptocom extends Exchange {
                 'fetchTrades': true,
                 'fetchTradingFee': false,
                 'fetchTradingFees': false,
+                'fetchTransactionFees': false,
                 'fetchTransactions': false,
                 'fetchTransfers': true,
                 'fetchWithdrawals': true,
@@ -211,6 +210,7 @@ module.exports = class cryptocom extends Exchange {
             'options': {
                 'defaultType': 'spot',
                 'accountsByType': {
+                    'funding': 'SPOT',
                     'spot': 'SPOT',
                     'derivatives': 'DERIVATIVES',
                     'swap': 'DERIVATIVES',
@@ -234,6 +234,7 @@ module.exports = class cryptocom extends Exchange {
                     '10009': BadRequest,
                     '20001': BadRequest,
                     '20002': InsufficientFunds,
+                    '20005': AccountNotEnabled, // {"id":"123xxx","method":"private/margin/xxx","code":"20005","message":"ACCOUNT_NOT_FOUND"}
                     '30003': BadSymbol,
                     '30004': BadRequest,
                     '30005': BadRequest,
@@ -264,31 +265,29 @@ module.exports = class cryptocom extends Exchange {
     }
 
     async fetchMarkets (params = {}) {
-        // {
-        //     "id": 11,
-        //     "method": "public/get-instruments",
-        //     "code": 0,
-        //     "result": {
-        //       "instruments": [
-        //         {
-        //           "instrument_name": "BTC_USDT",
-        //           "quote_currency": "BTC",
-        //           "base_currency": "USDT",
-        //           "price_decimals": 2,
-        //           "quantity_decimals": 6,
-        //           "margin_trading_enabled": true
-        //         },
-        //         {
-        //           "instrument_name": "CRO_BTC",
-        //           "quote_currency": "BTC",
-        //           "base_currency": "CRO",
-        //           "price_decimals": 8,
-        //           "quantity_decimals": 2,
-        //           "margin_trading_enabled": false
-        //         }
-        //       ]
-        //     }
-        //  }
+        //
+        //    {
+        //        id: 11,
+        //        method: 'public/get-instruments',
+        //        code: 0,
+        //        result: {
+        //            'instruments': [
+        //                {
+        //                    instrument_name: 'NEAR_BTC',
+        //                    quote_currency: 'BTC',
+        //                    base_currency: 'NEAR',
+        //                    price_decimals: '8',
+        //                    quantity_decimals: '2',
+        //                    margin_trading_enabled: true,
+        //                    margin_trading_enabled_5x: true,
+        //                    margin_trading_enabled_10x: true,
+        //                    max_quantity: '100000000',
+        //                    min_quantity: '0.01'
+        //               },
+        //            ]
+        //        }
+        //    }
+        //
         const response = await this.spotPublicGetPublicGetInstruments (params);
         const resultResponse = this.safeValue (response, 'result', {});
         const markets = this.safeValue (resultResponse, 'instruments', []);
@@ -300,61 +299,65 @@ module.exports = class cryptocom extends Exchange {
             const quoteId = this.safeString (market, 'quote_currency');
             const base = this.safeCurrencyCode (baseId);
             const quote = this.safeCurrencyCode (quoteId);
-            const symbol = base + '/' + quote;
             const priceDecimals = this.safeString (market, 'price_decimals');
             const minPrice = this.parsePrecision (priceDecimals);
-            const precision = {
-                'amount': this.safeInteger (market, 'quantity_decimals'),
-                'price': parseInt (priceDecimals),
-            };
             const minQuantity = this.safeString (market, 'min_quantity');
-            const minCost = this.parseNumber (Precise.stringMul (minQuantity, minPrice));
-            const maxQuantity = this.safeNumber (market, 'max_quantity');
-            const margin = this.safeValue (market, 'margin_trading_enabled');
+            let maxLeverage = this.parseNumber ('1');
+            const margin_trading_enabled_5x = this.safeValue (market, 'margin_trading_enabled_5x');
+            if (margin_trading_enabled_5x) {
+                maxLeverage = this.parseNumber ('5');
+            }
+            const margin_trading_enabled_10x = this.safeValue (market, 'margin_trading_enabled_10x');
+            if (margin_trading_enabled_10x) {
+                maxLeverage = this.parseNumber ('10');
+            }
             result.push ({
-                'info': market,
                 'id': id,
-                'symbol': symbol,
+                'symbol': base + '/' + quote,
                 'base': base,
                 'quote': quote,
+                'settle': undefined,
                 'baseId': baseId,
                 'quoteId': quoteId,
-                'linear': undefined,
-                'inverse': undefined,
-                'settle': undefined,
                 'settleId': undefined,
                 'type': 'spot',
                 'spot': true,
-                'margin': margin,
-                'future': false,
+                'margin': this.safeValue (market, 'margin_trading_enabled'),
                 'swap': false,
+                'future': false,
                 'option': false,
-                'optionType': undefined,
-                'strike': undefined,
+                'active': undefined,
+                'contract': false,
+                'linear': undefined,
+                'inverse': undefined,
+                'contractSize': undefined,
                 'expiry': undefined,
                 'expiryDatetime': undefined,
-                'contract': false,
-                'contractSize': undefined,
-                'active': undefined,
-                'precision': precision,
+                'strike': undefined,
+                'optionType': undefined,
+                'precision': {
+                    'amount': this.safeInteger (market, 'quantity_decimals'),
+                    'price': parseInt (priceDecimals),
+                },
                 'limits': {
+                    'leverage': {
+                        'min': this.parseNumber ('1'),
+                        'max': maxLeverage,
+                    },
                     'amount': {
                         'min': this.parseNumber (minQuantity),
-                        'max': maxQuantity,
+                        'max': this.safeNumber (market, 'max_quantity'),
                     },
                     'price': {
                         'min': this.parseNumber (minPrice),
                         'max': undefined,
                     },
                     'cost': {
-                        'min': minCost,
-                        'max': undefined,
-                    },
-                    'leverage': {
-                        'min': undefined,
+                        'min': this.parseNumber (Precise.stringMul (minQuantity, minPrice)),
                         'max': undefined,
                     },
                 },
+                'info': market,
             });
         }
         const futuresResponse = await this.derivativesPublicGetPublicGetInstruments ();
@@ -410,41 +413,39 @@ module.exports = class cryptocom extends Exchange {
                 symbol = symbol + '-' + this.yymmdd (expiry);
             }
             const contractSize = this.safeNumber (market, 'contract_size');
-            const marketId = this.safeString (market, 'symbol');
-            const maxLeverage = this.safeNumber (market, 'max_leverage');
-            const active = this.safeValue (market, 'tradable');
-            const pricePrecision = this.safeInteger (market, 'quote_decimals');
-            const amountPrecision = this.safeInteger (market, 'quantity_decimals');
             result.push ({
-                'info': market,
-                'id': marketId,
+                'id': this.safeString (market, 'symbol'),
                 'symbol': symbol,
                 'base': base,
                 'quote': quote,
+                'settle': quote,
                 'baseId': baseId,
                 'quoteId': quoteId,
-                'linear': true,
-                'inverse': false,
-                'settle': quote,
                 'settleId': quoteId,
                 'type': type,
                 'spot': false,
                 'margin': false,
-                'future': future,
                 'swap': swap,
+                'future': future,
                 'option': false,
-                'optionType': undefined,
-                'strike': undefined,
+                'active': this.safeValue (market, 'tradable'),
+                'contract': true,
+                'linear': true,
+                'inverse': false,
+                'contractSize': contractSize,
                 'expiry': expiry,
                 'expiryDatetime': this.iso8601 (expiry),
-                'contract': true,
-                'contractSize': contractSize,
-                'active': active,
+                'strike': undefined,
+                'optionType': undefined,
                 'precision': {
-                    'price': pricePrecision,
-                    'amount': amountPrecision,
+                    'price': this.safeInteger (market, 'quote_decimals'),
+                    'amount': this.safeInteger (market, 'quantity_decimals'),
                 },
                 'limits': {
+                    'leverage': {
+                        'min': this.parseNumber ('1'),
+                        'max': this.safeNumber (market, 'max_leverage'),
+                    },
                     'amount': {
                         'min': this.parseNumber (contractSize),
                         'max': undefined,
@@ -457,11 +458,8 @@ module.exports = class cryptocom extends Exchange {
                         'min': undefined,
                         'max': undefined,
                     },
-                    'leverage': {
-                        'min': undefined,
-                        'max': maxLeverage,
-                    },
                 },
+                'info': market,
             });
         }
         return result;
@@ -510,7 +508,7 @@ module.exports = class cryptocom extends Exchange {
         };
         const [ marketType, query ] = this.handleMarketTypeAndParams ('fetchTicker', market, params);
         if (marketType !== 'spot') {
-            throw new NotSupported (this.id + ' fetchTicker only supports spot markets');
+            throw new NotSupported (this.id + ' fetchTicker() only supports spot markets');
         }
         const response = await this.spotPublicGetPublicGetTicker (this.extend (request, query));
         // {
@@ -909,7 +907,7 @@ module.exports = class cryptocom extends Exchange {
             request['exec_inst'] = 'POST_ONLY';
             params = this.omit (params, [ 'postOnly' ]);
         }
-        const [ marketType, query ] = this.handleMarketTypeAndParams ('cancelAllOrders', market, params);
+        const [ marketType, query ] = this.handleMarketTypeAndParams ('createOrder', market, params);
         const method = this.getSupportedMapping (marketType, {
             'spot': 'spotPrivatePostPrivateCreateOrder',
             'future': 'derivativesPrivatePostPrivateCreateOrder',
@@ -1137,11 +1135,7 @@ module.exports = class cryptocom extends Exchange {
         //     }
         //
         const result = this.safeValue (response, 'result');
-        const id = this.safeString (result, 'id');
-        return {
-            'info': response,
-            'id': id,
-        };
+        return this.parseTransaction (result, currency);
     }
 
     async fetchDepositAddressesByNetwork (code, params = {}) {
@@ -1179,7 +1173,7 @@ module.exports = class cryptocom extends Exchange {
         const data = this.safeValue (response, 'result', {});
         const addresses = this.safeValue (data, 'deposit_address_list', []);
         if (addresses.length === 0) {
-            throw new ExchangeError (this.id + ' generating address...');
+            throw new ExchangeError (this.id + ' fetchDepositAddressesByNetwork() generating address...');
         }
         const result = {};
         for (let i = 0; i < addresses.length; i++) {
@@ -1310,28 +1304,28 @@ module.exports = class cryptocom extends Exchange {
         fromAccount = fromAccount.toLowerCase ();
         toAccount = toAccount.toLowerCase ();
         const accountsById = this.safeValue (this.options, 'accountsByType', {});
-        const fromId = this.safeString (accountsById, fromAccount);
-        if (fromId === undefined) {
-            const keys = Object.keys (accountsById);
-            throw new ExchangeError (this.id + ' fromAccount must be one of ' + keys.join (', '));
-        }
-        const toId = this.safeString (accountsById, toAccount);
-        if (toId === undefined) {
-            const keys = Object.keys (accountsById);
-            throw new ExchangeError (this.id + ' toAccount must be one of ' + keys.join (', '));
-        }
+        const fromId = this.safeString (accountsById, fromAccount, fromAccount);
+        const toId = this.safeString (accountsById, toAccount, toAccount);
         const request = {
             'currency': currency['id'],
             'amount': parseFloat (amount),
             'from': fromId,
             'to': toId,
         };
-        return await this.spotPrivatePostPrivateDerivTransfer (this.extend (request, params));
+        const repsonse = await this.spotPrivatePostPrivateDerivTransfer (this.extend (request, params));
+        //
+        //     {
+        //         "id": 11,
+        //         "method": "private/deriv/transfer",
+        //         "code": 0
+        //     }
+        //
+        return this.parseTransfer (repsonse, currency);
     }
 
     async fetchTransfers (code = undefined, since = undefined, limit = undefined, params = {}) {
         if (!('direction' in params)) {
-            throw new ArgumentsRequired (this.id + ' fetchTransfers requires a direction param to be either "IN" or "OUT"');
+            throw new ArgumentsRequired (this.id + ' fetchTransfers() requires a direction param to be either "IN" or "OUT"');
         }
         await this.loadMarkets ();
         let currency = undefined;
@@ -1364,12 +1358,7 @@ module.exports = class cryptocom extends Exchange {
         //
         const result = this.safeValue (response, 'result', {});
         const transferList = this.safeValue (result, 'transfer_list', []);
-        const resultArray = [];
-        for (let i = 0; i < transferList.length; i++) {
-            const transfer = transferList[i];
-            resultArray.push (this.parseTransfer (transfer, currency));
-        }
-        return this.filterBySinceLimit (resultArray, since, limit);
+        return this.parseTransfers (transferList, currency, since, limit, params);
     }
 
     parseTransferStatus (status) {
@@ -1407,7 +1396,7 @@ module.exports = class cryptocom extends Exchange {
         const status = this.parseTransferStatus (rawStatus);
         return {
             'info': transfer,
-            'id': undefined,
+            'id': this.safeString (transfer, 'id'),
             'timestamp': timestamp,
             'datetime': this.iso8601 (timestamp),
             'currency': code,
@@ -1451,8 +1440,8 @@ module.exports = class cryptocom extends Exchange {
             'close': last,
             'last': last,
             'previousClose': undefined,
-            'change': undefined,
-            'percentage': relativeChange,
+            'change': relativeChange,
+            'percentage': undefined,
             'average': undefined,
             'baseVolume': this.safeString (ticker, 'v'),
             'quoteVolume': undefined,
@@ -1698,30 +1687,42 @@ module.exports = class cryptocom extends Exchange {
         //
         // fetchDeposits
         //
-        // {
-        //     "currency": "XRP",
-        //     "fee": 1.0,
-        //     "create_time": 1607063412000,
-        //     "id": "2220",
-        //     "update_time": 1607063460000,
-        //     "amount": 100,
-        //     "address": "2NBqqD5GRJ8wHy1PYyCXTe9ke5226FhavBf?1234567890",
-        //     "status": "1"
-        // }
+        //     {
+        //         "currency": "XRP",
+        //         "fee": 1.0,
+        //         "create_time": 1607063412000,
+        //         "id": "2220",
+        //         "update_time": 1607063460000,
+        //         "amount": 100,
+        //         "address": "2NBqqD5GRJ8wHy1PYyCXTe9ke5226FhavBf?1234567890",
+        //         "status": "1"
+        //     }
         //
         // fetchWithdrawals
         //
-        // {
-        //     "currency": "XRP",
-        //     "client_wid": "my_withdrawal_002",
-        //     "fee": 1.0,
-        //     "create_time": 1607063412000,
-        //     "id": "2220",
-        //     "update_time": 1607063460000,
-        //     "amount": 100,
-        //     "address": "2NBqqD5GRJ8wHy1PYyCXTe9ke5226FhavBf?1234567890",
-        //     "status": "1"
-        // }
+        //     {
+        //         "currency": "XRP",
+        //         "client_wid": "my_withdrawal_002",
+        //         "fee": 1.0,
+        //         "create_time": 1607063412000,
+        //         "id": "2220",
+        //         "update_time": 1607063460000,
+        //         "amount": 100,
+        //         "address": "2NBqqD5GRJ8wHy1PYyCXTe9ke5226FhavBf?1234567890",
+        //         "status": "1"
+        //     }
+        //
+        // withdraw
+        //
+        //     {
+        //         "id": 2220,
+        //         "amount": 1,
+        //         "fee": 0.0004,
+        //         "symbol": "BTC",
+        //         "address": "2NBqqD5GRJ8wHy1PYyCXTe9ke5226FhavBf",
+        //         "client_wid": "my_withdrawal_002",
+        //         "create_time":1607063412000
+        //     }
         //
         let type = undefined;
         const rawStatus = this.safeString (transaction, 'status');

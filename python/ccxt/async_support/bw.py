@@ -25,8 +25,8 @@ class bw(Exchange):
             'has': {
                 'CORS': None,
                 'spot': True,
-                'margin': None,
-                'swap': None,
+                'margin': None,  # has but unimplemented
+                'swap': None,  # has but unimplemented
                 'future': None,
                 'option': None,
                 'cancelAllOrders': None,
@@ -36,7 +36,6 @@ class bw(Exchange):
                 'createLimitOrder': True,
                 'createMarketOrder': None,
                 'createOrder': True,
-                'deposit': None,
                 'editOrder': None,
                 'fetchBalance': True,
                 'fetchBidsAsks': None,
@@ -44,7 +43,6 @@ class bw(Exchange):
                 'fetchCurrencies': True,
                 'fetchDepositAddress': True,
                 'fetchDeposits': True,
-                'fetchFundingFees': None,
                 'fetchL2OrderBook': None,
                 'fetchLedger': None,
                 'fetchMarkets': True,
@@ -58,9 +56,10 @@ class bw(Exchange):
                 'fetchTicker': True,
                 'fetchTickers': True,
                 'fetchTrades': True,
-                'fetchTradingFee': None,
-                'fetchTradingFees': None,
+                'fetchTradingFee': False,
+                'fetchTradingFees': True,
                 'fetchTradingLimits': None,
+                'fetchTransactionFees': None,
                 'fetchTransactions': None,
                 'fetchWithdrawals': True,
                 'withdraw': None,
@@ -88,7 +87,7 @@ class bw(Exchange):
             },
             'fees': {
                 'trading': {
-                    'tierBased': False,
+                    'tierBased': True,
                     'percentage': True,
                     'taker': self.parse_number('0.002'),
                     'maker': self.parse_number('0.002'),
@@ -146,36 +145,41 @@ class bw(Exchange):
     async def fetch_markets(self, params={}):
         response = await self.publicGetExchangeConfigControllerWebsiteMarketcontrollerGetByWebId(params)
         #
-        #     {
-        #         "datas": [
-        #             {
-        #                 "orderNum":null,
-        #                 "leverEnable":true,
-        #                 "leverMultiple":10,
-        #                 "marketId":"291",
-        #                 "webId":"102",
-        #                 "serverId":"entrust_bw_23",
-        #                 "name":"eos_usdt",
-        #                 "leverType":"2",
-        #                 "buyerCurrencyId":"11",
-        #                 "sellerCurrencyId":"7",
-        #                 "amountDecimal":4,
-        #                 "priceDecimal":3,
-        #                 "minAmount":"0.0100000000",
-        #                 "state":1,
-        #                 "openTime":1572537600000,
-        #                 "defaultFee":"0.00200000",
-        #                 "createUid":null,
-        #                 "createTime":0,
-        #                 "modifyUid":null,
-        #                 "modifyTime":1574160113735,
-        #                 "combineMarketId":"",
-        #                 "isCombine":0,
-        #                 "isMining":0
-        #             }
-        #         ],
-        #         "resMsg": {"message":"success !", "method":null, "code":"1"}
-        #     }
+        #    {
+        #        resMsg: {
+        #            method: null,
+        #            code: '1',
+        #            message: 'success !'
+        #        },
+        #        datas: [
+        #            {
+        #                leverMultiple: '10',
+        #                amountDecimal: '4',
+        #                minAmount: '0.0100000000',
+        #                modifyUid: null,
+        #                buyerCurrencyId: '11',
+        #                isCombine: '0',
+        #                priceDecimal: '3',
+        #                combineMarketId: '',
+        #                openPrice: '0',
+        #                leverEnable: True,
+        #                marketId: '291',
+        #                serverId: 'entrust_bw_2',
+        #                isMining: '0',
+        #                webId: '102',
+        #                modifyTime: '1581595375498',
+        #                defaultFee: '0.00200000',
+        #                sellerCurrencyId: '7',
+        #                createTime: '0',
+        #                state: '1',
+        #                name: 'eos_usdt',
+        #                leverType: '2',
+        #                createUid: null,
+        #                orderNum: null,
+        #                openTime: '1574956800000'
+        #            },
+        #        ]
+        #    }
         #
         markets = self.safe_value(response, 'datas', [])
         result = []
@@ -189,60 +193,60 @@ class bw(Exchange):
             quote = self.safe_currency_code(quote)
             baseId = self.safe_string(market, 'sellerCurrencyId')
             quoteId = self.safe_string(market, 'buyerCurrencyId')
-            baseNumericId = int(baseId)
-            quoteNumericId = int(quoteId)
-            symbol = base + '/' + quote
             state = self.safe_integer(market, 'state')
-            active = (state == 1)
             fee = self.safe_number(market, 'defaultFee')
             result.append({
                 'id': id,
                 'numericId': numericId,
-                'symbol': symbol,
+                'symbol': base + '/' + quote,
                 'base': base,
                 'quote': quote,
+                'settle': None,
                 'baseId': baseId,
                 'quoteId': quoteId,
-                'baseNumericId': baseNumericId,
-                'quoteNumericId': quoteNumericId,
+                'settleId': None,
+                'baseNumericId': int(baseId),
+                'quoteNumericId': int(quoteId),
                 'type': 'spot',
                 'spot': True,
                 'margin': False,
-                'future': False,
                 'swap': False,
+                'future': False,
                 'option': False,
-                'optionType': None,
-                'strike': None,
+                'active': (state == 1),
+                'contract': False,
                 'linear': None,
                 'inverse': None,
-                'contract': False,
+                'taker': fee,
+                'maker': fee,
                 'contractSize': None,
-                'settle': None,
-                'settleId': None,
                 'expiry': None,
                 'expiryDatetime': None,
-                'active': active,
-                'maker': fee,
-                'taker': fee,
-                'info': market,
+                'strike': None,
+                'optionType': None,
                 'precision': {
                     'amount': self.safe_integer(market, 'amountDecimal'),
                     'price': self.safe_integer(market, 'priceDecimal'),
                 },
                 'limits': {
+                    'leverage': {
+                        'min': None,
+                        'max': None,
+                    },
                     'amount': {
                         'min': self.safe_number(market, 'minAmount'),
                         'max': None,
                     },
                     'price': {
-                        'min': 0,
+                        'min': self.parse_number('0'),
                         'max': None,
                     },
                     'cost': {
-                        'min': 0,
+                        'min': self.parse_number('0'),
                         'max': None,
                     },
                 },
+                'info': market,
             })
         return result
 
@@ -493,25 +497,19 @@ class bw(Exchange):
         priceString = self.safe_string(trade, 5)
         amountString = self.safe_string(trade, 6)
         marketId = self.safe_string(trade, 1)
-        symbol = None
+        delimiter = None
         if marketId is not None:
-            if marketId in self.markets_by_id:
-                market = self.markets_by_id[marketId]
-            else:
-                marketName = self.safe_string(trade, 3)
-                baseId, quoteId = marketName.split('_')
-                base = self.safe_currency_code(baseId)
-                quote = self.safe_currency_code(quoteId)
-                symbol = base + '/' + quote
-        if (symbol is None) and (market is not None):
-            symbol = market['symbol']
+            if not (marketId in self.markets_by_id):
+                delimiter = '_'
+                marketId = self.safe_string(trade, 3)
+        market = self.safe_market(marketId, market, delimiter)
         sideString = self.safe_string(trade, 4)
         side = 'sell' if (sideString == 'ask') else 'buy'
         return self.safe_trade({
             'id': None,
             'timestamp': timestamp,
             'datetime': self.iso8601(timestamp),
-            'symbol': symbol,
+            'symbol': market['symbol'],
             'order': None,
             'type': 'limit',
             'side': side,
@@ -550,6 +548,60 @@ class bw(Exchange):
         #
         trades = self.safe_value(response, 'datas', [])
         return self.parse_trades(trades, market, since, limit)
+
+    async def fetch_trading_fees(self, params={}):
+        await self.load_markets()
+        response = await self.publicGetExchangeConfigControllerWebsiteMarketcontrollerGetByWebId()
+        #
+        #    {
+        #        resMsg: {method: null, code: '1', message: 'success !'},
+        #        datas: [
+        #            {
+        #                leverMultiple: '10',
+        #                amountDecimal: '4',
+        #                minAmount: '0.0100000000',
+        #                modifyUid: null,
+        #                buyerCurrencyId: '11',
+        #                isCombine: '0',
+        #                priceDecimal: '3',
+        #                combineMarketId: '',
+        #                openPrice: '0',
+        #                leverEnable: True,
+        #                marketId: '291',
+        #                serverId: 'entrust_bw_2',
+        #                isMining: '0',
+        #                webId: '102',
+        #                modifyTime: '1581595375498',
+        #                defaultFee: '0.00200000',
+        #                sellerCurrencyId: '7',
+        #                createTime: '0',
+        #                state: '1',
+        #                name: 'eos_usdt',
+        #                leverType: '2',
+        #                createUid: null,
+        #                orderNum: null,
+        #                openTime: '1574956800000'
+        #            },
+        #            ...
+        #        ]
+        #    }
+        #
+        datas = self.safe_value(response, 'datas', [])
+        result = {}
+        for i in range(0, len(datas)):
+            data = datas[i]
+            marketId = self.safe_string(data, 'name')
+            symbol = self.safe_symbol(marketId, None, '_')
+            fee = self.safe_number(data, 'defaultFee')
+            result[symbol] = {
+                'info': data,
+                'symbol': symbol,
+                'maker': fee,
+                'taker': fee,
+                'percentage': True,
+                'tierBased': True,
+            }
+        return result
 
     def parse_ohlcv(self, ohlcv, market=None):
         #
@@ -641,7 +693,7 @@ class bw(Exchange):
 
     async def create_order(self, symbol, type, side, amount, price=None, params={}):
         if price is None:
-            raise ExchangeError(self.id + ' allows limit orders only')
+            raise ExchangeError(self.id + ' createOrder() allows limit orders only')
         await self.load_markets()
         market = self.market(symbol)
         request = {

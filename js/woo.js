@@ -22,18 +22,19 @@ module.exports = class woo extends Exchange {
             'has': {
                 'CORS': undefined,
                 'spot': true,
-                'margin': undefined,
-                'swap': undefined,
-                'future': undefined,
-                'option': undefined,
-                'addMargin': false,
+                'margin': true,
+                'swap': false,
+                'future': false,
+                'option': false,
                 'cancelAllOrders': false,
                 'cancelOrder': true,
                 'cancelOrders': true,
                 'cancelWithdraw': false, // exchange have that endpoint disabled atm, but was once implemented in ccxt per old docs: https://kronosresearch.github.io/wootrade-documents/#cancel-withdraw-request
                 'createMarketOrder': false,
                 'createOrder': true,
-                'deposit': false,
+                'createStopLimitOrder': false,
+                'createStopMarketOrder': false,
+                'createStopOrder': false,
                 'fetchBalance': true,
                 'fetchCanceledOrders': false,
                 'fetchClosedOrder': false,
@@ -41,9 +42,14 @@ module.exports = class woo extends Exchange {
                 'fetchCurrencies': true,
                 'fetchDepositAddress': false,
                 'fetchDeposits': true,
+                'fetchFundingHistory': false,
+                'fetchFundingRate': false,
                 'fetchFundingRateHistory': false,
+                'fetchFundingRates': false,
+                'fetchIndexOHLCV': false,
                 'fetchLedger': true,
                 'fetchMarkets': true,
+                'fetchMarkOHLCV': false,
                 'fetchMyTrades': true,
                 'fetchOHLCV': true,
                 'fetchOpenOrder': false,
@@ -52,18 +58,18 @@ module.exports = class woo extends Exchange {
                 'fetchOrderBook': true,
                 'fetchOrders': true,
                 'fetchOrderTrades': true,
-                'fetchPosition': false,
-                'fetchPositions': false,
+                'fetchPremiumIndexOHLCV': false,
                 'fetchStatus': false,
                 'fetchTicker': false,
                 'fetchTickers': false,
                 'fetchTime': false,
                 'fetchTrades': true,
+                'fetchTradingFee': false,
+                'fetchTradingFees': true,
                 'fetchTransactions': true,
                 'fetchTransfers': true,
                 'fetchWithdrawals': true,
-                'reduceMargin': false,
-                'setLeverage': false,
+                'transfer': true,
                 'withdraw': false, // exchange have that endpoint disabled atm, but was once implemented in ccxt per old docs: https://kronosresearch.github.io/wootrade-documents/#token-withdraw
             },
             'timeframes': {
@@ -131,6 +137,7 @@ module.exports = class woo extends Exchange {
                         },
                         'post': {
                             'order': 5, // 2 requests per 1 second per symbol
+                            'asset/main_sub_transfer': 30, // 20 requests per 60 seconds
                             'asset/withdraw': 120,  // implemented in ccxt, disabled on the exchange side https://kronosresearch.github.io/wootrade-documents/#token-withdraw
                         },
                         'delete': {
@@ -153,8 +160,8 @@ module.exports = class woo extends Exchange {
                 'trading': {
                     'tierBased': true,
                     'percentage': true,
-                    'maker': 0.2 / 100,
-                    'taker': 0.5 / 100,
+                    'maker': this.parseNumber ('0.0002'),
+                    'taker': this.parseNumber ('0.0005'),
                 },
             },
             'options': {
@@ -210,6 +217,9 @@ module.exports = class woo extends Exchange {
                 'defaultNetworkCodeForCurrencies': {
                     // 'USDT': 'TRC20',
                     // 'BTC': 'BTC',
+                },
+                'transfer': {
+                    'fillResponseFromRequest': true,
                 },
             },
             'commonCurrencies': {},
@@ -305,14 +315,14 @@ module.exports = class woo extends Exchange {
                 'settleId': undefined,
                 'type': marketTypeVal,
                 'spot': isSpot,
-                'margin': false,
+                'margin': true,
                 'swap': false,
                 'future': false,
                 'option': false,
                 'active': undefined,
                 'contract': isSwap || isFuture || isOption,
-                'linear': false,
-                'inverse': false,
+                'linear': undefined,
+                'inverse': undefined,
                 'contractSize': undefined,
                 'expiry': undefined,
                 'expiryDatetime': undefined,
@@ -479,6 +489,48 @@ module.exports = class woo extends Exchange {
             };
         }
         return fee;
+    }
+
+    async fetchTradingFees (params = {}) {
+        await this.loadMarkets ();
+        const response = await this.v1PrivateGetClientInfo (params);
+        //
+        //     {
+        //         "application":{
+        //             "id":45585,
+        //             "leverage":3.00,
+        //             "otpauth":false,
+        //             "alias":"email@address.com",
+        //             "application_id":"c2cc4d74-c8cb-4e10-84db-af2089b8c68a",
+        //             "account":"email@address.com",
+        //             "account_mode":"PURE_SPOT",
+        //             "taker_fee_rate":5.00,
+        //             "maker_fee_rate":2.00,
+        //             "interest_rate":0.00,
+        //             "futures_leverage":1.00,
+        //             "futures_taker_fee_rate":5.00,
+        //             "futures_maker_fee_rate":2.00
+        //         },
+        //         "margin_rate":1000,
+        //         "success":true
+        //     }
+        //
+        const application = this.safeValue (response, 'application', {});
+        const maker = this.safeString (application, 'maker_fee_rate');
+        const taker = this.safeString (application, 'taker_fee_rate');
+        const result = {};
+        for (let i = 0; i < this.symbols.length; i++) {
+            const symbol = this.symbols[i];
+            result[symbol] = {
+                'info': response,
+                'symbol': symbol,
+                'maker': this.parseNumber (Precise.stringDiv (maker, '10000')),
+                'taker': this.parseNumber (Precise.stringDiv (taker, '10000')),
+                'percentage': true,
+                'tierBased': true,
+            };
+        }
+        return result;
     }
 
     async fetchCurrencies (params = {}) {
@@ -1331,6 +1383,33 @@ module.exports = class woo extends Exchange {
         return this.safeString (statuses, status, status);
     }
 
+    async transfer (code, amount, fromAccount, toAccount, params = {}) {
+        await this.loadMarkets ();
+        const currency = this.currency (code);
+        const request = {
+            'token': currency['id'],
+            'amount': this.parseNumber (amount),
+            'from_application_id': fromAccount,
+            'to_application_id': toAccount,
+        };
+        const response = await this.v1PrivatePostAssetMainSubTransfer (this.extend (request, params));
+        //
+        //     {
+        //         "success": true,
+        //         "id": 200
+        //     }
+        //
+        const transfer = this.parseTransfer (response, currency);
+        const transferOptions = this.safeValue (this.options, 'transfer', {});
+        const fillResponseFromRequest = this.safeValue (transferOptions, 'fillResponseFromRequest', true);
+        if (fillResponseFromRequest) {
+            transfer['amount'] = amount;
+            transfer['fromAccount'] = fromAccount;
+            transfer['toAccount'] = toAccount;
+        }
+        return transfer;
+    }
+
     async fetchTransfers (code = undefined, since = undefined, limit = undefined, params = {}) {
         const request = {
             'type': 'COLLATERAL',
@@ -1340,7 +1419,33 @@ module.exports = class woo extends Exchange {
     }
 
     parseTransfer (transfer, currency = undefined) {
-        // example is "fetchTransactions"
+        //
+        //    getAssetHistoryRows
+        //        {
+        //            "created_time": "1579399877.041",  // Unix epoch time in seconds
+        //            "updated_time": "1579399877.041",  // Unix epoch time in seconds
+        //            "id": "202029292829292",
+        //            "external_id": "202029292829292",
+        //            "application_id": null,
+        //            "token": "ETH",
+        //            "target_address": "0x31d64B3230f8baDD91dE1710A65DF536aF8f7cDa",
+        //            "source_address": "0x70fd25717f769c7f9a46b319f0f9103c0d887af0",
+        //            "extra": "",
+        //            "type": "BALANCE",
+        //            "token_side": "DEPOSIT",
+        //            "amount": 1000,
+        //            "tx_id": "0x8a74c517bc104c8ebad0c3c3f64b1f302ed5f8bca598ae4459c63419038106b6",
+        //            "fee_token": null,
+        //            "fee_amount": null,
+        //            "status": "CONFIRMING"
+        //        }
+        //
+        //    v1PrivatePostAssetMainSubTransfer
+        //        {
+        //            "success": true,
+        //            "id": 200
+        //        }
+        //
         const networkizedCode = this.safeString (transfer, 'token');
         const currencyDefined = this.getCurrencyFromChaincode (networkizedCode, currency);
         const code = currencyDefined['code'];
@@ -1353,11 +1458,16 @@ module.exports = class woo extends Exchange {
         if (movementDirection === 'withdraw') {
             fromAccount = undefined;
             toAccount = 'spot';
-        } else {
+        } else if (movementDirection === 'deposit') {
             fromAccount = 'spot';
             toAccount = undefined;
         }
         const timestamp = this.safeTimestamp (transfer, 'created_time');
+        const success = this.safeValue (transfer, 'success');
+        let status = undefined;
+        if (success !== undefined) {
+            status = success ? 'ok' : 'failed';
+        }
         return {
             'id': this.safeString (transfer, 'id'),
             'timestamp': timestamp,
@@ -1366,13 +1476,20 @@ module.exports = class woo extends Exchange {
             'amount': this.safeNumber (transfer, 'amount'),
             'fromAccount': fromAccount,
             'toAccount': toAccount,
-            'status': this.parseTransferStatus (this.safeString (transfer, 'status')),
+            'status': this.parseTransferStatus (this.safeString (transfer, 'status', status)),
             'info': transfer,
         };
     }
 
     parseTransferStatus (status) {
-        return this.parseTransactionStatus (status);
+        const statuses = {
+            'NEW': 'pending',
+            'CONFIRMING': 'pending',
+            'PROCESSING': 'pending',
+            'COMPLETED': 'ok',
+            'CANCELED': 'canceled',
+        };
+        return this.safeString (statuses, status, status);
     }
 
     nonce () {

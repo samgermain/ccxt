@@ -14,39 +14,68 @@ module.exports = class bitvavo extends Exchange {
             'id': 'bitvavo',
             'name': 'Bitvavo',
             'countries': [ 'NL' ], // Netherlands
-            'rateLimit': 60.1, // 1000 requests per second
+            'rateLimit': 60, // 1000 requests per minute
             'version': 'v2',
             'certified': true,
             'pro': true,
             'has': {
                 'CORS': undefined,
                 'spot': true,
-                'margin': undefined,
-                'swap': undefined,
-                'future': undefined,
-                'option': undefined,
+                'margin': false,
+                'swap': false,
+                'future': false,
+                'option': false,
+                'addMargin': false,
                 'cancelAllOrders': true,
                 'cancelOrder': true,
                 'createOrder': true,
+                'createReduceOnlyOrder': false,
+                'createStopLimitOrder': true,
+                'createStopMarketOrder': true,
+                'createStopOrder': true,
                 'editOrder': true,
                 'fetchBalance': true,
+                'fetchBorrowRate': false,
+                'fetchBorrowRateHistories': false,
+                'fetchBorrowRateHistory': false,
+                'fetchBorrowRates': false,
+                'fetchBorrowRatesPerSymbol': false,
                 'fetchCurrencies': true,
                 'fetchDepositAddress': true,
                 'fetchDeposits': true,
+                'fetchFundingHistory': false,
+                'fetchFundingRate': false,
+                'fetchFundingRateHistory': false,
+                'fetchFundingRates': false,
+                'fetchIndexOHLCV': false,
+                'fetchLeverage': false,
+                'fetchLeverageTiers': false,
                 'fetchMarkets': true,
+                'fetchMarkOHLCV': false,
                 'fetchMyTrades': true,
                 'fetchOHLCV': true,
                 'fetchOpenOrders': true,
                 'fetchOrder': true,
                 'fetchOrderBook': true,
                 'fetchOrders': true,
+                'fetchPosition': false,
+                'fetchPositions': false,
+                'fetchPositionsRisk': false,
+                'fetchPremiumIndexOHLCV': false,
                 'fetchTicker': true,
                 'fetchTickers': true,
                 'fetchTime': true,
                 'fetchTrades': true,
+                'fetchTradingFee': false,
+                'fetchTradingFees': true,
+                'fetchTransfer': false,
+                'fetchTransfers': false,
                 'fetchWithdrawals': true,
-                'privateAPI': true,
-                'publicAPI': true,
+                'reduceMargin': false,
+                'setLeverage': false,
+                'setMarginMode': false,
+                'setPositionMode': false,
+                'transfer': false,
                 'withdraw': true,
             },
             'timeframes': {
@@ -89,6 +118,7 @@ module.exports = class bitvavo extends Exchange {
                 },
                 'private': {
                     'get': {
+                        'account': 1,
                         'order': 1,
                         'orders': 5,
                         'ordersOpen': { 'cost': 1, 'noMarket': 25 },
@@ -120,25 +150,25 @@ module.exports = class bitvavo extends Exchange {
                     'tiers': {
                         'taker': [
                             [ this.parseNumber ('0'), this.parseNumber ('0.0025') ],
-                            [ this.parseNumber ('50000'), this.parseNumber ('0.0024') ],
-                            [ this.parseNumber ('100000'), this.parseNumber ('0.0022') ],
-                            [ this.parseNumber ('250000'), this.parseNumber ('0.0020') ],
-                            [ this.parseNumber ('500000'), this.parseNumber ('0.0018') ],
-                            [ this.parseNumber ('1000000'), this.parseNumber ('0.0016') ],
-                            [ this.parseNumber ('2500000'), this.parseNumber ('0.0014') ],
-                            [ this.parseNumber ('5000000'), this.parseNumber ('0.0012') ],
-                            [ this.parseNumber ('10000000'), this.parseNumber ('0.0010') ],
+                            [ this.parseNumber ('100000'), this.parseNumber ('0.0020') ],
+                            [ this.parseNumber ('250000'), this.parseNumber ('0.0016') ],
+                            [ this.parseNumber ('500000'), this.parseNumber ('0.0012') ],
+                            [ this.parseNumber ('1000000'), this.parseNumber ('0.0010') ],
+                            [ this.parseNumber ('2500000'), this.parseNumber ('0.0008') ],
+                            [ this.parseNumber ('5000000'), this.parseNumber ('0.0006') ],
+                            [ this.parseNumber ('10000000'), this.parseNumber ('0.0005') ],
+                            [ this.parseNumber ('25000000'), this.parseNumber ('0.0004') ],
                         ],
                         'maker': [
-                            [ this.parseNumber ('0'), this.parseNumber ('0.0020') ],
-                            [ this.parseNumber ('50000'), this.parseNumber ('0.0015') ],
+                            [ this.parseNumber ('0'), this.parseNumber ('0.0015') ],
                             [ this.parseNumber ('100000'), this.parseNumber ('0.0010') ],
-                            [ this.parseNumber ('250000'), this.parseNumber ('0.0006') ],
-                            [ this.parseNumber ('500000'), this.parseNumber ('0.0003') ],
-                            [ this.parseNumber ('1000000'), this.parseNumber ('0.0001') ],
-                            [ this.parseNumber ('2500000'), this.parseNumber ('-0.0001') ],
-                            [ this.parseNumber ('5000000'), this.parseNumber ('-0.0003') ],
-                            [ this.parseNumber ('10000000'), this.parseNumber ('-0.0005') ],
+                            [ this.parseNumber ('250000'), this.parseNumber ('0.0008') ],
+                            [ this.parseNumber ('500000'), this.parseNumber ('0.0006') ],
+                            [ this.parseNumber ('1000000'), this.parseNumber ('0.0005') ],
+                            [ this.parseNumber ('2500000'), this.parseNumber ('0.0004') ],
+                            [ this.parseNumber ('5000000'), this.parseNumber ('0.0004') ],
+                            [ this.parseNumber ('10000000'), this.parseNumber ('0.0003') ],
+                            [ this.parseNumber ('25000000'), this.parseNumber ('0.0003') ],
                         ],
                     },
                 },
@@ -233,8 +263,8 @@ module.exports = class bitvavo extends Exchange {
         });
     }
 
-    currencyToPrecision (currency, fee) {
-        return this.decimalToPrecision (fee, 0, this.currencies[currency]['precision']);
+    currencyToPrecision (code, fee) {
+        return this.decimalToPrecision (fee, 0, this.currencies[code]['precision']);
     }
 
     amountToPrecision (symbol, amount) {
@@ -308,18 +338,18 @@ module.exports = class bitvavo extends Exchange {
                 'swap': false,
                 'future': false,
                 'option': false,
+                'active': (status === 'trading'),
                 'contract': false,
                 'linear': undefined,
                 'inverse': undefined,
                 'contractSize': undefined,
-                'active': (status === 'trading'),
                 'expiry': undefined,
                 'expiryDatetime': undefined,
                 'strike': undefined,
                 'optionType': undefined,
                 'precision': {
-                    'price': this.safeInteger (market, 'pricePrecision'),
                     'amount': amountPrecision,
+                    'price': this.safeInteger (market, 'pricePrecision'),
                 },
                 'limits': {
                     'leverage': {
@@ -612,7 +642,7 @@ module.exports = class bitvavo extends Exchange {
         const timestamp = this.safeInteger (trade, 'timestamp');
         const side = this.safeString (trade, 'side');
         const id = this.safeString2 (trade, 'id', 'fillId');
-        const marketId = this.safeInteger (trade, 'market');
+        const marketId = this.safeString (trade, 'market');
         const symbol = this.safeSymbol (marketId, market, '-');
         const taker = this.safeValue (trade, 'taker');
         let takerOrMaker = undefined;
@@ -645,6 +675,36 @@ module.exports = class bitvavo extends Exchange {
             'cost': undefined,
             'fee': fee,
         }, market);
+    }
+
+    async fetchTradingFees (params = {}) {
+        await this.loadMarkets ();
+        const response = await this.privateGetAccount (params);
+        //
+        //     {
+        //         "fees": {
+        //           "taker": "0.0025",
+        //           "maker": "0.0015",
+        //           "volume": "10000.00"
+        //         }
+        //     }
+        //
+        const fees = this.safeValue (response, 'fees');
+        const maker = this.safeNumber (fees, 'maker');
+        const taker = this.safeNumber (fees, 'taker');
+        const result = {};
+        for (let i = 0; i < this.symbols.length; i++) {
+            const symbol = this.symbols[i];
+            result[symbol] = {
+                'info': response,
+                'symbol': symbol,
+                'maker': maker,
+                'taker': taker,
+                'percentage': true,
+                'tierBased': true,
+            };
+        }
+        return result;
     }
 
     async fetchOrderBook (symbol, limit = undefined, params = {}) {
@@ -828,10 +888,10 @@ module.exports = class bitvavo extends Exchange {
             let stopPrice = this.safeNumber2 (params, 'stopPrice', 'triggerAmount');
             if (stopPrice === undefined) {
                 if (isStopLimit) {
-                    throw new ArgumentsRequired (this.id + ' createOrder requires a stopPrice parameter for a ' + type + ' order');
+                    throw new ArgumentsRequired (this.id + ' createOrder() requires a stopPrice parameter for a ' + type + ' order');
                 } else if (isStopMarket) {
                     if (price === undefined) {
-                        throw new ArgumentsRequired (this.id + ' createOrder requires a price argument or a stopPrice parameter for a ' + type + ' order');
+                        throw new ArgumentsRequired (this.id + ' createOrder() requires a price argument or a stopPrice parameter for a ' + type + ' order');
                     } else {
                         stopPrice = price;
                     }
@@ -1324,7 +1384,7 @@ module.exports = class bitvavo extends Exchange {
         //         }
         //     ]
         //
-        return this.parseTransactions (response, currency, since, limit);
+        return this.parseTransactions (response, currency, since, limit, { 'type': 'withdrawal' });
     }
 
     async fetchDeposits (code = undefined, since = undefined, limit = undefined, params = {}) {
@@ -1359,7 +1419,7 @@ module.exports = class bitvavo extends Exchange {
         //         }
         //     ]
         //
-        return this.parseTransactions (response, currency, since, limit);
+        return this.parseTransactions (response, currency, since, limit, { 'type': 'deposit' });
     }
 
     parseTransactionStatus (status) {
@@ -1428,10 +1488,10 @@ module.exports = class bitvavo extends Exchange {
             };
         }
         let type = undefined;
-        if ('success' in transaction) {
+        if (('success' in transaction) || ('address' in transaction)) {
             type = 'withdrawal';
         } else {
-            type = (status === undefined) ? 'deposit' : 'withdrawal';
+            type = 'deposit';
         }
         const tag = this.safeString (transaction, 'paymentId');
         return {

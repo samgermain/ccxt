@@ -19,48 +19,44 @@ module.exports = class whitebit extends Exchange {
             'has': {
                 'CORS': undefined,
                 'spot': true,
-                'margin': undefined,
+                'margin': undefined, // has but unimplemented
                 'swap': false,
                 'future': false,
                 'option': false,
-                'addMargin': false,
                 'cancelOrder': true,
                 'createDepositAddress': undefined,
                 'createLimitOrder': undefined,
                 'createMarketOrder': undefined,
                 'createOrder': true,
-                'createReduceOnlyOrder': false,
-                'deposit': undefined,
+                'createStopLimitOrder': true,
+                'createStopMarketOrder': true,
+                'createStopOrder': true,
                 'editOrder': undefined,
                 'fetchBalance': true,
                 'fetchBidsAsks': undefined,
                 'fetchClosedOrders': true,
                 'fetchCurrencies': true,
                 'fetchDepositAddress': true,
-                'fetchFundingFees': true,
                 'fetchFundingHistory': false,
                 'fetchFundingRate': false,
                 'fetchFundingRateHistory': false,
                 'fetchFundingRates': false,
                 'fetchIndexOHLCV': false,
-                'fetchIsolatedPositions': false,
                 'fetchMarkets': true,
                 'fetchMarkOHLCV': false,
                 'fetchOHLCV': true,
                 'fetchOpenOrders': true,
                 'fetchOrderBook': true,
                 'fetchOrderTrades': true,
-                'fetchPosition': false,
-                'fetchPositions': false,
-                'fetchPositionsRisk': false,
                 'fetchPremiumIndexOHLCV': false,
                 'fetchTicker': true,
                 'fetchTickers': true,
                 'fetchTime': true,
                 'fetchTrades': true,
+                'fetchTradingFee': false,
                 'fetchTradingFees': true,
-                'reduceMargin': false,
-                'setPositionMode': false,
+                'fetchTransactionFees': true,
+                'transfer': true,
                 'withdraw': true,
             },
             'timeframes': {
@@ -168,6 +164,7 @@ module.exports = class whitebit extends Exchange {
                             'main-account/history',
                             'main-account/withdraw',
                             'main-account/withdraw-pay',
+                            'main-account/transfer',
                             'trade-account/balance',
                             'trade-account/executed-history',
                             'trade-account/order',
@@ -194,6 +191,14 @@ module.exports = class whitebit extends Exchange {
             'options': {
                 'createMarketBuyOrderRequiresPrice': true,
                 'fiatCurrencies': [ 'EUR', 'USD', 'RUB', 'UAH' ],
+                'accountsByType': {
+                    'main': 'main',
+                    'spot': 'trade',
+                    'margin': 'margin', // api does not suppot transfers to margin
+                },
+                'transfer': {
+                    'fillTransferResponseFromRequest': true,
+                },
             },
             'exceptions': {
                 'exact': {
@@ -363,7 +368,7 @@ module.exports = class whitebit extends Exchange {
         return result;
     }
 
-    async fetchFundingFees (params = {}) {
+    async fetchTransactionFees (codes = undefined, params = {}) {
         await this.loadMarkets ();
         const response = await this.v4PublicGetFee (params);
         //
@@ -411,12 +416,43 @@ module.exports = class whitebit extends Exchange {
     }
 
     async fetchTradingFees (params = {}) {
-        const response = await this.v2PublicGetFee (params);
-        const fees = this.safeValue (response, 'result');
-        return {
-            'maker': this.safeNumber (fees, 'makerFee'),
-            'taker': this.safeNumber (fees, 'takerFee'),
-        };
+        const response = await this.v4PublicGetAssets (params);
+        //
+        //      {
+        //          '1INCH': {
+        //              name: '1inch',
+        //              unified_cryptoasset_id: '8104',
+        //              can_withdraw: true,
+        //              can_deposit: true,
+        //              min_withdraw: '33',
+        //              max_withdraw: '0',
+        //              maker_fee: '0.1',
+        //              taker_fee: '0.1',
+        //              min_deposit: '30',
+        //              max_deposit: '0'
+        //            },
+        //            ...
+        //      }
+        //
+        const result = {};
+        for (let i = 0; i < this.symbols.length; i++) {
+            const symbol = this.symbols[i];
+            const market = this.market (symbol);
+            const fee = this.safeValue (response, market['baseId'], {});
+            let makerFee = this.safeString (fee, 'maker_fee');
+            let takerFee = this.safeString (fee, 'taker_fee');
+            makerFee = Precise.stringDiv (makerFee, '100');
+            takerFee = Precise.stringDiv (takerFee, '100');
+            result[symbol] = {
+                'info': fee,
+                'symbol': market['symbol'],
+                'percentage': true,
+                'tierBased': false,
+                'maker': this.parseNumber (makerFee),
+                'taker': this.parseNumber (takerFee),
+            };
+        }
+        return result;
     }
 
     async fetchTicker (symbol, params = {}) {
@@ -448,41 +484,37 @@ module.exports = class whitebit extends Exchange {
     }
 
     parseTicker (ticker, market = undefined) {
+        //
         //  FetchTicker (v1)
         //
-        //      {
-        //          "bid":"0.021979",
-        //          "ask":"0.021996",
-        //          "open":"0.02182",
-        //          "high":"0.022039",
-        //          "low":"0.02161",
-        //          "last":"0.021987",
-        //          "volume":"2810.267",
-        //          "deal":"61.383565474",
-        //          "change":"0.76",
-        //      }
+        //    {
+        //        "bid": "0.021979",
+        //        "ask": "0.021996",
+        //        "open": "0.02182",
+        //        "high": "0.022039",
+        //        "low": "0.02161",
+        //        "last": "0.021987",
+        //        "volume": "2810.267",
+        //        "deal": "61.383565474",
+        //        "change": "0.76",
+        //    }
         //
         // FetchTickers (v4)
         //
-        //      "BCH_RUB":{
-        //          "base_id":1831,
-        //          "quote_id":0,
-        //          "last_price":"32830.21",
-        //          "quote_volume":"1494659.8024096",
-        //          "base_volume":"46.1083",
-        //          "isFrozen":false,
-        //          "change":"2.12" // in percent
-        //      },
+        //    "BCH_RUB": {
+        //        "base_id": 1831,
+        //        "quote_id": 0,
+        //        "last_price": "32830.21",
+        //        "quote_volume": "1494659.8024096",
+        //        "base_volume": "46.1083",
+        //        "isFrozen": false,
+        //        "change": "2.12" // in percent
+        //    }
         //
-        let symbol = undefined;
-        if (market !== undefined) {
-            symbol = market['symbol'];
-        }
+        market = this.safeMarket (undefined, market);
         const last = this.safeString (ticker, 'last_price');
-        const change = this.safeString (ticker, 'change');
-        const percentage = Precise.stringMul (change, '0.01');
         return this.safeTicker ({
-            'symbol': symbol,
+            'symbol': market['symbol'],
             'timestamp': undefined,
             'datetime': undefined,
             'high': this.safeString (ticker, 'high'),
@@ -497,7 +529,7 @@ module.exports = class whitebit extends Exchange {
             'last': last,
             'previousClose': undefined,
             'change': undefined,
-            'percentage': percentage,
+            'percentage': this.safeString (ticker, 'change'),
             'average': undefined,
             'baseVolume': this.safeString2 (ticker, 'base_volume', 'volume'),
             'quoteVolume': this.safeString2 (ticker, 'quote_volume', 'deal'),
@@ -718,13 +750,14 @@ module.exports = class whitebit extends Exchange {
         //          "pong"
         //      ]
         //
-        let status = this.safeString (response, 0, undefined);
-        status = (status === undefined) ? 'maintenance' : 'ok';
-        this.status = this.extend (this.status, {
-            'status': status,
+        const status = this.safeString (response, 0);
+        return {
+            'status': (status === 'pong') ? 'ok' : status,
             'updated': this.milliseconds (),
-        });
-        return this.status;
+            'eta': undefined,
+            'url': undefined,
+            'info': response,
+        };
     }
 
     async fetchTime (params = {}) {
@@ -770,7 +803,7 @@ module.exports = class whitebit extends Exchange {
         // aggregate common assignments regardless stop or not
         if (type === 'limit' || type === 'stopLimit') {
             if (price === undefined) {
-                throw new ArgumentsRequired (this.id + ' createOrder requires a price argument for a stopLimit order');
+                throw new ArgumentsRequired (this.id + ' createOrder() requires a price argument for a stopLimit order');
             }
             const convertedPrice = this.priceToPrecision (symbol, price);
             request['price'] = convertedPrice;
@@ -794,7 +827,7 @@ module.exports = class whitebit extends Exchange {
             }
         }
         if (method === undefined) {
-            throw new ArgumentsRequired (this.id + 'Invalid type:  createOrder() requires one of the following order types: market, limit, stopLimit or stopMarket');
+            throw new ArgumentsRequired (this.id + ' createOrder() requires one of the following order types: market, limit, stopLimit or stopMarket');
         }
         const response = await this[method] (this.extend (request, params));
         return this.parseOrder (response);
@@ -882,6 +915,7 @@ module.exports = class whitebit extends Exchange {
         let market = undefined;
         if (symbol !== undefined) {
             market = this.market (symbol);
+            symbol = market['symbol'];
             request['market'] = market['id'];
         }
         if (limit !== undefined) {
@@ -995,13 +1029,9 @@ module.exports = class whitebit extends Exchange {
         const dealFee = this.safeString (order, 'dealFee');
         let fee = undefined;
         if (dealFee !== undefined) {
-            let feeCurrencyCode = undefined;
-            if (market !== undefined) {
-                feeCurrencyCode = market['quote'];
-            }
             fee = {
                 'cost': this.parseNumber (dealFee),
-                'currency': feeCurrencyCode,
+                'currency': market['quote'],
             };
         }
         const timestamp = this.safeTimestamp2 (order, 'ctime', 'timestamp');
@@ -1133,6 +1163,58 @@ module.exports = class whitebit extends Exchange {
         };
     }
 
+    async transfer (code, amount, fromAccount, toAccount, params = {}) {
+        await this.loadMarkets ();
+        const currency = this.currency (code);
+        const accountsByType = this.safeValue (this.options, 'accountsByType');
+        const fromAccountId = this.safeString (accountsByType, fromAccount, fromAccount);
+        const toAccountId = this.safeString (accountsByType, toAccount, toAccount);
+        let type = undefined;
+        if (fromAccountId === 'main' && toAccountId === 'trade') {
+            type = 'deposit';
+        } else if (fromAccountId === 'trade' && toAccountId === 'main') {
+            type = 'withdraw';
+        }
+        if (type === undefined) {
+            throw new ExchangeError (this.id + ' transfer() only allows transfers between main account and spot account');
+        }
+        const request = {
+            'ticker': currency['id'],
+            'method': type,
+            'amount': this.currencyToPrecision (code, amount),
+        };
+        const response = await this.v4PrivatePostMainAccountTransfer (this.extend (request, params));
+        //
+        //    []
+        //
+        const transfer = this.parseTransfer (response, currency);
+        const transferOptions = this.safeValue (this.options, 'transfer', {});
+        const fillTransferResponseFromRequest = this.safeValue (transferOptions, 'fillTransferResponseFromRequest', true);
+        if (fillTransferResponseFromRequest) {
+            transfer['amount'] = amount;
+            transfer['fromAccount'] = fromAccount;
+            transfer['toAccount'] = toAccount;
+        }
+        return transfer;
+    }
+
+    parseTransfer (transfer, currency) {
+        //
+        //    []
+        //
+        return {
+            'info': transfer,
+            'id': undefined,
+            'timestamp': undefined,
+            'datetime': undefined,
+            'currency': this.safeCurrencyCode (undefined, currency),
+            'amount': undefined,
+            'fromAccount': undefined,
+            'toAccount': undefined,
+            'status': 'pending',
+        };
+    }
+
     async withdraw (code, amount, address, tag = undefined, params = {}) {
         await this.loadMarkets ();
         const currency = this.currency (code); // check if it has canDeposit
@@ -1163,9 +1245,36 @@ module.exports = class whitebit extends Exchange {
         //
         //     []
         //
+        return this.extend ({ 'id': uniqueId }, this.parseTransaction (response, currency));
+    }
+
+    parseTransaction (transaction, currency = undefined) {
+        //
+        // withdraw
+        //
+        //     []
+        //
+        currency = this.safeCurrency (undefined, currency);
         return {
-            'id': uniqueId,
-            'info': response,
+            'id': undefined,
+            'txid': undefined,
+            'timestamp': undefined,
+            'datetime': undefined,
+            'network': undefined,
+            'addressFrom': undefined,
+            'address': undefined,
+            'addressTo': undefined,
+            'amount': undefined,
+            'type': undefined,
+            'currency': currency['code'],
+            'status': undefined,
+            'updated': undefined,
+            'tagFrom': undefined,
+            'tag': undefined,
+            'tagTo': undefined,
+            'comment': undefined,
+            'fee': undefined,
+            'info': transaction,
         };
     }
 
@@ -1214,13 +1323,15 @@ module.exports = class whitebit extends Exchange {
             // For cases where we have a meaningful status
             // {"response":null,"status":422,"errors":{"orderId":["Finished order id 435453454535 not found on your account"]},"notification":null,"warning":"Finished order id 435453454535 not found on your account","_token":null}
             const status = this.safeInteger (response, 'status');
+            // {"code":10,"message":"Unauthorized request."}
+            const message = this.safeString (response, 'message');
             // For these cases where we have a generic code variable error key
             // {"code":0,"message":"Validation failed","errors":{"amount":["Amount must be greater than 0"]}}
             const code = this.safeInteger (response, 'code');
             const hasErrorStatus = status !== undefined && status !== '200';
             if (hasErrorStatus || code !== undefined) {
                 const feedback = this.id + ' ' + body;
-                let errorInfo = undefined;
+                let errorInfo = message;
                 if (hasErrorStatus) {
                     errorInfo = status;
                 } else {

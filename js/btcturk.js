@@ -28,6 +28,7 @@ module.exports = class btcturk extends Exchange {
                 'createReduceOnlyOrder': false,
                 'fetchBalance': true,
                 'fetchBorrowRate': false,
+                'fetchBorrowRateHistories': false,
                 'fetchBorrowRateHistory': false,
                 'fetchBorrowRates': false,
                 'fetchBorrowRatesPerSymbol': false,
@@ -36,7 +37,6 @@ module.exports = class btcturk extends Exchange {
                 'fetchFundingRateHistory': false,
                 'fetchFundingRates': false,
                 'fetchIndexOHLCV': false,
-                'fetchIsolatedPositions': false,
                 'fetchLeverage': false,
                 'fetchMarkets': true,
                 'fetchMarkOHLCV': false,
@@ -213,8 +213,8 @@ module.exports = class btcturk extends Exchange {
                 'strike': undefined,
                 'optionType': undefined,
                 'precision': {
-                    'price': this.safeInteger (entry, 'denominatorScale'),
                     'amount': this.safeInteger (entry, 'numeratorScale'),
+                    'price': this.safeInteger (entry, 'denominatorScale'),
                 },
                 'limits': {
                     'leverage': {

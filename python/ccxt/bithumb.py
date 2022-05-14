@@ -30,24 +30,47 @@ class bithumb(Exchange):
             'has': {
                 'CORS': True,
                 'spot': True,
-                'margin': None,
-                'swap': None,
-                'future': None,
-                'option': None,
+                'margin': False,
+                'swap': False,
+                'future': False,
+                'option': False,
+                'addMargin': False,
                 'cancelOrder': True,
                 'createMarketOrder': True,
                 'createOrder': True,
+                'createReduceOnlyOrder': False,
                 'fetchBalance': True,
+                'fetchBorrowRate': False,
+                'fetchBorrowRateHistories': False,
+                'fetchBorrowRateHistory': False,
+                'fetchBorrowRates': False,
+                'fetchBorrowRatesPerSymbol': False,
+                'fetchFundingHistory': False,
+                'fetchFundingRate': False,
+                'fetchFundingRateHistory': False,
+                'fetchFundingRates': False,
                 'fetchIndexOHLCV': False,
+                'fetchLeverage': False,
                 'fetchMarkets': True,
                 'fetchMarkOHLCV': False,
                 'fetchOHLCV': True,
                 'fetchOpenOrders': True,
                 'fetchOrder': True,
                 'fetchOrderBook': True,
+                'fetchPosition': False,
+                'fetchPositions': False,
+                'fetchPositionsRisk': False,
+                'fetchPremiumIndexOHLCV': False,
                 'fetchTicker': True,
                 'fetchTickers': True,
                 'fetchTrades': True,
+                'fetchTransfer': False,
+                'fetchTransfers': False,
+                'reduceMargin': False,
+                'setLeverage': False,
+                'setMarginMode': False,
+                'setPositionMode': False,
+                'transfer': False,
                 'withdraw': True,
             },
             'hostname': 'bithumb.com',
@@ -163,6 +186,7 @@ class bithumb(Exchange):
         quotes = list(quoteCurrencies.keys())
         for i in range(0, len(quotes)):
             quote = quotes[i]
+            quoteId = quote
             extension = self.safe_value(quoteCurrencies, quote, {})
             method = 'publicGetTickerALL' + quote
             response = getattr(self, method)(params)
@@ -174,7 +198,6 @@ class bithumb(Exchange):
                     continue
                 market = data[currencyId]
                 base = self.safe_currency_code(currencyId)
-                symbol = currencyId + '/' + quote
                 active = True
                 if isinstance(market, list):
                     numElements = len(market)
@@ -182,18 +205,37 @@ class bithumb(Exchange):
                         active = False
                 entry = self.deep_extend({
                     'id': currencyId,
-                    'symbol': symbol,
+                    'symbol': base + '/' + quote,
                     'base': base,
                     'quote': quote,
-                    'info': market,
+                    'settle': None,
+                    'baseId': currencyId,
+                    'quoteId': quoteId,
+                    'settleId': None,
                     'type': 'spot',
                     'spot': True,
+                    'margin': False,
+                    'swap': False,
+                    'future': False,
+                    'option': False,
                     'active': active,
+                    'contract': False,
+                    'linear': None,
+                    'inverse': None,
+                    'contractSize': None,
+                    'expiry': None,
+                    'expiryDateTime': None,
+                    'strike': None,
+                    'optionType': None,
                     'precision': {
-                        'amount': 4,
-                        'price': 4,
+                        'amount': int('4'),
+                        'price': int('4'),
                     },
                     'limits': {
+                        'leverage': {
+                            'min': None,
+                            'max': None,
+                        },
                         'amount': {
                             'min': None,
                             'max': None,
@@ -204,8 +246,7 @@ class bithumb(Exchange):
                         },
                         'cost': {},  # set via options
                     },
-                    'baseId': None,
-                    'quoteId': None,
+                    'info': market,
                 }, extension)
                 result.append(entry)
         return result
@@ -483,9 +524,7 @@ class bithumb(Exchange):
         side = self.safe_string(trade, 'type')
         side = 'sell' if (side == 'ask') else 'buy'
         id = self.safe_string(trade, 'cont_no')
-        symbol = None
-        if market is not None:
-            symbol = market['symbol']
+        market = self.safe_market(None, market)
         priceString = self.safe_string(trade, 'price')
         amountString = self.safe_string_2(trade, 'units_traded', 'units')
         costString = self.safe_string(trade, 'total')
@@ -503,7 +542,7 @@ class bithumb(Exchange):
             'info': trade,
             'timestamp': timestamp,
             'datetime': self.iso8601(timestamp),
-            'symbol': symbol,
+            'symbol': market['symbol'],
             'order': None,
             'type': type,
             'side': side,
@@ -701,7 +740,8 @@ class bithumb(Exchange):
         quote = self.safe_currency_code(quoteId)
         if (base is not None) and (quote is not None):
             symbol = base + '/' + quote
-        if (symbol is None) and (market is not None):
+        if symbol is None:
+            market = self.safe_market(None, market)
             symbol = market['symbol']
         id = self.safe_string(order, 'order_id')
         rawTrades = self.safe_value(order, 'contract', [])
@@ -805,9 +845,38 @@ class bithumb(Exchange):
             elif tag is not None:
                 request['destination'] = tag
         response = self.privatePostTradeBtcWithdrawal(self.extend(request, params))
+        #
+        # {"status" : "0000"}
+        #
+        return self.parse_transaction(response, currency)
+
+    def parse_transaction(self, transaction, currency=None):
+        #
+        # withdraw
+        #
+        #     {"status" : "0000"}
+        #
+        currency = self.safe_currency(None, currency)
         return {
-            'info': response,
             'id': None,
+            'txid': None,
+            'timestamp': None,
+            'datetime': None,
+            'network': None,
+            'addressFrom': None,
+            'address': None,
+            'addressTo': None,
+            'amount': None,
+            'type': None,
+            'currency': currency['code'],
+            'status': None,
+            'updated': None,
+            'tagFrom': None,
+            'tag': None,
+            'tagTo': None,
+            'comment': None,
+            'fee': None,
+            'info': transaction,
         }
 
     def nonce(self):

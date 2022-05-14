@@ -11,6 +11,7 @@ use \ccxt\ArgumentsRequired;
 use \ccxt\NullResponse;
 use \ccxt\InvalidOrder;
 use \ccxt\NotSupported;
+use \ccxt\Precise;
 
 class cex extends Exchange {
 
@@ -23,26 +24,43 @@ class cex extends Exchange {
             'has' => array(
                 'CORS' => null,
                 'spot' => true,
-                'margin' => null,
-                'swap' => null,
-                'future' => null,
-                'option' => null,
+                'margin' => null, // has but unimplemented
+                'swap' => false,
+                'future' => false,
+                'option' => false,
                 'cancelOrder' => true,
                 'createOrder' => true,
                 'editOrder' => true,
                 'fetchBalance' => true,
                 'fetchClosedOrders' => true,
                 'fetchCurrencies' => true,
+                'fetchDeposit' => false,
                 'fetchDepositAddress' => true,
+                'fetchDeposits' => false,
+                'fetchFundingHistory' => false,
+                'fetchFundingRate' => false,
+                'fetchFundingRateHistory' => false,
+                'fetchFundingRates' => false,
+                'fetchIndexOHLCV' => false,
                 'fetchMarkets' => true,
+                'fetchMarkOHLCV' => false,
                 'fetchOHLCV' => true,
                 'fetchOpenOrders' => true,
                 'fetchOrder' => true,
                 'fetchOrderBook' => true,
                 'fetchOrders' => true,
+                'fetchPremiumIndexOHLCV' => false,
                 'fetchTicker' => true,
                 'fetchTickers' => true,
                 'fetchTrades' => true,
+                'fetchTradingFee' => false,
+                'fetchTradingFees' => true,
+                'fetchTransfer' => false,
+                'fetchTransfers' => false,
+                'fetchWithdrawal' => false,
+                'fetchWithdrawals' => false,
+                'transfer' => false,
+                'withdraw' => false,
             ),
             'timeframes' => array(
                 '1m' => '1m',
@@ -139,6 +157,7 @@ class cex extends Exchange {
                     'Invalid API key' => '\\ccxt\\AuthenticationError',
                     'There was an error while placing your order' => '\\ccxt\\InvalidOrder',
                     'Sorry, too many clients already' => '\\ccxt\\DDoSProtection',
+                    'Invalid Symbols Pair' => '\\ccxt\\BadSymbol',
                 ),
             ),
             'options' => array(
@@ -315,10 +334,8 @@ class cex extends Exchange {
             $market = $markets[$i];
             $baseId = $this->safe_string($market, 'symbol1');
             $quoteId = $this->safe_string($market, 'symbol2');
-            $id = $baseId . '/' . $quoteId;
             $base = $this->safe_currency_code($baseId);
             $quote = $this->safe_currency_code($quoteId);
-            $symbol = $base . '/' . $quote;
             $baseCurrency = $this->safe_value($currenciesById, $baseId, array());
             $quoteCurrency = $this->safe_value($currenciesById, $quoteId, array());
             $pricePrecision = $this->safe_integer($quoteCurrency, 'precision', 8);
@@ -329,40 +346,41 @@ class cex extends Exchange {
                     $pricePrecision = $this->safe_integer($pair, 'pricePrecision', $pricePrecision);
                 }
             }
-            $baseCcyPrecision = $this->safe_integer($baseCurrency, 'precision', 8);
-            $baseCcyScale = $this->safe_integer($baseCurrency, 'scale', 0);
-            $amountPrecision = $baseCcyPrecision - $baseCcyScale;
-            $precision = array(
-                'amount' => $amountPrecision,
-                'price' => $pricePrecision,
-            );
+            $baseCcyPrecision = $this->safe_string($baseCurrency, 'precision', '8');
+            $baseCcyScale = $this->safe_string($baseCurrency, 'scale', '0');
             $result[] = array(
-                'id' => $id,
-                'info' => $market,
-                'symbol' => $symbol,
+                'id' => $baseId . '/' . $quoteId,
+                'symbol' => $base . '/' . $quote,
                 'base' => $base,
                 'quote' => $quote,
+                'settle' => null,
                 'baseId' => $baseId,
                 'quoteId' => $quoteId,
+                'settleId' => null,
                 'type' => 'spot',
                 'spot' => true,
-                'margin' => false,
-                'future' => false,
+                'margin' => null,
                 'swap' => false,
+                'future' => false,
                 'option' => false,
-                'optionType' => null,
-                'strike' => null,
+                'active' => null,
+                'contract' => false,
                 'linear' => null,
                 'inverse' => null,
-                'contract' => false,
                 'contractSize' => null,
-                'settle' => null,
-                'settleId' => null,
                 'expiry' => null,
                 'expiryDatetime' => null,
-                'active' => null,
-                'precision' => $precision,
+                'strike' => null,
+                'optionType' => null,
+                'precision' => array(
+                    'amount' => intval(Precise::string_sub($baseCcyPrecision, $baseCcyScale)),
+                    'price' => $pricePrecision,
+                ),
                 'limits' => array(
+                    'leverage' => array(
+                        'min' => null,
+                        'max' => null,
+                    ),
                     'amount' => array(
                         'min' => $this->safe_number($market, 'minLotSize'),
                         'max' => $this->safe_number($market, 'maxLotSize'),
@@ -376,6 +394,7 @@ class cex extends Exchange {
                         'max' => null,
                     ),
                 ),
+                'info' => $market,
             );
         }
         return $result;
@@ -512,12 +531,13 @@ class cex extends Exchange {
             'currencies' => implode('/', $currencies),
         );
         $response = yield $this->publicGetTickersCurrencies (array_merge($request, $params));
-        $tickers = $response['data'];
+        $tickers = $this->safe_value($response, 'data', array());
         $result = array();
         for ($t = 0; $t < count($tickers); $t++) {
             $ticker = $tickers[$t];
-            $symbol = str_replace(':', '/', $ticker['pair']);
-            $market = $this->markets[$symbol];
+            $marketId = $this->safe_string($ticker, 'pair');
+            $market = $this->safe_market($marketId, null, ':');
+            $symbol = $market['symbol'];
             $result[$symbol] = $this->parse_ticker($ticker, $market);
         }
         return $this->filter_by_array($result, 'symbol', $symbols);
@@ -551,16 +571,13 @@ class cex extends Exchange {
         $side = $this->safe_string($trade, 'type');
         $priceString = $this->safe_string($trade, 'price');
         $amountString = $this->safe_string($trade, 'amount');
-        $symbol = null;
-        if ($market !== null) {
-            $symbol = $market['symbol'];
-        }
+        $market = $this->safe_market(null, $market);
         return $this->safe_trade(array(
             'info' => $trade,
             'id' => $id,
             'timestamp' => $timestamp,
             'datetime' => $this->iso8601($timestamp),
-            'symbol' => $symbol,
+            'symbol' => $market['symbol'],
             'type' => $type,
             'side' => $side,
             'order' => null,
@@ -580,6 +597,41 @@ class cex extends Exchange {
         );
         $response = yield $this->publicGetTradeHistoryPair (array_merge($request, $params));
         return $this->parse_trades($response, $market, $since, $limit);
+    }
+
+    public function fetch_trading_fees($params = array ()) {
+        yield $this->load_markets();
+        $response = yield $this->privatePostGetMyfee ($params);
+        //
+        //      {
+        //          e => 'get_myfee',
+        //          ok => 'ok',
+        //          $data => {
+        //            'BTC:USD' => array( buy => '0.25', sell => '0.25', buyMaker => '0.15', sellMaker => '0.15' ),
+        //            'ETH:USD' => array( buy => '0.25', sell => '0.25', buyMaker => '0.15', sellMaker => '0.15' ),
+        //            ..
+        //          }
+        //      }
+        //
+        $data = $this->safe_value($response, 'data', array());
+        $result = array();
+        for ($i = 0; $i < count($this->symbols); $i++) {
+            $symbol = $this->symbols[$i];
+            $market = $this->market($symbol);
+            $fee = $this->safe_value($data, $market['id'], array());
+            $makerString = $this->safe_string($fee, 'buyMaker');
+            $takerString = $this->safe_string($fee, 'buy');
+            $maker = $this->parse_number(Precise::string_div($makerString, '100'));
+            $taker = $this->parse_number(Precise::string_div($takerString, '100'));
+            $result[$symbol] = array(
+                'info' => $fee,
+                'symbol' => $symbol,
+                'maker' => $maker,
+                'taker' => $taker,
+                'percentage' => true,
+            );
+        }
+        return $result;
     }
 
     public function create_order($symbol, $type, $side, $amount, $price = null, $params = array ()) {
@@ -1289,7 +1341,7 @@ class cex extends Exchange {
     public function fetch_deposit_address($code, $params = array ()) {
         if ($code === 'XRP' || $code === 'XLM') {
             // https://github.com/ccxt/ccxt/pull/2327#issuecomment-375204856
-            throw new NotSupported($this->id . ' fetchDepositAddress does not support XRP and XLM addresses yet (awaiting docs from CEX.io)');
+            throw new NotSupported($this->id . ' fetchDepositAddress() does not support XRP and XLM addresses yet (awaiting docs from CEX.io)');
         }
         yield $this->load_markets();
         $currency = $this->currency($code);

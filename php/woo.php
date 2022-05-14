@@ -23,18 +23,19 @@ class woo extends Exchange {
             'has' => array(
                 'CORS' => null,
                 'spot' => true,
-                'margin' => null,
-                'swap' => null,
-                'future' => null,
-                'option' => null,
-                'addMargin' => false,
+                'margin' => true,
+                'swap' => false,
+                'future' => false,
+                'option' => false,
                 'cancelAllOrders' => false,
                 'cancelOrder' => true,
                 'cancelOrders' => true,
                 'cancelWithdraw' => false, // exchange have that endpoint disabled atm, but was once implemented in ccxt per old docs => https://kronosresearch.github.io/wootrade-documents/#cancel-withdraw-request
                 'createMarketOrder' => false,
                 'createOrder' => true,
-                'deposit' => false,
+                'createStopLimitOrder' => false,
+                'createStopMarketOrder' => false,
+                'createStopOrder' => false,
                 'fetchBalance' => true,
                 'fetchCanceledOrders' => false,
                 'fetchClosedOrder' => false,
@@ -42,9 +43,14 @@ class woo extends Exchange {
                 'fetchCurrencies' => true,
                 'fetchDepositAddress' => false,
                 'fetchDeposits' => true,
+                'fetchFundingHistory' => false,
+                'fetchFundingRate' => false,
                 'fetchFundingRateHistory' => false,
+                'fetchFundingRates' => false,
+                'fetchIndexOHLCV' => false,
                 'fetchLedger' => true,
                 'fetchMarkets' => true,
+                'fetchMarkOHLCV' => false,
                 'fetchMyTrades' => true,
                 'fetchOHLCV' => true,
                 'fetchOpenOrder' => false,
@@ -53,18 +59,18 @@ class woo extends Exchange {
                 'fetchOrderBook' => true,
                 'fetchOrders' => true,
                 'fetchOrderTrades' => true,
-                'fetchPosition' => false,
-                'fetchPositions' => false,
+                'fetchPremiumIndexOHLCV' => false,
                 'fetchStatus' => false,
                 'fetchTicker' => false,
                 'fetchTickers' => false,
                 'fetchTime' => false,
                 'fetchTrades' => true,
+                'fetchTradingFee' => false,
+                'fetchTradingFees' => true,
                 'fetchTransactions' => true,
                 'fetchTransfers' => true,
                 'fetchWithdrawals' => true,
-                'reduceMargin' => false,
-                'setLeverage' => false,
+                'transfer' => true,
                 'withdraw' => false, // exchange have that endpoint disabled atm, but was once implemented in ccxt per old docs => https://kronosresearch.github.io/wootrade-documents/#token-withdraw
             ),
             'timeframes' => array(
@@ -132,6 +138,7 @@ class woo extends Exchange {
                         ),
                         'post' => array(
                             'order' => 5, // 2 requests per 1 second per symbol
+                            'asset/main_sub_transfer' => 30, // 20 requests per 60 seconds
                             'asset/withdraw' => 120,  // implemented in ccxt, disabled on the exchange side https://kronosresearch.github.io/wootrade-documents/#token-withdraw
                         ),
                         'delete' => array(
@@ -154,8 +161,8 @@ class woo extends Exchange {
                 'trading' => array(
                     'tierBased' => true,
                     'percentage' => true,
-                    'maker' => 0.2 / 100,
-                    'taker' => 0.5 / 100,
+                    'maker' => $this->parse_number('0.0002'),
+                    'taker' => $this->parse_number('0.0005'),
                 ),
             ),
             'options' => array(
@@ -211,6 +218,9 @@ class woo extends Exchange {
                 'defaultNetworkCodeForCurrencies' => array(
                     // 'USDT' => 'TRC20',
                     // 'BTC' => 'BTC',
+                ),
+                'transfer' => array(
+                    'fillResponseFromRequest' => true,
                 ),
             ),
             'commonCurrencies' => array(),
@@ -306,14 +316,14 @@ class woo extends Exchange {
                 'settleId' => null,
                 'type' => $marketTypeVal,
                 'spot' => $isSpot,
-                'margin' => false,
+                'margin' => true,
                 'swap' => false,
                 'future' => false,
                 'option' => false,
                 'active' => null,
                 'contract' => $isSwap || $isFuture || $isOption,
-                'linear' => false,
-                'inverse' => false,
+                'linear' => null,
+                'inverse' => null,
                 'contractSize' => null,
                 'expiry' => null,
                 'expiryDatetime' => null,
@@ -480,6 +490,48 @@ class woo extends Exchange {
             );
         }
         return $fee;
+    }
+
+    public function fetch_trading_fees($params = array ()) {
+        $this->load_markets();
+        $response = $this->v1PrivateGetClientInfo ($params);
+        //
+        //     {
+        //         "application":array(
+        //             "id":45585,
+        //             "leverage":3.00,
+        //             "otpauth":false,
+        //             "alias":"email@address.com",
+        //             "application_id":"c2cc4d74-c8cb-4e10-84db-af2089b8c68a",
+        //             "account":"email@address.com",
+        //             "account_mode":"PURE_SPOT",
+        //             "taker_fee_rate":5.00,
+        //             "maker_fee_rate":2.00,
+        //             "interest_rate":0.00,
+        //             "futures_leverage":1.00,
+        //             "futures_taker_fee_rate":5.00,
+        //             "futures_maker_fee_rate":2.00
+        //         ),
+        //         "margin_rate":1000,
+        //         "success":true
+        //     }
+        //
+        $application = $this->safe_value($response, 'application', array());
+        $maker = $this->safe_string($application, 'maker_fee_rate');
+        $taker = $this->safe_string($application, 'taker_fee_rate');
+        $result = array();
+        for ($i = 0; $i < count($this->symbols); $i++) {
+            $symbol = $this->symbols[$i];
+            $result[$symbol] = array(
+                'info' => $response,
+                'symbol' => $symbol,
+                'maker' => $this->parse_number(Precise::string_div($maker, '10000')),
+                'taker' => $this->parse_number(Precise::string_div($taker, '10000')),
+                'percentage' => true,
+                'tierBased' => true,
+            );
+        }
+        return $result;
     }
 
     public function fetch_currencies($params = array ()) {
@@ -1332,6 +1384,33 @@ class woo extends Exchange {
         return $this->safe_string($statuses, $status, $status);
     }
 
+    public function transfer($code, $amount, $fromAccount, $toAccount, $params = array ()) {
+        $this->load_markets();
+        $currency = $this->currency($code);
+        $request = array(
+            'token' => $currency['id'],
+            'amount' => $this->parse_number($amount),
+            'from_application_id' => $fromAccount,
+            'to_application_id' => $toAccount,
+        );
+        $response = $this->v1PrivatePostAssetMainSubTransfer (array_merge($request, $params));
+        //
+        //     {
+        //         "success" => true,
+        //         "id" => 200
+        //     }
+        //
+        $transfer = $this->parse_transfer($response, $currency);
+        $transferOptions = $this->safe_value($this->options, 'transfer', array());
+        $fillResponseFromRequest = $this->safe_value($transferOptions, 'fillResponseFromRequest', true);
+        if ($fillResponseFromRequest) {
+            $transfer['amount'] = $amount;
+            $transfer['fromAccount'] = $fromAccount;
+            $transfer['toAccount'] = $toAccount;
+        }
+        return $transfer;
+    }
+
     public function fetch_transfers($code = null, $since = null, $limit = null, $params = array ()) {
         $request = array(
             'type' => 'COLLATERAL',
@@ -1341,7 +1420,33 @@ class woo extends Exchange {
     }
 
     public function parse_transfer($transfer, $currency = null) {
-        // example is "fetchTransactions"
+        //
+        //    getAssetHistoryRows
+        //        {
+        //            "created_time" => "1579399877.041",  // Unix epoch time in seconds
+        //            "updated_time" => "1579399877.041",  // Unix epoch time in seconds
+        //            "id" => "202029292829292",
+        //            "external_id" => "202029292829292",
+        //            "application_id" => null,
+        //            "token" => "ETH",
+        //            "target_address" => "0x31d64B3230f8baDD91dE1710A65DF536aF8f7cDa",
+        //            "source_address" => "0x70fd25717f769c7f9a46b319f0f9103c0d887af0",
+        //            "extra" => "",
+        //            "type" => "BALANCE",
+        //            "token_side" => "DEPOSIT",
+        //            "amount" => 1000,
+        //            "tx_id" => "0x8a74c517bc104c8ebad0c3c3f64b1f302ed5f8bca598ae4459c63419038106b6",
+        //            "fee_token" => null,
+        //            "fee_amount" => null,
+        //            "status" => "CONFIRMING"
+        //        }
+        //
+        //    v1PrivatePostAssetMainSubTransfer
+        //        {
+        //            "success" => true,
+        //            "id" => 200
+        //        }
+        //
         $networkizedCode = $this->safe_string($transfer, 'token');
         $currencyDefined = $this->get_currency_from_chaincode($networkizedCode, $currency);
         $code = $currencyDefined['code'];
@@ -1354,11 +1459,16 @@ class woo extends Exchange {
         if ($movementDirection === 'withdraw') {
             $fromAccount = null;
             $toAccount = 'spot';
-        } else {
+        } else if ($movementDirection === 'deposit') {
             $fromAccount = 'spot';
             $toAccount = null;
         }
         $timestamp = $this->safe_timestamp($transfer, 'created_time');
+        $success = $this->safe_value($transfer, 'success');
+        $status = null;
+        if ($success !== null) {
+            $status = $success ? 'ok' : 'failed';
+        }
         return array(
             'id' => $this->safe_string($transfer, 'id'),
             'timestamp' => $timestamp,
@@ -1367,13 +1477,20 @@ class woo extends Exchange {
             'amount' => $this->safe_number($transfer, 'amount'),
             'fromAccount' => $fromAccount,
             'toAccount' => $toAccount,
-            'status' => $this->parse_transfer_status($this->safe_string($transfer, 'status')),
+            'status' => $this->parse_transfer_status($this->safe_string($transfer, 'status', $status)),
             'info' => $transfer,
         );
     }
 
     public function parse_transfer_status($status) {
-        return $this->parse_transaction_status($status);
+        $statuses = array(
+            'NEW' => 'pending',
+            'CONFIRMING' => 'pending',
+            'PROCESSING' => 'pending',
+            'COMPLETED' => 'ok',
+            'CANCELED' => 'canceled',
+        );
+        return $this->safe_string($statuses, $status, $status);
     }
 
     public function nonce() {

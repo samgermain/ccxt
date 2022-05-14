@@ -20,13 +20,18 @@ class bitforex extends Exchange {
             'has' => array(
                 'CORS' => null,
                 'spot' => true,
-                'margin' => null,
-                'swap' => null,
-                'future' => null,
-                'option' => null,
+                'margin' => false,
+                'swap' => null, // has but unimplemented
+                'future' => false,
+                'option' => false,
                 'cancelOrder' => true,
                 'createOrder' => true,
                 'fetchBalance' => true,
+                'fetchBorrowRate' => false,
+                'fetchBorrowRateHistories' => false,
+                'fetchBorrowRateHistory' => false,
+                'fetchBorrowRates' => false,
+                'fetchBorrowRatesPerSymbol' => false,
                 'fetchClosedOrders' => true,
                 'fetchMarkets' => true,
                 'fetchMyTrades' => null,
@@ -38,6 +43,12 @@ class bitforex extends Exchange {
                 'fetchTicker' => true,
                 'fetchTickers' => null,
                 'fetchTrades' => true,
+                'fetchTransfer' => false,
+                'fetchTransfers' => false,
+                'fetchWithdrawal' => false,
+                'fetchWithdrawals' => false,
+                'transfer' => false,
+                'withdraw' => false,
             ),
             'timeframes' => array(
                 '1m' => '1min',
@@ -104,6 +115,7 @@ class bitforex extends Exchange {
                 'CAPP' => 'Crypto Application Token',
                 'CREDIT' => 'TerraCredit',
                 'CTC' => 'Culture Ticket Chain',
+                'EWT' => 'EcoWatt Token',
                 'IQ' => 'IQ.Cash',
                 'MIR' => 'MIR COIN',
                 'NOIA' => 'METANOIA',
@@ -127,6 +139,19 @@ class bitforex extends Exchange {
 
     public function fetch_markets($params = array ()) {
         $response = yield $this->publicGetApiV1MarketSymbols ($params);
+        //
+        //    {
+        //        "data" => array(
+        //            array(
+        //                "amountPrecision":4,
+        //                "minOrderAmount":3.0E-4,
+        //                "pricePrecision":2,
+        //                "symbol":"coin-usdt-btc"
+        //            ),
+        //            ...
+        //        )
+        //    }
+        //
         $data = $response['data'];
         $result = array();
         for ($i = 0; $i < count($data); $i++) {
@@ -137,38 +162,52 @@ class bitforex extends Exchange {
             $quoteId = $symbolParts[1];
             $base = $this->safe_currency_code($baseId);
             $quote = $this->safe_currency_code($quoteId);
-            $symbol = $base . '/' . $quote;
-            $active = true;
-            $precision = array(
-                'amount' => $this->safe_integer($market, 'amountPrecision'),
-                'price' => $this->safe_integer($market, 'pricePrecision'),
-            );
-            $limits = array(
-                'amount' => array(
-                    'min' => $this->safe_number($market, 'minOrderAmount'),
-                    'max' => null,
-                ),
-                'price' => array(
-                    'min' => null,
-                    'max' => null,
-                ),
-                'cost' => array(
-                    'min' => null,
-                    'max' => null,
-                ),
-            );
             $result[] = array(
                 'id' => $id,
-                'symbol' => $symbol,
+                'symbol' => $base . '/' . $quote,
                 'base' => $base,
                 'quote' => $quote,
+                'settle' => null,
                 'baseId' => $baseId,
                 'quoteId' => $quoteId,
+                'settleId' => null,
                 'type' => 'spot',
                 'spot' => true,
-                'active' => $active,
-                'precision' => $precision,
-                'limits' => $limits,
+                'margin' => false,
+                'swap' => false,
+                'future' => false,
+                'option' => false,
+                'active' => true,
+                'contract' => false,
+                'linear' => null,
+                'inverse' => null,
+                'contractSize' => null,
+                'expiry' => null,
+                'expiryDateTime' => null,
+                'strike' => null,
+                'optionType' => null,
+                'precision' => array(
+                    'amount' => $this->safe_integer($market, 'amountPrecision'),
+                    'price' => $this->safe_integer($market, 'pricePrecision'),
+                ),
+                'limits' => array(
+                    'leverage' => array(
+                        'min' => null,
+                        'max' => null,
+                    ),
+                    'amount' => array(
+                        'min' => $this->safe_number($market, 'minOrderAmount'),
+                        'max' => null,
+                    ),
+                    'price' => array(
+                        'min' => null,
+                        'max' => null,
+                    ),
+                    'cost' => array(
+                        'min' => null,
+                        'max' => null,
+                    ),
+                ),
                 'info' => $market,
             );
         }
@@ -195,10 +234,7 @@ class bitforex extends Exchange {
         //          "tid":"1131019639"
         //      }
         //
-        $symbol = null;
-        if ($market !== null) {
-            $symbol = $market['symbol'];
-        }
+        $market = $this->safe_market(null, $market);
         $timestamp = $this->safe_integer($trade, 'time');
         $id = $this->safe_string($trade, 'tid');
         $orderId = null;
@@ -211,7 +247,7 @@ class bitforex extends Exchange {
             'id' => $id,
             'timestamp' => $timestamp,
             'datetime' => $this->iso8601($timestamp),
-            'symbol' => $symbol,
+            'symbol' => $market['symbol'],
             'type' => null,
             'side' => $side,
             'price' => $priceString,

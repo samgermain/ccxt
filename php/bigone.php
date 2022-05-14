@@ -21,13 +21,16 @@ class bigone extends Exchange {
             'has' => array(
                 'CORS' => null,
                 'spot' => true,
-                'margin' => null,
-                'swap' => null,
-                'future' => null,
+                'margin' => null, // has but unimplemented
+                'swap' => null, // has but unimplemented
+                'future' => null, // has but unimplemented
                 'option' => null,
                 'cancelAllOrders' => true,
                 'cancelOrder' => true,
                 'createOrder' => true,
+                'createStopLimitOrder' => true,
+                'createStopMarketOrder' => true,
+                'createStopOrder' => true,
                 'fetchBalance' => true,
                 'fetchClosedOrders' => true,
                 'fetchDepositAddress' => true,
@@ -43,7 +46,10 @@ class bigone extends Exchange {
                 'fetchTickers' => true,
                 'fetchTime' => true,
                 'fetchTrades' => true,
+                'fetchTradingFee' => false,
+                'fetchTradingFees' => false,
                 'fetchWithdrawals' => true,
+                'transfer' => true,
                 'withdraw' => true,
             ),
             'timeframes' => array(
@@ -114,6 +120,17 @@ class bigone extends Exchange {
                     'withdraw' => array(),
                 ),
             ),
+            'options' => array(
+                'accountsByType' => array(
+                    'spot' => 'SPOT',
+                    'funding' => 'FUND',
+                    'future' => 'CONTRACT',
+                    'swap' => 'CONTRACT',
+                ),
+                'transfer' => array(
+                    'fillResponseFromRequest' => true,
+                ),
+            ),
             'exceptions' => array(
                 'exact' => array(
                     '10001' => '\\ccxt\\BadRequest', // syntax error
@@ -122,7 +139,7 @@ class bigone extends Exchange {
                     "Price mulit with amount should larger than AssetPair's min_quote_value" => '\\ccxt\\InvalidOrder',
                     '10007' => '\\ccxt\\BadRequest', // parameter error, array("code":10007,"message":"Amount's scale must greater than AssetPair's base scale")
                     '10011' => '\\ccxt\\ExchangeError', // system error
-                    '10013' => '\\ccxt\\OrderNotFound', // array("code":10013,"message":"Resource not found")
+                    '10013' => '\\ccxt\\BadSymbol', // array("code":10013,"message":"Resource not found")
                     '10014' => '\\ccxt\\InsufficientFunds', // array("code":10014,"message":"Insufficient funds")
                     '10403' => '\\ccxt\\PermissionDenied', // permission denied
                     '10429' => '\\ccxt\\RateLimitExceeded', // too many requests
@@ -174,6 +191,7 @@ class bigone extends Exchange {
         //                 ),
         //                 "base_scale":3,
         //                 "min_quote_value":"0.0001",
+        //                 "max_quote_value":"35"
         //             ),
         //         )
         //     }
@@ -190,54 +208,51 @@ class bigone extends Exchange {
             $quoteId = $this->safe_string($quoteAsset, 'symbol');
             $base = $this->safe_currency_code($baseId);
             $quote = $this->safe_currency_code($quoteId);
-            $symbol = $base . '/' . $quote;
-            $amountPrecisionString = $this->safe_string($market, 'base_scale');
-            $pricePrecisionString = $this->safe_string($market, 'quote_scale');
-            $amountLimit = $this->parse_precision($amountPrecisionString);
-            $priceLimit = $this->parse_precision($pricePrecisionString);
-            $precision = array(
-                'amount' => intval($amountPrecisionString),
-                'price' => intval($pricePrecisionString),
-            );
-            $minCost = $this->safe_number($market, 'min_quote_value');
             $entry = array(
                 'id' => $id,
                 'uuid' => $uuid,
-                'symbol' => $symbol,
+                'symbol' => $base . '/' . $quote,
                 'base' => $base,
                 'quote' => $quote,
+                'settle' => null,
                 'baseId' => $baseId,
                 'quoteId' => $quoteId,
+                'settleId' => null,
                 'type' => 'spot',
                 'spot' => true,
                 'margin' => false,
-                'future' => false,
                 'swap' => false,
+                'future' => false,
                 'option' => false,
+                'active' => true,
+                'contract' => false,
                 'linear' => null,
                 'inverse' => null,
+                'contractSize' => null,
                 'expiry' => null,
                 'expiryDatetime' => null,
-                'optionType' => null,
                 'strike' => null,
-                'contract' => false,
-                'contractSize' => null,
-                'settle' => null,
-                'settleId' => null,
-                'active' => true,
-                'precision' => $precision,
+                'optionType' => null,
+                'precision' => array(
+                    'amount' => $this->safe_integer($market, 'base_scale'),
+                    'price' => $this->safe_integer($market, 'quote_scale'),
+                ),
                 'limits' => array(
+                    'leverage' => array(
+                        'min' => null,
+                        'max' => null,
+                    ),
                     'amount' => array(
-                        'min' => $this->parse_number($amountLimit),
+                        'min' => null,
                         'max' => null,
                     ),
                     'price' => array(
-                        'min' => $this->parse_number($priceLimit),
+                        'min' => null,
                         'max' => null,
                     ),
                     'cost' => array(
-                        'min' => $minCost,
-                        'max' => null,
+                        'min' => $this->safe_number($market, 'min_quote_value'),
+                        'max' => $this->safe_number($market, 'max_quote_value'),
                     ),
                 ),
                 'info' => $market,
@@ -469,7 +484,7 @@ class bigone extends Exchange {
         $priceString = $this->safe_string($trade, 'price');
         $amountString = $this->safe_string($trade, 'amount');
         $marketId = $this->safe_string($trade, 'asset_pair_name');
-        $symbol = $this->safe_symbol($marketId, $market, '-');
+        $market = $this->safe_market($marketId, $market, '-');
         $side = $this->safe_string($trade, 'side');
         $takerSide = $this->safe_string($trade, 'taker_side');
         $takerOrMaker = null;
@@ -504,7 +519,7 @@ class bigone extends Exchange {
             'id' => $id,
             'timestamp' => $timestamp,
             'datetime' => $this->iso8601($timestamp),
-            'symbol' => $symbol,
+            'symbol' => $market['symbol'],
             'order' => $orderId,
             'type' => 'limit',
             'side' => $side,
@@ -516,7 +531,7 @@ class bigone extends Exchange {
         );
         $makerCurrencyCode = null;
         $takerCurrencyCode = null;
-        if (($market !== null) && ($takerOrMaker !== null)) {
+        if ($takerOrMaker !== null) {
             if ($side === 'buy') {
                 if ($takerOrMaker === 'maker') {
                     $makerCurrencyCode = $market['base'];
@@ -1035,7 +1050,7 @@ class bigone extends Exchange {
         $data = $this->safe_value($response, 'data', array());
         $dataLength = is_array($data) ? count($data) : 0;
         if ($dataLength < 1) {
-            throw new ExchangeError($this->id . 'fetchDepositAddress() returned empty $address response');
+            throw new ExchangeError($this->id . ' fetchDepositAddress() returned empty $address response');
         }
         $firstElement = $data[0];
         $address = $this->safe_string($firstElement, 'value');
@@ -1229,6 +1244,69 @@ class bigone extends Exchange {
         //
         $withdrawals = $this->safe_value($response, 'data', array());
         return $this->parse_transactions($withdrawals, $code, $since, $limit);
+    }
+
+    public function transfer($code, $amount, $fromAccount, $toAccount, $params = array ()) {
+        $this->load_markets();
+        $currency = $this->currency($code);
+        $accountsByType = $this->safe_value($this->options, 'accountsByType', array());
+        $fromId = $this->safe_string($accountsByType, $fromAccount, $fromAccount);
+        $toId = $this->safe_string($accountsByType, $toAccount, $toAccount);
+        $guid = $this->safe_string($params, 'guid', $this->uuid());
+        $request = array(
+            'symbol' => $currency['id'],
+            'amount' => $this->currency_to_precision($code, $amount),
+            'from' => $fromId,
+            'to' => $toId,
+            'guid' => $guid,
+            // 'type' => type, // NORMAL, MASTER_TO_SUB, SUB_TO_MASTER, SUB_INTERNAL, default is NORMAL
+            // 'sub_acccunt' => '', // when type is NORMAL, it should be empty, and when type is others it is required
+        );
+        $response = $this->privatePostTransfer (array_merge($request, $params));
+        //
+        //     {
+        //         "code" => 0,
+        //         "data" => null
+        //     }
+        //
+        $transfer = $this->parse_transfer($response, $currency);
+        $transferOptions = $this->safe_value($this->options, 'transfer', array());
+        $fillResponseFromRequest = $this->safe_value($transferOptions, 'fillResponseFromRequest', true);
+        if ($fillResponseFromRequest) {
+            $transfer['fromAccount'] = $fromAccount;
+            $transfer['toAccount'] = $toAccount;
+            $transfer['amount'] = $amount;
+            $transfer['id'] = $guid;
+        }
+        return $transfer;
+    }
+
+    public function parse_transfer($transfer, $currency = null) {
+        //
+        //     {
+        //         "code" => 0,
+        //         "data" => null
+        //     }
+        //
+        $code = $this->safe_number($transfer, 'code');
+        return array(
+            'info' => $transfer,
+            'id' => null,
+            'timestamp' => null,
+            'datetime' => null,
+            'currency' => $code,
+            'amount' => null,
+            'fromAccount' => null,
+            'toAccount' => null,
+            'status' => $this->parse_transfer_status($code),
+        );
+    }
+
+    public function parse_transfer_status($status) {
+        $statuses = array(
+            '0' => 'ok',
+        );
+        return $this->safe_string($statuses, $status, 'failed');
     }
 
     public function withdraw($code, $amount, $address, $tag = null, $params = array ()) {

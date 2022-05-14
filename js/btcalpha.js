@@ -28,16 +28,18 @@ module.exports = class btcalpha extends Exchange {
                 'createReduceOnlyOrder': false,
                 'fetchBalance': true,
                 'fetchBorrowRate': false,
+                'fetchBorrowRateHistories': false,
                 'fetchBorrowRateHistory': false,
                 'fetchBorrowRates': false,
                 'fetchBorrowRatesPerSymbol': false,
                 'fetchClosedOrders': true,
+                'fetchDeposit': false,
+                'fetchDeposits': true,
                 'fetchFundingHistory': false,
                 'fetchFundingRate': false,
                 'fetchFundingRateHistory': false,
                 'fetchFundingRates': false,
                 'fetchIndexOHLCV': false,
-                'fetchIsolatedPositions': false,
                 'fetchLeverage': false,
                 'fetchMarkets': true,
                 'fetchMarkOHLCV': false,
@@ -53,10 +55,18 @@ module.exports = class btcalpha extends Exchange {
                 'fetchPremiumIndexOHLCV': false,
                 'fetchTicker': undefined,
                 'fetchTrades': true,
+                'fetchTradingFee': false,
+                'fetchTradingFees': false,
+                'fetchTransfer': false,
+                'fetchTransfers': false,
+                'fetchWithdrawal': false,
+                'fetchWithdrawals': true,
                 'reduceMargin': false,
                 'setLeverage': false,
                 'setMarginMode': false,
                 'setPositionMode': false,
+                'transfer': false,
+                'withdraw': false,
             },
             'timeframes': {
                 '1m': '1',
@@ -123,6 +133,21 @@ module.exports = class btcalpha extends Exchange {
 
     async fetchMarkets (params = {}) {
         const response = await this.publicGetPairs (params);
+        //
+        //    [
+        //        {
+        //            "name": "1INCH_USDT",
+        //            "currency1": "1INCH",
+        //            "currency2": "USDT",
+        //            "price_precision": 4,
+        //            "amount_precision": 2,
+        //            "minimum_order_size": "0.01000000",
+        //            "maximum_order_size": "900000.00000000",
+        //            "minimum_order_value": "10.00000000",
+        //            "liquidity_type": 10
+        //        },
+        //    ]
+        //
         const result = [];
         for (let i = 0; i < response.length; i++) {
             const market = response[i];
@@ -235,13 +260,8 @@ module.exports = class btcalpha extends Exchange {
         //          "my_side": "buy"
         //      }
         //
-        let symbol = undefined;
-        if (market === undefined) {
-            market = this.safeValue (this.markets_by_id, trade['pair']);
-        }
-        if (market !== undefined) {
-            symbol = market['symbol'];
-        }
+        const marketId = this.safeString (trade, 'pair');
+        market = this.safeMarket (marketId, market, '_');
         const timestamp = this.safeTimestamp (trade, 'timestamp');
         const priceString = this.safeString (trade, 'price');
         const amountString = this.safeString (trade, 'amount');
@@ -252,7 +272,7 @@ module.exports = class btcalpha extends Exchange {
             'info': trade,
             'timestamp': timestamp,
             'datetime': this.iso8601 (timestamp),
-            'symbol': symbol,
+            'symbol': market['symbol'],
             'order': id,
             'type': 'limit',
             'side': side,
@@ -277,6 +297,102 @@ module.exports = class btcalpha extends Exchange {
         }
         const trades = await this.publicGetExchanges (this.extend (request, params));
         return this.parseTrades (trades, market, since, limit);
+    }
+
+    async fetchDeposits (code = undefined, since = undefined, limit = undefined, params = {}) {
+        await this.loadMarkets ();
+        const response = await this.privateGetDeposits (params);
+        //
+        //     [
+        //         {
+        //             "timestamp": 1485363039.18359,
+        //             "id": 317,
+        //             "currency": "BTC",
+        //             "amount": 530.00000000
+        //         }
+        //     ]
+        //
+        return this.parseTransactions (response, code, since, limit, { 'type': 'deposit' });
+    }
+
+    async fetchWithdrawals (code = undefined, since = undefined, limit = undefined, params = {}) {
+        await this.loadMarkets ();
+        let currency = undefined;
+        const request = {};
+        if (code !== undefined) {
+            currency = this.currency (code);
+            request['currency_id'] = currency['id'];
+        }
+        const response = await this.privateGetWithdraws (this.extend (request, params));
+        //
+        //     [
+        //         {
+        //             "id": 403,
+        //             "timestamp": 1485363466.868539,
+        //             "currency": "BTC",
+        //             "amount": 0.53000000,
+        //             "status": 20
+        //         }
+        //     ]
+        //
+        return this.parseTransactions (response, code, since, limit, { 'type': 'withdrawal' });
+    }
+
+    parseTransaction (transaction, currency = undefined) {
+        //
+        //  deposit
+        //      {
+        //          "timestamp": 1485363039.18359,
+        //          "id": 317,
+        //          "currency": "BTC",
+        //          "amount": 530.00000000
+        //      }
+        //
+        //  withdrawal
+        //      {
+        //          "id": 403,
+        //          "timestamp": 1485363466.868539,
+        //          "currency": "BTC",
+        //          "amount": 0.53000000,
+        //          "status": 20
+        //      }
+        //
+        let timestamp = this.safeString (transaction, 'timestamp');
+        timestamp = Precise.stringMul (timestamp, '1000');
+        const currencyId = this.safeString (transaction, 'currency');
+        const statusId = this.safeString (transaction, 'status');
+        return {
+            'id': this.safeString (transaction, 'id'),
+            'info': transaction,
+            'timestamp': this.parseNumber (timestamp),
+            'datetime': this.iso8601 (timestamp),
+            'network': undefined,
+            'address': undefined,
+            'addressTo': undefined,
+            'addressFrom': undefined,
+            'tag': undefined,
+            'tagTo': undefined,
+            'tagFrom': undefined,
+            'currency': this.safeCurrencyCode (currencyId, currency),
+            'amount': this.safeNumber (transaction, 'amount'),
+            'txid': undefined,
+            'type': undefined,
+            'status': this.parseTransactionStatus (statusId),
+            'comment': undefined,
+            'fee': undefined,
+            'updated': undefined,
+        };
+    }
+
+    parseTransactionStatus (status) {
+        const statuses = {
+            '10': 'pending',  // New
+            '20': 'pending',  // Verified, waiting for approving
+            '30': 'ok',       // Approved by moderator
+            '40': 'failed',   // Refused by moderator. See your email for more details
+            '50': 'canceled', // Cancelled by user
+        };
+        return this.safeString (statuses, status, status);
     }
 
     parseOHLCV (ohlcv, market = undefined) {

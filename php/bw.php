@@ -21,8 +21,8 @@ class bw extends Exchange {
             'has' => array(
                 'CORS' => null,
                 'spot' => true,
-                'margin' => null,
-                'swap' => null,
+                'margin' => null, // has but unimplemented
+                'swap' => null, // has but unimplemented
                 'future' => null,
                 'option' => null,
                 'cancelAllOrders' => null,
@@ -32,7 +32,6 @@ class bw extends Exchange {
                 'createLimitOrder' => true,
                 'createMarketOrder' => null,
                 'createOrder' => true,
-                'deposit' => null,
                 'editOrder' => null,
                 'fetchBalance' => true,
                 'fetchBidsAsks' => null,
@@ -40,7 +39,6 @@ class bw extends Exchange {
                 'fetchCurrencies' => true,
                 'fetchDepositAddress' => true,
                 'fetchDeposits' => true,
-                'fetchFundingFees' => null,
                 'fetchL2OrderBook' => null,
                 'fetchLedger' => null,
                 'fetchMarkets' => true,
@@ -54,9 +52,10 @@ class bw extends Exchange {
                 'fetchTicker' => true,
                 'fetchTickers' => true,
                 'fetchTrades' => true,
-                'fetchTradingFee' => null,
-                'fetchTradingFees' => null,
+                'fetchTradingFee' => false,
+                'fetchTradingFees' => true,
                 'fetchTradingLimits' => null,
+                'fetchTransactionFees' => null,
                 'fetchTransactions' => null,
                 'fetchWithdrawals' => true,
                 'withdraw' => null,
@@ -84,7 +83,7 @@ class bw extends Exchange {
             ),
             'fees' => array(
                 'trading' => array(
-                    'tierBased' => false,
+                    'tierBased' => true,
                     'percentage' => true,
                     'taker' => $this->parse_number('0.002'),
                     'maker' => $this->parse_number('0.002'),
@@ -143,36 +142,41 @@ class bw extends Exchange {
     public function fetch_markets($params = array ()) {
         $response = $this->publicGetExchangeConfigControllerWebsiteMarketcontrollerGetByWebId ($params);
         //
-        //     {
-        //         "datas" => array(
-        //             {
-        //                 "orderNum":null,
-        //                 "leverEnable":true,
-        //                 "leverMultiple":10,
-        //                 "marketId":"291",
-        //                 "webId":"102",
-        //                 "serverId":"entrust_bw_23",
-        //                 "name":"eos_usdt",
-        //                 "leverType":"2",
-        //                 "buyerCurrencyId":"11",
-        //                 "sellerCurrencyId":"7",
-        //                 "amountDecimal":4,
-        //                 "priceDecimal":3,
-        //                 "minAmount":"0.0100000000",
-        //                 "state":1,
-        //                 "openTime":1572537600000,
-        //                 "defaultFee":"0.00200000",
-        //                 "createUid":null,
-        //                 "createTime":0,
-        //                 "modifyUid":null,
-        //                 "modifyTime":1574160113735,
-        //                 "combineMarketId":"",
-        //                 "isCombine":0,
-        //                 "isMining":0
-        //             }
-        //         ),
-        //         "resMsg" => array( "message":"success !", "method":null, "code":"1" )
-        //     }
+        //    {
+        //        resMsg => array(
+        //            method => null,
+        //            code => '1',
+        //            message => 'success !'
+        //        ),
+        //        datas => array(
+        //            array(
+        //                leverMultiple => '10',
+        //                amountDecimal => '4',
+        //                minAmount => '0.0100000000',
+        //                modifyUid => null,
+        //                buyerCurrencyId => '11',
+        //                isCombine => '0',
+        //                priceDecimal => '3',
+        //                combineMarketId => '',
+        //                openPrice => '0',
+        //                leverEnable => true,
+        //                marketId => '291',
+        //                serverId => 'entrust_bw_2',
+        //                isMining => '0',
+        //                webId => '102',
+        //                modifyTime => '1581595375498',
+        //                defaultFee => '0.00200000',
+        //                sellerCurrencyId => '7',
+        //                createTime => '0',
+        //                $state => '1',
+        //                $name => 'eos_usdt',
+        //                leverType => '2',
+        //                createUid => null,
+        //                orderNum => null,
+        //                openTime => '1574956800000'
+        //            ),
+        //        )
+        //    }
         //
         $markets = $this->safe_value($response, 'datas', array());
         $result = array();
@@ -186,60 +190,60 @@ class bw extends Exchange {
             $quote = $this->safe_currency_code($quote);
             $baseId = $this->safe_string($market, 'sellerCurrencyId');
             $quoteId = $this->safe_string($market, 'buyerCurrencyId');
-            $baseNumericId = intval($baseId);
-            $quoteNumericId = intval($quoteId);
-            $symbol = $base . '/' . $quote;
             $state = $this->safe_integer($market, 'state');
-            $active = ($state === 1);
             $fee = $this->safe_number($market, 'defaultFee');
             $result[] = array(
                 'id' => $id,
                 'numericId' => $numericId,
-                'symbol' => $symbol,
+                'symbol' => $base . '/' . $quote,
                 'base' => $base,
                 'quote' => $quote,
+                'settle' => null,
                 'baseId' => $baseId,
                 'quoteId' => $quoteId,
-                'baseNumericId' => $baseNumericId,
-                'quoteNumericId' => $quoteNumericId,
+                'settleId' => null,
+                'baseNumericId' => intval($baseId),
+                'quoteNumericId' => intval($quoteId),
                 'type' => 'spot',
                 'spot' => true,
                 'margin' => false,
-                'future' => false,
                 'swap' => false,
+                'future' => false,
                 'option' => false,
-                'optionType' => null,
-                'strike' => null,
+                'active' => ($state === 1),
+                'contract' => false,
                 'linear' => null,
                 'inverse' => null,
-                'contract' => false,
+                'taker' => $fee,
+                'maker' => $fee,
                 'contractSize' => null,
-                'settle' => null,
-                'settleId' => null,
                 'expiry' => null,
                 'expiryDatetime' => null,
-                'active' => $active,
-                'maker' => $fee,
-                'taker' => $fee,
-                'info' => $market,
+                'strike' => null,
+                'optionType' => null,
                 'precision' => array(
                     'amount' => $this->safe_integer($market, 'amountDecimal'),
                     'price' => $this->safe_integer($market, 'priceDecimal'),
                 ),
                 'limits' => array(
+                    'leverage' => array(
+                        'min' => null,
+                        'max' => null,
+                    ),
                     'amount' => array(
                         'min' => $this->safe_number($market, 'minAmount'),
                         'max' => null,
                     ),
                     'price' => array(
-                        'min' => 0,
+                        'min' => $this->parse_number('0'),
                         'max' => null,
                     ),
                     'cost' => array(
-                        'min' => 0,
+                        'min' => $this->parse_number('0'),
                         'max' => null,
                     ),
                 ),
+                'info' => $market,
             );
         }
         return $result;
@@ -501,28 +505,21 @@ class bw extends Exchange {
         $priceString = $this->safe_string($trade, 5);
         $amountString = $this->safe_string($trade, 6);
         $marketId = $this->safe_string($trade, 1);
-        $symbol = null;
+        $delimiter = null;
         if ($marketId !== null) {
-            if (is_array($this->markets_by_id) && array_key_exists($marketId, $this->markets_by_id)) {
-                $market = $this->markets_by_id[$marketId];
-            } else {
-                $marketName = $this->safe_string($trade, 3);
-                list($baseId, $quoteId) = explode('_', $marketName);
-                $base = $this->safe_currency_code($baseId);
-                $quote = $this->safe_currency_code($quoteId);
-                $symbol = $base . '/' . $quote;
+            if (!(is_array($this->markets_by_id) && array_key_exists($marketId, $this->markets_by_id))) {
+                $delimiter = '_';
+                $marketId = $this->safe_string($trade, 3);
             }
         }
-        if (($symbol === null) && ($market !== null)) {
-            $symbol = $market['symbol'];
-        }
+        $market = $this->safe_market($marketId, $market, $delimiter);
         $sideString = $this->safe_string($trade, 4);
         $side = ($sideString === 'ask') ? 'sell' : 'buy';
         return $this->safe_trade(array(
             'id' => null,
             'timestamp' => $timestamp,
             'datetime' => $this->iso8601($timestamp),
-            'symbol' => $symbol,
+            'symbol' => $market['symbol'],
             'order' => null,
             'type' => 'limit',
             'side' => $side,
@@ -563,6 +560,62 @@ class bw extends Exchange {
         //
         $trades = $this->safe_value($response, 'datas', array());
         return $this->parse_trades($trades, $market, $since, $limit);
+    }
+
+    public function fetch_trading_fees($params = array ()) {
+        $this->load_markets();
+        $response = $this->publicGetExchangeConfigControllerWebsiteMarketcontrollerGetByWebId ();
+        //
+        //    {
+        //        resMsg => array( method => null, code => '1', message => 'success !' ),
+        //        $datas => array(
+        //            array(
+        //                leverMultiple => '10',
+        //                amountDecimal => '4',
+        //                minAmount => '0.0100000000',
+        //                modifyUid => null,
+        //                buyerCurrencyId => '11',
+        //                isCombine => '0',
+        //                priceDecimal => '3',
+        //                combineMarketId => '',
+        //                openPrice => '0',
+        //                leverEnable => true,
+        //                $marketId => '291',
+        //                serverId => 'entrust_bw_2',
+        //                isMining => '0',
+        //                webId => '102',
+        //                modifyTime => '1581595375498',
+        //                defaultFee => '0.00200000',
+        //                sellerCurrencyId => '7',
+        //                createTime => '0',
+        //                state => '1',
+        //                name => 'eos_usdt',
+        //                leverType => '2',
+        //                createUid => null,
+        //                orderNum => null,
+        //                openTime => '1574956800000'
+        //            ),
+        //            ...
+        //        )
+        //    }
+        //
+        $datas = $this->safe_value($response, 'datas', array());
+        $result = array();
+        for ($i = 0; $i < count($datas); $i++) {
+            $data = $datas[$i];
+            $marketId = $this->safe_string($data, 'name');
+            $symbol = $this->safe_symbol($marketId, null, '_');
+            $fee = $this->safe_number($data, 'defaultFee');
+            $result[$symbol] = array(
+                'info' => $data,
+                'symbol' => $symbol,
+                'maker' => $fee,
+                'taker' => $fee,
+                'percentage' => true,
+                'tierBased' => true,
+            );
+        }
+        return $result;
     }
 
     public function parse_ohlcv($ohlcv, $market = null) {
@@ -661,7 +714,7 @@ class bw extends Exchange {
 
     public function create_order($symbol, $type, $side, $amount, $price = null, $params = array ()) {
         if ($price === null) {
-            throw new ExchangeError($this->id . ' allows limit orders only');
+            throw new ExchangeError($this->id . ' createOrder() allows limit orders only');
         }
         $this->load_markets();
         $market = $this->market($symbol);

@@ -18,7 +18,7 @@ module.exports = class idex extends Exchange {
             // public data endpoints 5 requests a second => 1000ms / 5 = 200ms between requests roughly (without Authentication)
             // all endpoints 10 requests a second => (1000ms / rateLimit) / 10 => 1 / 2 (with Authentication)
             'rateLimit': 200,
-            'version': 'v2',
+            'version': 'v3',
             'pro': true,
             'certified': true,
             'requiresWeb3': true,
@@ -33,6 +33,9 @@ module.exports = class idex extends Exchange {
                 'cancelOrder': true,
                 'createOrder': true,
                 'createReduceOnlyOrder': false,
+                'createStopLimitOrder': true,
+                'createStopMarketOrder': true,
+                'createStopOrder': true,
                 'fetchBalance': true,
                 'fetchBorrowRate': false,
                 'fetchBorrowRateHistories': false,
@@ -47,8 +50,8 @@ module.exports = class idex extends Exchange {
                 'fetchFundingRateHistory': false,
                 'fetchFundingRates': false,
                 'fetchIndexOHLCV': false,
-                'fetchIsolatedPositions': false,
                 'fetchLeverage': false,
+                'fetchLeverageTiers': false,
                 'fetchMarkets': true,
                 'fetchMarkOHLCV': false,
                 'fetchMyTrades': true,
@@ -64,12 +67,15 @@ module.exports = class idex extends Exchange {
                 'fetchTicker': true,
                 'fetchTickers': true,
                 'fetchTrades': true,
+                'fetchTradingFee': false,
+                'fetchTradingFees': true,
                 'fetchTransactions': undefined,
                 'fetchWithdrawals': true,
                 'reduceMargin': false,
                 'setLeverage': false,
                 'setMarginMode': false,
                 'setPositionMode': false,
+                'transfer': false,
                 'withdraw': true,
             },
             'timeframes': {
@@ -234,8 +240,8 @@ module.exports = class idex extends Exchange {
                 'strike': undefined,
                 'optionType': undefined,
                 'precision': {
-                    'price': parseInt (quotePrecisionString),
                     'amount': parseInt (basePrecisionString),
+                    'price': parseInt (quotePrecisionString),
                 },
                 'limits': {
                     'leverage': {
@@ -517,6 +523,45 @@ module.exports = class idex extends Exchange {
         }, market);
     }
 
+    async fetchTradingFees (params = {}) {
+        this.checkRequiredCredentials ();
+        await this.loadMarkets ();
+        const nonce = this.uuidv1 ();
+        const request = {
+            'nonce': nonce,
+        };
+        let response = undefined;
+        response = await this.privateGetUser (this.extend (request, params));
+        //
+        //     {
+        //         depositEnabled: true,
+        //         orderEnabled: true,
+        //         cancelEnabled: true,
+        //         withdrawEnabled: true,
+        //         totalPortfolioValueUsd: '0.00',
+        //         makerFeeRate: '0.0000',
+        //         takerFeeRate: '0.0025',
+        //         takerIdexFeeRate: '0.0005',
+        //         takerLiquidityProviderFeeRate: '0.0020'
+        //     }
+        //
+        const maker = this.safeNumber (response, 'makerFeeRate');
+        const taker = this.safeNumber (response, 'takerFeeRate');
+        const result = {};
+        for (let i = 0; i < this.symbols.length; i++) {
+            const symbol = this.symbols[i];
+            result[symbol] = {
+                'info': response,
+                'symbol': symbol,
+                'maker': maker,
+                'taker': taker,
+                'percentage': true,
+                'tierBased': false,
+            };
+        }
+        return result;
+    }
+
     async fetchOrderBook (symbol, limit = undefined, params = {}) {
         await this.loadMarkets ();
         const market = this.market (symbol);
@@ -651,7 +696,7 @@ module.exports = class idex extends Exchange {
         // ]
         const extendedRequest = this.extend (request, params);
         if (extendedRequest['wallet'] === undefined) {
-            throw new BadRequest (this.id + ' wallet is undefined, set this.walletAddress or "address" in params');
+            throw new BadRequest (this.id + ' fetchBalance() wallet is undefined, set this.walletAddress or "address" in params');
         }
         let response = undefined;
         try {
@@ -708,7 +753,7 @@ module.exports = class idex extends Exchange {
         // ]
         const extendedRequest = this.extend (request, params);
         if (extendedRequest['wallet'] === undefined) {
-            throw new BadRequest (this.id + ' walletAddress is undefined, set this.walletAddress or "address" in params');
+            throw new BadRequest (this.id + ' fetchMyTrades() walletAddress is undefined, set this.walletAddress or "address" in params');
         }
         let response = undefined;
         try {
@@ -959,7 +1004,7 @@ module.exports = class idex extends Exchange {
         let stopPriceString = undefined;
         if ((type === 'stopLossLimit') || (type === 'takeProfitLimit') || ('stopPrice' in params)) {
             if (!('stopPrice' in params)) {
-                throw new BadRequest (this.id + ' stopPrice is a required parameter for ' + type + 'orders');
+                throw new BadRequest (this.id + ' createOrder() stopPrice is a required parameter for ' + type + 'orders');
             }
             stopPriceString = this.priceToPrecision (symbol, params['stopPrice']);
         }
@@ -984,7 +1029,7 @@ module.exports = class idex extends Exchange {
         let amountEnum = 0; // base quantity
         if ('quoteOrderQuantity' in params) {
             if (type !== 'market') {
-                throw new NotSupported (this.id + ' quoteOrderQuantity is not supported for ' + type + ' orders, only supported for market orders');
+                throw new NotSupported (this.id + ' createOrder() quoteOrderQuantity is not supported for ' + type + ' orders, only supported for market orders');
             }
             amountEnum = 1;
             amount = this.safeNumber (params, 'quoteOrderQuantity');
@@ -1152,22 +1197,20 @@ module.exports = class idex extends Exchange {
             },
             'signature': signature,
         };
-        // {
-        //   withdrawalId: 'a61dcff0-ec4d-11ea-8b83-c78a6ecb3180',
-        //   asset: 'ETH',
-        //   assetContractAddress: '0x0000000000000000000000000000000000000000',
-        //   quantity: '0.20000000',
-        //   time: 1598962883190,
-        //   fee: '0.00024000',
-        //   txStatus: 'pending',
-        //   txId: null
-        // }
         const response = await this.privatePostWithdrawals (request);
-        const id = this.safeString (response, 'withdrawalId');
-        return {
-            'info': response,
-            'id': id,
-        };
+        //
+        //     {
+        //         withdrawalId: 'a61dcff0-ec4d-11ea-8b83-c78a6ecb3180',
+        //         asset: 'ETH',
+        //         assetContractAddress: '0x0000000000000000000000000000000000000000',
+        //         quantity: '0.20000000',
+        //         time: 1598962883190,
+        //         fee: '0.00024000',
+        //         txStatus: 'pending',
+        //         txId: null
+        //     }
+        //
+        return this.parseTransaction (response, currency);
     }
 
     async cancelOrder (id, symbol = undefined, params = {}) {
@@ -1269,33 +1312,52 @@ module.exports = class idex extends Exchange {
     }
 
     parseTransaction (transaction, currency = undefined) {
+        //
         // fetchDeposits
-        // {
-        //   depositId: 'e9970cc0-eb6b-11ea-9e89-09a5ebc1f98f',
-        //   asset: 'ETH',
-        //   quantity: '1.00000000',
-        //   txId: '0xcd4aac3171d7131cc9e795568c67938675185ac17641553ef54c8a7c294c8142',
-        //   txTime: 1598865853000,
-        //   confirmationTime: 1598865930231
-        // }
+        //
+        //     {
+        //         depositId: 'e9970cc0-eb6b-11ea-9e89-09a5ebc1f98f',
+        //         asset: 'ETH',
+        //         quantity: '1.00000000',
+        //         txId: '0xcd4aac3171d7131cc9e795568c67938675185ac17641553ef54c8a7c294c8142',
+        //         txTime: 1598865853000,
+        //         confirmationTime: 1598865930231
+        //     }
+        //
         // fetchWithdrwalas
-        // {
-        //   withdrawalId: 'a62d8760-ec4d-11ea-9fa6-47904c19499b',
-        //   asset: 'ETH',
-        //   assetContractAddress: '0x0000000000000000000000000000000000000000',
-        //   quantity: '0.20000000',
-        //   time: 1598962883288,
-        //   fee: '0.00024000',
-        //   txId: '0x305e9cdbaa85ad029f50578d13d31d777c085de573ed5334d95c19116d8c03ce',
-        //   txStatus: 'mined'
-        //  }
+        //
+        //     {
+        //         withdrawalId: 'a62d8760-ec4d-11ea-9fa6-47904c19499b',
+        //         asset: 'ETH',
+        //         assetContractAddress: '0x0000000000000000000000000000000000000000',
+        //         quantity: '0.20000000',
+        //         time: 1598962883288,
+        //         fee: '0.00024000',
+        //         txId: '0x305e9cdbaa85ad029f50578d13d31d777c085de573ed5334d95c19116d8c03ce',
+        //         txStatus: 'mined'
+        //     }
+        //
+        // withdraw
+        //
+        //     {
+        //         withdrawalId: 'a61dcff0-ec4d-11ea-8b83-c78a6ecb3180',
+        //         asset: 'ETH',
+        //         assetContractAddress: '0x0000000000000000000000000000000000000000',
+        //         quantity: '0.20000000',
+        //         time: 1598962883190,
+        //         fee: '0.00024000',
+        //         txStatus: 'pending',
+        //         txId: null
+        //     }
+        //
         let type = undefined;
         if ('depositId' in transaction) {
             type = 'deposit';
-        } else if ('withdrawalId' in transaction) {
+        } else if (('withdrawId' in transaction) || ('withdrawalId' in transaction)) {
             type = 'withdrawal';
         }
-        const id = this.safeString2 (transaction, 'depositId', 'withdrawId');
+        let id = this.safeString2 (transaction, 'depositId', 'withdrawId');
+        id = this.safeString (transaction, 'withdrawalId', id);
         const code = this.safeCurrencyCode (this.safeString (transaction, 'asset'), currency);
         const amount = this.safeNumber (transaction, 'quantity');
         const txid = this.safeString (transaction, 'txId');

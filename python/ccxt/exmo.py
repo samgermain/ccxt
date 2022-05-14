@@ -4,13 +4,6 @@
 # https://github.com/ccxt/ccxt/blob/master/CONTRIBUTING.md#how-to-contribute-code
 
 from ccxt.base.exchange import Exchange
-
-# -----------------------------------------------------------------------------
-
-try:
-    basestring  # Python 3
-except NameError:
-    basestring = str  # Python 2
 import hashlib
 from ccxt.base.errors import ExchangeError
 from ccxt.base.errors import AuthenticationError
@@ -38,17 +31,25 @@ class exmo(Exchange):
             'has': {
                 'CORS': None,
                 'spot': True,
-                'margin': None,
-                'swap': None,
-                'future': None,
-                'option': None,
+                'margin': None,  # has but unimplemented
+                'swap': False,
+                'future': False,
+                'option': False,
                 'cancelOrder': True,
                 'createOrder': True,
+                'createStopLimitOrder': True,
+                'createStopMarketOrder': True,
+                'createStopOrder': True,
                 'fetchBalance': True,
                 'fetchCurrencies': True,
                 'fetchDepositAddress': True,
-                'fetchFundingFees': True,
+                'fetchFundingHistory': False,
+                'fetchFundingRate': False,
+                'fetchFundingRateHistory': False,
+                'fetchFundingRates': False,
+                'fetchIndexOHLCV': False,
                 'fetchMarkets': True,
+                'fetchMarkOHLCV': False,
                 'fetchMyTrades': True,
                 'fetchOHLCV': True,
                 'fetchOpenOrders': True,
@@ -56,12 +57,18 @@ class exmo(Exchange):
                 'fetchOrderBook': True,
                 'fetchOrderBooks': True,
                 'fetchOrderTrades': True,
+                'fetchPremiumIndexOHLCV': False,
                 'fetchTicker': True,
                 'fetchTickers': True,
                 'fetchTrades': True,
+                'fetchTradingFee': False,
                 'fetchTradingFees': True,
+                'fetchTransactionFees': True,
                 'fetchTransactions': True,
+                'fetchTransfer': False,
+                'fetchTransfers': False,
                 'fetchWithdrawals': True,
+                'transfer': False,
                 'withdraw': True,
             },
             'timeframes': {
@@ -89,7 +96,6 @@ class exmo(Exchange):
                 'referral': 'https://exmo.me/?ref=131685',
                 'doc': [
                     'https://exmo.me/en/api_doc?ref=131685',
-                    'https://github.com/exmo-dev/exmo_api_lib/tree/master/nodejs',
                 ],
                 'fees': 'https://exmo.com/en/docs/fees',
             },
@@ -161,14 +167,14 @@ class exmo(Exchange):
             'fees': {
                 'trading': {
                     'feeSide': 'get',
-                    'tierBased': False,
+                    'tierBased': True,
                     'percentage': True,
-                    'maker': self.parse_number('0.002'),
-                    'taker': self.parse_number('0.002'),
+                    'maker': self.parse_number('0.004'),
+                    'taker': self.parse_number('0.004'),
                 },
                 'funding': {
                     'tierBased': False,
-                    'percentage': False,  # fixed funding fees for crypto, see fetchFundingFees below
+                    'percentage': False,  # fixed funding fees for crypto, see fetchTransactionFees below
                 },
             },
             'options': {
@@ -176,6 +182,12 @@ class exmo(Exchange):
                     'ETH': 'ERC20',
                     'TRX': 'TRC20',
                 },
+                'fetchTradingFees': {
+                    'method': 'fetchPrivateTradingFees',  # or 'fetchPublicTradingFees'
+                },
+            },
+            'commonCurrencies': {
+                'GMT': 'GMT Token',
             },
             'exceptions': {
                 'exact': {
@@ -205,10 +217,101 @@ class exmo(Exchange):
         })
 
     def fetch_trading_fees(self, params={}):
-        return {
-            'maker': self.fees['trading']['maker'],
-            'taker': self.fees['trading']['taker'],
-        }
+        method = self.safe_string(params, 'method')
+        params = self.omit(params, 'method')
+        if method is None:
+            options = self.safe_value(self.options, 'fetchTradingFees', {})
+            method = self.safe_string(options, 'method', 'fetchPrivateTradingFees')
+        return getattr(self, method)(params)
+
+    def fetch_private_trading_fees(self, params={}):
+        self.load_markets()
+        response = self.privatePostMarginPairList(params)
+        #
+        #     {
+        #         pairs: [{
+        #             name: 'EXM_USD',
+        #             buy_price: '0.02728391',
+        #             sell_price: '0.0276',
+        #             last_trade_price: '0.0276',
+        #             ticker_updated: '1646956050056696046',
+        #             is_fair_price: True,
+        #             max_price_precision: '8',
+        #             min_order_quantity: '1',
+        #             max_order_quantity: '50000',
+        #             min_order_price: '0.00000001',
+        #             max_order_price: '1000',
+        #             max_position_quantity: '50000',
+        #             trade_taker_fee: '0.05',
+        #             trade_maker_fee: '0',
+        #             liquidation_fee: '0.5',
+        #             max_leverage: '3',
+        #             default_leverage: '3',
+        #             liquidation_level: '5',
+        #             margin_call_level: '7.5',
+        #             position: '1',
+        #             updated: '1638976144797807397'
+        #         }
+        #         ...
+        #         ]
+        #     }
+        #
+        pairs = self.safe_value(response, 'pairs', [])
+        result = {}
+        for i in range(0, len(pairs)):
+            pair = pairs[i]
+            marketId = self.safe_string(pair, 'name')
+            symbol = self.safe_symbol(marketId, None, '_')
+            makerString = self.safe_string(pair, 'trade_maker_fee')
+            takerString = self.safe_string(pair, 'trade_taker_fee')
+            maker = self.parse_number(Precise.string_div(makerString, '100'))
+            taker = self.parse_number(Precise.string_div(takerString, '100'))
+            result[symbol] = {
+                'info': pair,
+                'symbol': symbol,
+                'maker': maker,
+                'taker': taker,
+                'percentage': True,
+                'tierBased': True,
+            }
+        return result
+
+    def fetch_public_trading_fees(self, params={}):
+        self.load_markets()
+        response = self.publicGetPairSettings(params)
+        #
+        #     {
+        #         BTC_USD: {
+        #             min_quantity: '0.00002',
+        #             max_quantity: '1000',
+        #             min_price: '1',
+        #             max_price: '150000',
+        #             max_amount: '500000',
+        #             min_amount: '1',
+        #             price_precision: '2',
+        #             commission_taker_percent: '0.3',
+        #             commission_maker_percent: '0.3'
+        #         },
+        #     }
+        #
+        result = {}
+        for i in range(0, len(self.symbols)):
+            symbol = self.symbols[i]
+            market = self.market(symbol)
+            fee = self.safe_value(response, market['id'], {})
+            makerString = self.safe_string(fee, 'commission_maker_percent')
+            takerString = self.safe_string(fee, 'commission_taker_percent')
+            maker = self.parse_number(Precise.string_div(makerString, '100'))
+            taker = self.parse_number(Precise.string_div(takerString, '100'))
+            result[symbol] = {
+                'info': fee,
+                'symbol': symbol,
+                'maker': maker,
+                'taker': taker,
+                'percentage': True,
+                'tierBased': True,
+            }
+        return result
 
     def parse_fixed_float_value(self, input):
         if (input is None) or (input == '-'):
@@ -220,10 +323,10 @@ class exmo(Exchange):
         value = parts[0].replace('%', '')
         result = float(value)
         if (result > 0) and isPercentage:
-            raise ExchangeError(self.id + ' parseFixedFloatValue detected an unsupported non-zero percentage-based fee ' + input)
+            raise ExchangeError(self.id + ' parseFixedFloatValue() detected an unsupported non-zero percentage-based fee ' + input)
         return result
 
-    def fetch_funding_fees(self, params={}):
+    def fetch_transaction_fees(self, codes=None, params={}):
         self.load_markets()
         currencyList = self.publicGetCurrencyListExtended(params)
         #
@@ -432,35 +535,41 @@ class exmo(Exchange):
             quote = self.safe_currency_code(quoteId)
             takerString = self.safe_string(market, 'commission_taker_percent')
             makerString = self.safe_string(market, 'commission_maker_percent')
-            taker = self.parse_number(Precise.string_div(takerString, '100'))
-            maker = self.parse_number(Precise.string_div(makerString, '100'))
             result.append({
                 'id': id,
                 'symbol': symbol,
                 'base': base,
                 'quote': quote,
+                'settle': None,
                 'baseId': baseId,
                 'quoteId': quoteId,
+                'settleId': None,
                 'type': 'spot',
                 'spot': True,
                 'margin': False,
-                'future': False,
                 'swap': False,
+                'future': False,
                 'option': False,
-                'optionType': None,
-                'strike': None,
+                'active': True,
+                'contract': False,
                 'linear': None,
                 'inverse': None,
-                'contract': False,
+                'taker': self.parse_number(Precise.string_div(takerString, '100')),
+                'maker': self.parse_number(Precise.string_div(makerString, '100')),
                 'contractSize': None,
-                'settle': None,
-                'settleId': None,
                 'expiry': None,
                 'expiryDatetime': None,
-                'active': True,
-                'taker': taker,
-                'maker': maker,
+                'strike': None,
+                'optionType': None,
+                'precision': {
+                    'amount': int('8'),
+                    'price': self.safe_integer(market, 'price_precision'),
+                },
                 'limits': {
+                    'leverage': {
+                        'min': None,
+                        'max': None,
+                    },
                     'amount': {
                         'min': self.safe_number(market, 'min_quantity'),
                         'max': self.safe_number(market, 'max_quantity'),
@@ -473,10 +582,6 @@ class exmo(Exchange):
                         'min': self.safe_number(market, 'min_amount'),
                         'max': self.safe_number(market, 'max_amount'),
                     },
-                },
-                'precision': {
-                    'amount': 8,
-                    'price': self.safe_integer(market, 'price_precision'),
                 },
                 'info': market,
             })
@@ -498,7 +603,7 @@ class exmo(Exchange):
                 raise ArgumentsRequired(self.id + ' fetchOHLCV() requires a since argument or a limit argument')
             else:
                 if limit > maxLimit:
-                    raise BadRequest(self.id + ' fetchOHLCV will serve ' + str(maxLimit) + ' candles at most')
+                    raise BadRequest(self.id + ' fetchOHLCV() will serve ' + str(maxLimit) + ' candles at most')
                 request['from'] = int(now / 1000) - limit * duration - 1
                 request['to'] = int(now / 1000)
         else:
@@ -507,7 +612,7 @@ class exmo(Exchange):
                 request['to'] = int(now / 1000)
             else:
                 if limit > maxLimit:
-                    raise BadRequest(self.id + ' fetchOHLCV will serve ' + str(maxLimit) + ' candles at most')
+                    raise BadRequest(self.id + ' fetchOHLCV() will serve ' + str(maxLimit) + ' candles at most')
                 to = self.sum(since, limit * duration * 1000)
                 request['to'] = int(to / 1000)
         response = self.publicGetCandlesHistory(self.extend(request, params))
@@ -596,7 +701,7 @@ class exmo(Exchange):
             # max URL length is 2083 symbols, including http schema, hostname, tld, etc...
             if len(ids) > 2048:
                 numIds = len(self.ids)
-                raise ExchangeError(self.id + ' has ' + str(numIds) + ' symbols exceeding max URL length, you are required to specify a list of symbols in the first argument to fetchOrderBooks')
+                raise ExchangeError(self.id + ' fetchOrderBooks() has ' + str(numIds) + ' symbols exceeding max URL length, you are required to specify a list of symbols in the first argument to fetchOrderBooks')
         else:
             ids = self.market_ids(symbols)
             ids = ','.join(ids)
@@ -872,7 +977,7 @@ class exmo(Exchange):
         if clientOrderId is not None:
             clientOrderId = self.safe_integer_2(params, 'client_id', 'clientOrderId')
             if clientOrderId is None:
-                raise BadRequest(self.id + ' createOrder client order id must be an integer / numeric literal')
+                raise BadRequest(self.id + ' createOrder() client order id must be an integer / numeric literal')
             else:
                 request['client_id'] = clientOrderId
             params = self.omit(params, ['client_id', 'clientOrderId'])
@@ -984,6 +1089,9 @@ class exmo(Exchange):
 
     def fetch_open_orders(self, symbol=None, since=None, limit=None, params={}):
         self.load_markets()
+        if symbol is not None:
+            market = self.market(symbol)
+            symbol = market['symbol']
         response = self.privatePostUserOpenOrders(params)
         marketIds = list(response.keys())
         orders = []
@@ -1173,10 +1281,7 @@ class exmo(Exchange):
             request['transport'] = network
             params = self.omit(params, 'network')
         response = self.privatePostWithdrawCrypt(self.extend(request, params))
-        return {
-            'info': response,
-            'id': response['task_id'],
-        }
+        return self.parse_transaction(response, currency)
 
     def parse_transaction_status(self, status):
         statuses = {
@@ -1232,7 +1337,7 @@ class exmo(Exchange):
         #             "error": ""
         #          },
         #
-        id = self.safe_string(transaction, 'order_id')
+        id = self.safe_string_2(transaction, 'order_id', 'task_id')
         timestamp = self.safe_timestamp_2(transaction, 'dt', 'created')
         updated = self.safe_timestamp(transaction, 'updated')
         amount = self.safe_number(transaction, 'amount')
@@ -1417,7 +1522,7 @@ class exmo(Exchange):
             #     {"s":"error","errmsg":"strconv.ParseInt: parsing \"\": invalid syntax"}
             #
             success = self.safe_value(response, 'result', False)
-            if isinstance(success, basestring):
+            if isinstance(success, str):
                 if (success == 'true') or (success == '1'):
                     success = True
                 else:

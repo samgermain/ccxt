@@ -27,24 +27,47 @@ class coinone(Exchange):
             'has': {
                 'CORS': None,
                 'spot': True,
-                'margin': None,
-                'swap': None,
-                'future': None,
-                'option': None,
+                'margin': False,
+                'swap': False,
+                'future': False,
+                'option': False,
+                'addMargin': False,
                 'cancelOrder': True,
                 'createMarketOrder': None,
                 'createOrder': True,
+                'createReduceOnlyOrder': False,
                 'fetchBalance': True,
+                'fetchBorrowRate': False,
+                'fetchBorrowRateHistories': False,
+                'fetchBorrowRateHistory': False,
+                'fetchBorrowRates': False,
+                'fetchBorrowRatesPerSymbol': False,
                 'fetchClosedOrders': None,  # the endpoint that should return closed orders actually returns trades, https://github.com/ccxt/ccxt/pull/7067
                 'fetchDepositAddresses': True,
+                'fetchFundingHistory': False,
+                'fetchFundingRate': False,
+                'fetchFundingRateHistory': False,
+                'fetchFundingRates': False,
+                'fetchIndexOHLCV': False,
+                'fetchLeverage': False,
+                'fetchLeverageTiers': False,
                 'fetchMarkets': True,
+                'fetchMarkOHLCV': False,
                 'fetchMyTrades': True,
                 'fetchOpenOrders': True,
                 'fetchOrder': True,
                 'fetchOrderBook': True,
+                'fetchPosition': False,
+                'fetchPositions': False,
+                'fetchPositionsRisk': False,
+                'fetchPremiumIndexOHLCV': False,
                 'fetchTicker': True,
                 'fetchTickers': True,
                 'fetchTrades': True,
+                'reduceMargin': False,
+                'setLeverage': False,
+                'setMarginMode': False,
+                'setPositionMode': False,
             },
             'urls': {
                 'logo': 'https://user-images.githubusercontent.com/1294454/38003300-adc12fba-323f-11e8-8525-725f53c4a659.jpg',
@@ -116,6 +139,27 @@ class coinone(Exchange):
             'currency': 'all',
         }
         response = self.publicGetTicker(request)
+        #
+        #    {
+        #        "result": "success",
+        #        "errorCode": "0",
+        #        "timestamp": "1643676668",
+        #        "xec": {
+        #          "currency": "xec",
+        #          "first": "0.0914",
+        #          "low": "0.0894",
+        #          "high": "0.096",
+        #          "last": "0.0937",
+        #          "volume": "1673283662.9797",
+        #          "yesterday_first": "0.0929",
+        #          "yesterday_low": "0.0913",
+        #          "yesterday_high": "0.0978",
+        #          "yesterday_last": "0.0913",
+        #          "yesterday_volume": "1167285865.4571"
+        #        },
+        #        ...
+        #    }
+        #
         result = []
         quoteId = 'krw'
         quote = self.safe_currency_code(quoteId)
@@ -128,16 +172,52 @@ class coinone(Exchange):
                 continue
             base = self.safe_currency_code(baseId)
             result.append({
-                'info': ticker,
                 'id': baseId,
                 'symbol': base + '/' + quote,
                 'base': base,
                 'quote': quote,
+                'settle': None,
                 'baseId': baseId,
                 'quoteId': quoteId,
+                'settleId': None,
                 'type': 'spot',
                 'spot': True,
-                'active': True,
+                'margin': False,
+                'swap': False,
+                'future': False,
+                'option': False,
+                'active': None,
+                'contract': False,
+                'linear': None,
+                'inverse': None,
+                'contractSize': None,
+                'expiry': None,
+                'expiryDatetime': None,
+                'strike': None,
+                'optionType': None,
+                'precision': {
+                    'amount': None,
+                    'price': None,
+                },
+                'limits': {
+                    'leverage': {
+                        'min': None,
+                        'max': None,
+                    },
+                    'amount': {
+                        'min': None,
+                        'max': None,
+                    },
+                    'price': {
+                        'min': None,
+                        'max': None,
+                    },
+                    'cost': {
+                        'min': None,
+                        'max': None,
+                    },
+                },
+                'info': ticker,
             })
         return result
 
@@ -275,7 +355,7 @@ class coinone(Exchange):
         #     }
         #
         timestamp = self.safe_timestamp(trade, 'timestamp')
-        symbol = market['symbol'] if (market is not None) else None
+        market = self.safe_market(None, market)
         is_ask = self.safe_string(trade, 'is_ask')
         side = self.safe_string(trade, 'type')
         if is_ask is not None:
@@ -297,9 +377,7 @@ class coinone(Exchange):
             feeCostString = Precise.string_abs(feeCostString)
             feeRateString = self.safe_string(trade, 'feeRate')
             feeRateString = Precise.string_abs(feeRateString)
-            feeCurrencyCode = None
-            if market is not None:
-                feeCurrencyCode = market['quote'] if (side == 'sell') else market['base']
+            feeCurrencyCode = market['quote'] if (side == 'sell') else market['base']
             fee = {
                 'cost': feeCostString,
                 'currency': feeCurrencyCode,
@@ -311,7 +389,7 @@ class coinone(Exchange):
             'timestamp': timestamp,
             'datetime': self.iso8601(timestamp),
             'order': orderId,
-            'symbol': symbol,
+            'symbol': market['symbol'],
             'type': None,
             'side': side,
             'takerOrMaker': None,
@@ -350,7 +428,7 @@ class coinone(Exchange):
 
     def create_order(self, symbol, type, side, amount, price=None, params={}):
         if type != 'limit':
-            raise ExchangeError(self.id + ' allows limit orders only')
+            raise ExchangeError(self.id + ' createOrder() allows limit orders only')
         self.load_markets()
         request = {
             'price': price,
@@ -515,7 +593,7 @@ class coinone(Exchange):
         # The returned amount might not be same as the ordered amount. If an order is partially filled, the returned amount means the remaining amount.
         # For the same reason, the returned amount and remaining are always same, and the returned filled and cost are always zero.
         if symbol is None:
-            raise ExchangeError(self.id + ' allows fetching closed orders with a specific symbol')
+            raise ExchangeError(self.id + ' fetchOpenOrders() allows fetching closed orders with a specific symbol')
         self.load_markets()
         market = self.market(symbol)
         request = {

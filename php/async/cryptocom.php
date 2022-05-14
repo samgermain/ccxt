@@ -23,9 +23,9 @@ class cryptocom extends Exchange {
             'has' => array(
                 'CORS' => false,
                 'spot' => true,
-                'margin' => null,
-                'swap' => null,
-                'future' => null,
+                'margin' => null, // has but not fully implemented
+                'swap' => null, // has but not fully implemented
+                'future' => null, // has but not fully implemented
                 'option' => null,
                 'cancelAllOrders' => true,
                 'cancelOrder' => true,
@@ -37,11 +37,9 @@ class cryptocom extends Exchange {
                 'fetchDepositAddress' => true,
                 'fetchDepositAddressesByNetwork' => true,
                 'fetchDeposits' => true,
-                'fetchFundingFees' => false,
                 'fetchFundingHistory' => false,
                 'fetchFundingRate' => false,
                 'fetchFundingRates' => false,
-                'fetchIsolatedPositions' => false,
                 'fetchMarkets' => true,
                 'fetchMyTrades' => true,
                 'fetchOHLCV' => true,
@@ -57,6 +55,7 @@ class cryptocom extends Exchange {
                 'fetchTrades' => true,
                 'fetchTradingFee' => false,
                 'fetchTradingFees' => false,
+                'fetchTransactionFees' => false,
                 'fetchTransactions' => false,
                 'fetchTransfers' => true,
                 'fetchWithdrawals' => true,
@@ -217,6 +216,7 @@ class cryptocom extends Exchange {
             'options' => array(
                 'defaultType' => 'spot',
                 'accountsByType' => array(
+                    'funding' => 'SPOT',
                     'spot' => 'SPOT',
                     'derivatives' => 'DERIVATIVES',
                     'swap' => 'DERIVATIVES',
@@ -240,6 +240,7 @@ class cryptocom extends Exchange {
                     '10009' => '\\ccxt\\BadRequest',
                     '20001' => '\\ccxt\\BadRequest',
                     '20002' => '\\ccxt\\InsufficientFunds',
+                    '20005' => '\\ccxt\\AccountNotEnabled', // array("id":"123xxx","method":"private/margin/xxx","code":"20005","message":"ACCOUNT_NOT_FOUND")
                     '30003' => '\\ccxt\\BadSymbol',
                     '30004' => '\\ccxt\\BadRequest',
                     '30005' => '\\ccxt\\BadRequest',
@@ -270,31 +271,29 @@ class cryptocom extends Exchange {
     }
 
     public function fetch_markets($params = array ()) {
-        // {
-        //     "id" => 11,
-        //     "method" => "public/get-instruments",
-        //     "code" => 0,
-        //     "result" => {
-        //       "instruments" => array(
-        //         array(
-        //           "instrument_name" => "BTC_USDT",
-        //           "quote_currency" => "BTC",
-        //           "base_currency" => "USDT",
-        //           "price_decimals" => 2,
-        //           "quantity_decimals" => 6,
-        //           "margin_trading_enabled" => true
-        //         ),
-        //         {
-        //           "instrument_name" => "CRO_BTC",
-        //           "quote_currency" => "BTC",
-        //           "base_currency" => "CRO",
-        //           "price_decimals" => 8,
-        //           "quantity_decimals" => 2,
-        //           "margin_trading_enabled" => false
-        //         }
-        //       )
-        //     }
-        //  }
+        //
+        //    {
+        //        $id => 11,
+        //        method => 'public/get-instruments',
+        //        code => 0,
+        //        $result => {
+        //            'instruments' => array(
+        //                array(
+        //                    instrument_name => 'NEAR_BTC',
+        //                    quote_currency => 'BTC',
+        //                    base_currency => 'NEAR',
+        //                    price_decimals => '8',
+        //                    quantity_decimals => '2',
+        //                    margin_trading_enabled => true,
+        //                    $margin_trading_enabled_5x => true,
+        //                    $margin_trading_enabled_10x => true,
+        //                    max_quantity => '100000000',
+        //                    min_quantity => '0.01'
+        //               ),
+        //            )
+        //        }
+        //    }
+        //
         $response = yield $this->spotPublicGetPublicGetInstruments ($params);
         $resultResponse = $this->safe_value($response, 'result', array());
         $markets = $this->safe_value($resultResponse, 'instruments', array());
@@ -306,61 +305,65 @@ class cryptocom extends Exchange {
             $quoteId = $this->safe_string($market, 'quote_currency');
             $base = $this->safe_currency_code($baseId);
             $quote = $this->safe_currency_code($quoteId);
-            $symbol = $base . '/' . $quote;
             $priceDecimals = $this->safe_string($market, 'price_decimals');
             $minPrice = $this->parse_precision($priceDecimals);
-            $precision = array(
-                'amount' => $this->safe_integer($market, 'quantity_decimals'),
-                'price' => intval($priceDecimals),
-            );
             $minQuantity = $this->safe_string($market, 'min_quantity');
-            $minCost = $this->parse_number(Precise::string_mul($minQuantity, $minPrice));
-            $maxQuantity = $this->safe_number($market, 'max_quantity');
-            $margin = $this->safe_value($market, 'margin_trading_enabled');
+            $maxLeverage = $this->parse_number('1');
+            $margin_trading_enabled_5x = $this->safe_value($market, 'margin_trading_enabled_5x');
+            if ($margin_trading_enabled_5x) {
+                $maxLeverage = $this->parse_number('5');
+            }
+            $margin_trading_enabled_10x = $this->safe_value($market, 'margin_trading_enabled_10x');
+            if ($margin_trading_enabled_10x) {
+                $maxLeverage = $this->parse_number('10');
+            }
             $result[] = array(
-                'info' => $market,
                 'id' => $id,
-                'symbol' => $symbol,
+                'symbol' => $base . '/' . $quote,
                 'base' => $base,
                 'quote' => $quote,
+                'settle' => null,
                 'baseId' => $baseId,
                 'quoteId' => $quoteId,
-                'linear' => null,
-                'inverse' => null,
-                'settle' => null,
                 'settleId' => null,
                 'type' => 'spot',
                 'spot' => true,
-                'margin' => $margin,
-                'future' => false,
+                'margin' => $this->safe_value($market, 'margin_trading_enabled'),
                 'swap' => false,
+                'future' => false,
                 'option' => false,
-                'optionType' => null,
-                'strike' => null,
+                'active' => null,
+                'contract' => false,
+                'linear' => null,
+                'inverse' => null,
+                'contractSize' => null,
                 'expiry' => null,
                 'expiryDatetime' => null,
-                'contract' => false,
-                'contractSize' => null,
-                'active' => null,
-                'precision' => $precision,
+                'strike' => null,
+                'optionType' => null,
+                'precision' => array(
+                    'amount' => $this->safe_integer($market, 'quantity_decimals'),
+                    'price' => intval($priceDecimals),
+                ),
                 'limits' => array(
+                    'leverage' => array(
+                        'min' => $this->parse_number('1'),
+                        'max' => $maxLeverage,
+                    ),
                     'amount' => array(
                         'min' => $this->parse_number($minQuantity),
-                        'max' => $maxQuantity,
+                        'max' => $this->safe_number($market, 'max_quantity'),
                     ),
                     'price' => array(
                         'min' => $this->parse_number($minPrice),
                         'max' => null,
                     ),
                     'cost' => array(
-                        'min' => $minCost,
-                        'max' => null,
-                    ),
-                    'leverage' => array(
-                        'min' => null,
+                        'min' => $this->parse_number(Precise::string_mul($minQuantity, $minPrice)),
                         'max' => null,
                     ),
                 ),
+                'info' => $market,
             );
         }
         $futuresResponse = yield $this->derivativesPublicGetPublicGetInstruments ();
@@ -416,41 +419,39 @@ class cryptocom extends Exchange {
                 $symbol = $symbol . '-' . $this->yymmdd($expiry);
             }
             $contractSize = $this->safe_number($market, 'contract_size');
-            $marketId = $this->safe_string($market, 'symbol');
-            $maxLeverage = $this->safe_number($market, 'max_leverage');
-            $active = $this->safe_value($market, 'tradable');
-            $pricePrecision = $this->safe_integer($market, 'quote_decimals');
-            $amountPrecision = $this->safe_integer($market, 'quantity_decimals');
             $result[] = array(
-                'info' => $market,
-                'id' => $marketId,
+                'id' => $this->safe_string($market, 'symbol'),
                 'symbol' => $symbol,
                 'base' => $base,
                 'quote' => $quote,
+                'settle' => $quote,
                 'baseId' => $baseId,
                 'quoteId' => $quoteId,
-                'linear' => true,
-                'inverse' => false,
-                'settle' => $quote,
                 'settleId' => $quoteId,
                 'type' => $type,
                 'spot' => false,
                 'margin' => false,
-                'future' => $future,
                 'swap' => $swap,
+                'future' => $future,
                 'option' => false,
-                'optionType' => null,
-                'strike' => null,
+                'active' => $this->safe_value($market, 'tradable'),
+                'contract' => true,
+                'linear' => true,
+                'inverse' => false,
+                'contractSize' => $contractSize,
                 'expiry' => $expiry,
                 'expiryDatetime' => $this->iso8601($expiry),
-                'contract' => true,
-                'contractSize' => $contractSize,
-                'active' => $active,
+                'strike' => null,
+                'optionType' => null,
                 'precision' => array(
-                    'price' => $pricePrecision,
-                    'amount' => $amountPrecision,
+                    'price' => $this->safe_integer($market, 'quote_decimals'),
+                    'amount' => $this->safe_integer($market, 'quantity_decimals'),
                 ),
                 'limits' => array(
+                    'leverage' => array(
+                        'min' => $this->parse_number('1'),
+                        'max' => $this->safe_number($market, 'max_leverage'),
+                    ),
                     'amount' => array(
                         'min' => $this->parse_number($contractSize),
                         'max' => null,
@@ -463,11 +464,8 @@ class cryptocom extends Exchange {
                         'min' => null,
                         'max' => null,
                     ),
-                    'leverage' => array(
-                        'min' => null,
-                        'max' => $maxLeverage,
-                    ),
                 ),
+                'info' => $market,
             );
         }
         return $result;
@@ -516,7 +514,7 @@ class cryptocom extends Exchange {
         );
         list($marketType, $query) = $this->handle_market_type_and_params('fetchTicker', $market, $params);
         if ($marketType !== 'spot') {
-            throw new NotSupported($this->id . ' fetchTicker only supports spot markets');
+            throw new NotSupported($this->id . ' fetchTicker() only supports spot markets');
         }
         $response = yield $this->spotPublicGetPublicGetTicker (array_merge($request, $query));
         // {
@@ -915,7 +913,7 @@ class cryptocom extends Exchange {
             $request['exec_inst'] = 'POST_ONLY';
             $params = $this->omit($params, array( 'postOnly' ));
         }
-        list($marketType, $query) = $this->handle_market_type_and_params('cancelAllOrders', $market, $params);
+        list($marketType, $query) = $this->handle_market_type_and_params('createOrder', $market, $params);
         $method = $this->get_supported_mapping($marketType, array(
             'spot' => 'spotPrivatePostPrivateCreateOrder',
             'future' => 'derivativesPrivatePostPrivateCreateOrder',
@@ -1143,11 +1141,7 @@ class cryptocom extends Exchange {
         //     }
         //
         $result = $this->safe_value($response, 'result');
-        $id = $this->safe_string($result, 'id');
-        return array(
-            'info' => $response,
-            'id' => $id,
-        );
+        return $this->parse_transaction($result, $currency);
     }
 
     public function fetch_deposit_addresses_by_network($code, $params = array ()) {
@@ -1185,7 +1179,7 @@ class cryptocom extends Exchange {
         $data = $this->safe_value($response, 'result', array());
         $addresses = $this->safe_value($data, 'deposit_address_list', array());
         if (strlen($addresses) === 0) {
-            throw new ExchangeError($this->id . ' generating $address->..');
+            throw new ExchangeError($this->id . ' fetchDepositAddressesByNetwork() generating $address->..');
         }
         $result = array();
         for ($i = 0; $i < count($addresses); $i++) {
@@ -1316,28 +1310,28 @@ class cryptocom extends Exchange {
         $fromAccount = strtolower($fromAccount);
         $toAccount = strtolower($toAccount);
         $accountsById = $this->safe_value($this->options, 'accountsByType', array());
-        $fromId = $this->safe_string($accountsById, $fromAccount);
-        if ($fromId === null) {
-            $keys = is_array($accountsById) ? array_keys($accountsById) : array();
-            throw new ExchangeError($this->id . ' $fromAccount must be one of ' . implode(', ', $keys));
-        }
-        $toId = $this->safe_string($accountsById, $toAccount);
-        if ($toId === null) {
-            $keys = is_array($accountsById) ? array_keys($accountsById) : array();
-            throw new ExchangeError($this->id . ' $toAccount must be one of ' . implode(', ', $keys));
-        }
+        $fromId = $this->safe_string($accountsById, $fromAccount, $fromAccount);
+        $toId = $this->safe_string($accountsById, $toAccount, $toAccount);
         $request = array(
             'currency' => $currency['id'],
             'amount' => floatval($amount),
             'from' => $fromId,
             'to' => $toId,
         );
-        return yield $this->spotPrivatePostPrivateDerivTransfer (array_merge($request, $params));
+        $repsonse = yield $this->spotPrivatePostPrivateDerivTransfer (array_merge($request, $params));
+        //
+        //     {
+        //         "id" => 11,
+        //         "method" => "private/deriv/transfer",
+        //         "code" => 0
+        //     }
+        //
+        return $this->parse_transfer($repsonse, $currency);
     }
 
     public function fetch_transfers($code = null, $since = null, $limit = null, $params = array ()) {
         if (!(is_array($params) && array_key_exists('direction', $params))) {
-            throw new ArgumentsRequired($this->id . ' fetchTransfers requires a direction param to be either "IN" or "OUT"');
+            throw new ArgumentsRequired($this->id . ' fetchTransfers() requires a direction param to be either "IN" or "OUT"');
         }
         yield $this->load_markets();
         $currency = null;
@@ -1352,7 +1346,7 @@ class cryptocom extends Exchange {
         //
         //     {
         //       id => '1641032709328',
-        //       method => 'private/deriv/get-$transfer-history',
+        //       method => 'private/deriv/get-transfer-history',
         //       $code => '0',
         //       $result => {
         //         transfer_list => array(
@@ -1370,12 +1364,7 @@ class cryptocom extends Exchange {
         //
         $result = $this->safe_value($response, 'result', array());
         $transferList = $this->safe_value($result, 'transfer_list', array());
-        $resultArray = array();
-        for ($i = 0; $i < count($transferList); $i++) {
-            $transfer = $transferList[$i];
-            $resultArray[] = $this->parse_transfer($transfer, $currency);
-        }
-        return $this->filter_by_since_limit($resultArray, $since, $limit);
+        return $this->parse_transfers($transferList, $currency, $since, $limit, $params);
     }
 
     public function parse_transfer_status($status) {
@@ -1413,7 +1402,7 @@ class cryptocom extends Exchange {
         $status = $this->parse_transfer_status($rawStatus);
         return array(
             'info' => $transfer,
-            'id' => null,
+            'id' => $this->safe_string($transfer, 'id'),
             'timestamp' => $timestamp,
             'datetime' => $this->iso8601($timestamp),
             'currency' => $code,
@@ -1457,8 +1446,8 @@ class cryptocom extends Exchange {
             'close' => $last,
             'last' => $last,
             'previousClose' => null,
-            'change' => null,
-            'percentage' => $relativeChange,
+            'change' => $relativeChange,
+            'percentage' => null,
             'average' => null,
             'baseVolume' => $this->safe_string($ticker, 'v'),
             'quoteVolume' => null,
@@ -1704,30 +1693,42 @@ class cryptocom extends Exchange {
         //
         // fetchDeposits
         //
-        // {
-        //     "currency" => "XRP",
-        //     "fee" => 1.0,
-        //     "create_time" => 1607063412000,
-        //     "id" => "2220",
-        //     "update_time" => 1607063460000,
-        //     "amount" => 100,
-        //     "address" => "2NBqqD5GRJ8wHy1PYyCXTe9ke5226FhavBf?1234567890",
-        //     "status" => "1"
-        // }
+        //     {
+        //         "currency" => "XRP",
+        //         "fee" => 1.0,
+        //         "create_time" => 1607063412000,
+        //         "id" => "2220",
+        //         "update_time" => 1607063460000,
+        //         "amount" => 100,
+        //         "address" => "2NBqqD5GRJ8wHy1PYyCXTe9ke5226FhavBf?1234567890",
+        //         "status" => "1"
+        //     }
         //
         // fetchWithdrawals
         //
-        // {
-        //     "currency" => "XRP",
-        //     "client_wid" => "my_withdrawal_002",
-        //     "fee" => 1.0,
-        //     "create_time" => 1607063412000,
-        //     "id" => "2220",
-        //     "update_time" => 1607063460000,
-        //     "amount" => 100,
-        //     "address" => "2NBqqD5GRJ8wHy1PYyCXTe9ke5226FhavBf?1234567890",
-        //     "status" => "1"
-        // }
+        //     {
+        //         "currency" => "XRP",
+        //         "client_wid" => "my_withdrawal_002",
+        //         "fee" => 1.0,
+        //         "create_time" => 1607063412000,
+        //         "id" => "2220",
+        //         "update_time" => 1607063460000,
+        //         "amount" => 100,
+        //         "address" => "2NBqqD5GRJ8wHy1PYyCXTe9ke5226FhavBf?1234567890",
+        //         "status" => "1"
+        //     }
+        //
+        // withdraw
+        //
+        //     {
+        //         "id" => 2220,
+        //         "amount" => 1,
+        //         "fee" => 0.0004,
+        //         "symbol" => "BTC",
+        //         "address" => "2NBqqD5GRJ8wHy1PYyCXTe9ke5226FhavBf",
+        //         "client_wid" => "my_withdrawal_002",
+        //         "create_time":1607063412000
+        //     }
         //
         $type = null;
         $rawStatus = $this->safe_string($transaction, 'status');

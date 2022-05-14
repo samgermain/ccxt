@@ -25,6 +25,7 @@ class qtrade extends Exchange {
                 'www' => 'https://qtrade.io',
                 'doc' => 'https://qtrade-exchange.github.io/qtrade-docs',
                 'referral' => 'https://qtrade.io/?ref=BKOQWVFGRH2C',
+                'fees' => 'https://qtrade.io/fees',
             ),
             'has' => array(
                 'CORS' => null,
@@ -40,6 +41,7 @@ class qtrade extends Exchange {
                 'createReduceOnlyOrder' => false,
                 'fetchBalance' => true,
                 'fetchBorrowRate' => false,
+                'fetchBorrowRateHistories' => false,
                 'fetchBorrowRateHistory' => false,
                 'fetchBorrowRates' => false,
                 'fetchBorrowRatesPerSymbol' => false,
@@ -53,8 +55,8 @@ class qtrade extends Exchange {
                 'fetchFundingRateHistory' => false,
                 'fetchFundingRates' => false,
                 'fetchIndexOHLCV' => false,
-                'fetchIsolatedPositions' => false,
                 'fetchLeverage' => false,
+                'fetchLeverageTiers' => false,
                 'fetchMarkets' => true,
                 'fetchMarkOHLCV' => false,
                 'fetchMyTrades' => true,
@@ -70,13 +72,18 @@ class qtrade extends Exchange {
                 'fetchTicker' => true,
                 'fetchTickers' => true,
                 'fetchTrades' => true,
+                'fetchTradingFee' => true,
+                'fetchTradingFees' => false,
                 'fetchTransactions' => null,
+                'fetchTransfer' => false,
+                'fetchTransfers' => true,
                 'fetchWithdrawal' => true,
                 'fetchWithdrawals' => true,
                 'reduceMargin' => false,
                 'setLeverage' => false,
                 'setMarginMode' => false,
                 'setPositionMode' => false,
+                'transfer' => false,
                 'withdraw' => true,
             ),
             'timeframes' => array(
@@ -132,8 +139,8 @@ class qtrade extends Exchange {
                     'feeSide' => 'quote',
                     'tierBased' => true,
                     'percentage' => true,
-                    'taker' => 0.005,
-                    'maker' => 0.0,
+                    'taker' => $this->parse_number('0.005'),
+                    'maker' => $this->parse_number('0.0'),
                 ),
                 'funding' => array(
                     'withdraw' => array(),
@@ -230,8 +237,8 @@ class qtrade extends Exchange {
                 'strike' => null,
                 'optionType' => null,
                 'precision' => array(
-                    'price' => $this->safe_integer($market, 'base_precision'),
                     'amount' => $this->safe_integer($market, 'market_precision'),
+                    'price' => $this->safe_integer($market, 'base_precision'),
                 ),
                 'limits' => array(
                     'leverage' => array(
@@ -710,6 +717,48 @@ class qtrade extends Exchange {
             'cost' => $cost,
             'fee' => $fee,
         ), $market);
+    }
+
+    public function fetch_trading_fee($symbol, $params = array ()) {
+        yield $this->load_markets();
+        $market = $this->market($symbol);
+        $request = array(
+            'market_string' => $market['id'],
+        );
+        $response = yield $this->publicGetMarketMarketString (array_merge($request, $params));
+        //
+        //     {
+        //         $data => {
+        //             $market => array(
+        //                 id => '41',
+        //                 market_currency => 'ETH',
+        //                 base_currency => 'BTC',
+        //                 maker_fee => '0',
+        //                 taker_fee => '0.005',
+        //                 metadata => array(),
+        //                 can_trade => true,
+        //                 can_cancel => true,
+        //                 can_view => true,
+        //                 market_string => 'ETH_BTC',
+        //                 minimum_sell_amount => '0.001',
+        //                 minimum_buy_value => '0.0001',
+        //                 market_precision => '18',
+        //                 base_precision => '8'
+        //             ),
+        //             recent_trades => array()
+        //         }
+        //     }
+        //
+        $data = $this->safe_value($response, 'data', array());
+        $marketData = $this->safe_value($data, 'market', array());
+        return array(
+            'info' => $marketData,
+            'symbol' => $symbol,
+            'maker' => $this->safe_number($marketData, 'maker_fee'),
+            'taker' => $this->safe_number($marketData, 'taker_fee'),
+            'percentage' => true,
+            'tierBased' => true,
+        );
     }
 
     public function parse_balance($response) {
@@ -1199,6 +1248,68 @@ class qtrade extends Exchange {
         $data = $this->safe_value($response, 'data', array());
         $deposits = $this->safe_value($data, 'deposits', array());
         return $this->parse_transactions($deposits, $currency, $since, $limit);
+    }
+
+    public function fetch_transfers($code = null, $since = null, $limit = null, $params = array ()) {
+        yield $this->load_markets();
+        $currency = null;
+        if ($code !== null) {
+            $currency = $this->currency($code);
+        }
+        $response = yield $this->privateGetTransfers ($params);
+        //
+        //     {
+        //         "data" => {
+        //             "transfers" => array(
+        //                 {
+        //                     "amount" => "0.5",
+        //                     "created_at" => "2018-12-10T00:06:41.066665Z",
+        //                     "currency" => "BTC",
+        //                     "id" => 9,
+        //                     "reason_code" => "referral_payout",
+        //                     "reason_metadata" => array(
+        //                         "note" => "January referral earnings"
+        //                     ),
+        //                     "sender_email" => "qtrade",
+        //                     "sender_id" => 218
+        //                 }
+        //             )
+        //         }
+        //     }
+        //
+        $data = $this->safe_value($response, 'data', array());
+        $transfers = $this->safe_value($data, 'transfers', array());
+        return $this->parse_transfers($transfers, $currency, $since, $limit);
+    }
+
+    public function parse_transfer($transfer, $currency = null) {
+        //
+        //     {
+        //         "amount" => "0.5",
+        //         "created_at" => "2018-12-10T00:06:41.066665Z",
+        //         "currency" => "BTC",
+        //         "id" => 9,
+        //         "reason_code" => "referral_payout",
+        //         "reason_metadata" => array(
+        //             "note" => "January referral earnings"
+        //         ),
+        //         "sender_email" => "qtrade",
+        //         "sender_id" => 218
+        //     }
+        //
+        $currencyId = $this->safe_string($transfer, 'currency');
+        $dateTime = $this->safe_string($transfer, 'created_at');
+        return array(
+            'info' => $transfer,
+            'id' => $this->safe_string($transfer, 'id'),
+            'timestamp' => $this->parse8601($dateTime),
+            'datetime' => $dateTime,
+            'currency' => $this->safe_currency_code($currencyId, $currency),
+            'amount' => $this->safe_number($transfer, 'amount'),
+            'fromAccount' => $this->safe_string($transfer, 'sender_id'),
+            'toAccount' => null,
+            'status' => 'ok',
+        );
     }
 
     public function fetch_withdrawal($id, $code = null, $params = array ()) {

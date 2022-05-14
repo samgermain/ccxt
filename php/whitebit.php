@@ -23,48 +23,44 @@ class whitebit extends Exchange {
             'has' => array(
                 'CORS' => null,
                 'spot' => true,
-                'margin' => null,
+                'margin' => null, // has but unimplemented
                 'swap' => false,
                 'future' => false,
                 'option' => false,
-                'addMargin' => false,
                 'cancelOrder' => true,
                 'createDepositAddress' => null,
                 'createLimitOrder' => null,
                 'createMarketOrder' => null,
                 'createOrder' => true,
-                'createReduceOnlyOrder' => false,
-                'deposit' => null,
+                'createStopLimitOrder' => true,
+                'createStopMarketOrder' => true,
+                'createStopOrder' => true,
                 'editOrder' => null,
                 'fetchBalance' => true,
                 'fetchBidsAsks' => null,
                 'fetchClosedOrders' => true,
                 'fetchCurrencies' => true,
                 'fetchDepositAddress' => true,
-                'fetchFundingFees' => true,
                 'fetchFundingHistory' => false,
                 'fetchFundingRate' => false,
                 'fetchFundingRateHistory' => false,
                 'fetchFundingRates' => false,
                 'fetchIndexOHLCV' => false,
-                'fetchIsolatedPositions' => false,
                 'fetchMarkets' => true,
                 'fetchMarkOHLCV' => false,
                 'fetchOHLCV' => true,
                 'fetchOpenOrders' => true,
                 'fetchOrderBook' => true,
                 'fetchOrderTrades' => true,
-                'fetchPosition' => false,
-                'fetchPositions' => false,
-                'fetchPositionsRisk' => false,
                 'fetchPremiumIndexOHLCV' => false,
                 'fetchTicker' => true,
                 'fetchTickers' => true,
                 'fetchTime' => true,
                 'fetchTrades' => true,
+                'fetchTradingFee' => false,
                 'fetchTradingFees' => true,
-                'reduceMargin' => false,
-                'setPositionMode' => false,
+                'fetchTransactionFees' => true,
+                'transfer' => true,
                 'withdraw' => true,
             ),
             'timeframes' => array(
@@ -172,6 +168,7 @@ class whitebit extends Exchange {
                             'main-account/history',
                             'main-account/withdraw',
                             'main-account/withdraw-pay',
+                            'main-account/transfer',
                             'trade-account/balance',
                             'trade-account/executed-history',
                             'trade-account/order',
@@ -198,6 +195,14 @@ class whitebit extends Exchange {
             'options' => array(
                 'createMarketBuyOrderRequiresPrice' => true,
                 'fiatCurrencies' => array( 'EUR', 'USD', 'RUB', 'UAH' ),
+                'accountsByType' => array(
+                    'main' => 'main',
+                    'spot' => 'trade',
+                    'margin' => 'margin', // api does not suppot transfers to margin
+                ),
+                'transfer' => array(
+                    'fillTransferResponseFromRequest' => true,
+                ),
             ),
             'exceptions' => array(
                 'exact' => array(
@@ -367,7 +372,7 @@ class whitebit extends Exchange {
         return $result;
     }
 
-    public function fetch_funding_fees($params = array ()) {
+    public function fetch_transaction_fees($codes = null, $params = array ()) {
         $this->load_markets();
         $response = $this->v4PublicGetFee ($params);
         //
@@ -415,12 +420,43 @@ class whitebit extends Exchange {
     }
 
     public function fetch_trading_fees($params = array ()) {
-        $response = $this->v2PublicGetFee ($params);
-        $fees = $this->safe_value($response, 'result');
-        return array(
-            'maker' => $this->safe_number($fees, 'makerFee'),
-            'taker' => $this->safe_number($fees, 'takerFee'),
-        );
+        $response = $this->v4PublicGetAssets ($params);
+        //
+        //      {
+        //          '1INCH' => array(
+        //              name => '1inch',
+        //              unified_cryptoasset_id => '8104',
+        //              can_withdraw => true,
+        //              can_deposit => true,
+        //              min_withdraw => '33',
+        //              max_withdraw => '0',
+        //              maker_fee => '0.1',
+        //              taker_fee => '0.1',
+        //              min_deposit => '30',
+        //              max_deposit => '0'
+        //            ),
+        //            ...
+        //      }
+        //
+        $result = array();
+        for ($i = 0; $i < count($this->symbols); $i++) {
+            $symbol = $this->symbols[$i];
+            $market = $this->market($symbol);
+            $fee = $this->safe_value($response, $market['baseId'], array());
+            $makerFee = $this->safe_string($fee, 'maker_fee');
+            $takerFee = $this->safe_string($fee, 'taker_fee');
+            $makerFee = Precise::string_div($makerFee, '100');
+            $takerFee = Precise::string_div($takerFee, '100');
+            $result[$symbol] = array(
+                'info' => $fee,
+                'symbol' => $market['symbol'],
+                'percentage' => true,
+                'tierBased' => false,
+                'maker' => $this->parse_number($makerFee),
+                'taker' => $this->parse_number($takerFee),
+            );
+        }
+        return $result;
     }
 
     public function fetch_ticker($symbol, $params = array ()) {
@@ -452,41 +488,37 @@ class whitebit extends Exchange {
     }
 
     public function parse_ticker($ticker, $market = null) {
+        //
         //  FetchTicker (v1)
         //
-        //      {
-        //          "bid":"0.021979",
-        //          "ask":"0.021996",
-        //          "open":"0.02182",
-        //          "high":"0.022039",
-        //          "low":"0.02161",
-        //          "last":"0.021987",
-        //          "volume":"2810.267",
-        //          "deal":"61.383565474",
-        //          "change":"0.76",
-        //      }
+        //    {
+        //        "bid" => "0.021979",
+        //        "ask" => "0.021996",
+        //        "open" => "0.02182",
+        //        "high" => "0.022039",
+        //        "low" => "0.02161",
+        //        "last" => "0.021987",
+        //        "volume" => "2810.267",
+        //        "deal" => "61.383565474",
+        //        "change" => "0.76",
+        //    }
         //
         // FetchTickers (v4)
         //
-        //      "BCH_RUB":array(
-        //          "base_id":1831,
-        //          "quote_id":0,
-        //          "last_price":"32830.21",
-        //          "quote_volume":"1494659.8024096",
-        //          "base_volume":"46.1083",
-        //          "isFrozen":false,
-        //          "change":"2.12" // in percent
-        //      ),
+        //    "BCH_RUB" => {
+        //        "base_id" => 1831,
+        //        "quote_id" => 0,
+        //        "last_price" => "32830.21",
+        //        "quote_volume" => "1494659.8024096",
+        //        "base_volume" => "46.1083",
+        //        "isFrozen" => false,
+        //        "change" => "2.12" // in percent
+        //    }
         //
-        $symbol = null;
-        if ($market !== null) {
-            $symbol = $market['symbol'];
-        }
+        $market = $this->safe_market(null, $market);
         $last = $this->safe_string($ticker, 'last_price');
-        $change = $this->safe_string($ticker, 'change');
-        $percentage = Precise::string_mul($change, '0.01');
         return $this->safe_ticker(array(
-            'symbol' => $symbol,
+            'symbol' => $market['symbol'],
             'timestamp' => null,
             'datetime' => null,
             'high' => $this->safe_string($ticker, 'high'),
@@ -501,7 +533,7 @@ class whitebit extends Exchange {
             'last' => $last,
             'previousClose' => null,
             'change' => null,
-            'percentage' => $percentage,
+            'percentage' => $this->safe_string($ticker, 'change'),
             'average' => null,
             'baseVolume' => $this->safe_string_2($ticker, 'base_volume', 'volume'),
             'quoteVolume' => $this->safe_string_2($ticker, 'quote_volume', 'deal'),
@@ -722,13 +754,14 @@ class whitebit extends Exchange {
         //          "pong"
         //      )
         //
-        $status = $this->safe_string($response, 0, null);
-        $status = ($status === null) ? 'maintenance' : 'ok';
-        $this->status = array_merge($this->status, array(
-            'status' => $status,
+        $status = $this->safe_string($response, 0);
+        return array(
+            'status' => ($status === 'pong') ? 'ok' : $status,
             'updated' => $this->milliseconds(),
-        ));
-        return $this->status;
+            'eta' => null,
+            'url' => null,
+            'info' => $response,
+        );
     }
 
     public function fetch_time($params = array ()) {
@@ -774,7 +807,7 @@ class whitebit extends Exchange {
         // aggregate common assignments regardless stop or not
         if ($type === 'limit' || $type === 'stopLimit') {
             if ($price === null) {
-                throw new ArgumentsRequired($this->id . ' createOrder requires a $price argument for a stopLimit order');
+                throw new ArgumentsRequired($this->id . ' createOrder() requires a $price argument for a stopLimit order');
             }
             $convertedPrice = $this->price_to_precision($symbol, $price);
             $request['price'] = $convertedPrice;
@@ -798,7 +831,7 @@ class whitebit extends Exchange {
             }
         }
         if ($method === null) {
-            throw new ArgumentsRequired($this->id . 'Invalid $type =>  createOrder() requires one of the following order types => $market, limit, stopLimit or stopMarket');
+            throw new ArgumentsRequired($this->id . ' createOrder() requires one of the following order types => $market, limit, stopLimit or stopMarket');
         }
         $response = $this->$method (array_merge($request, $params));
         return $this->parse_order($response);
@@ -886,6 +919,7 @@ class whitebit extends Exchange {
         $market = null;
         if ($symbol !== null) {
             $market = $this->market($symbol);
+            $symbol = $market['symbol'];
             $request['market'] = $market['id'];
         }
         if ($limit !== null) {
@@ -999,13 +1033,9 @@ class whitebit extends Exchange {
         $dealFee = $this->safe_string($order, 'dealFee');
         $fee = null;
         if ($dealFee !== null) {
-            $feeCurrencyCode = null;
-            if ($market !== null) {
-                $feeCurrencyCode = $market['quote'];
-            }
             $fee = array(
                 'cost' => $this->parse_number($dealFee),
-                'currency' => $feeCurrencyCode,
+                'currency' => $market['quote'],
             );
         }
         $timestamp = $this->safe_timestamp_2($order, 'ctime', 'timestamp');
@@ -1137,6 +1167,58 @@ class whitebit extends Exchange {
         );
     }
 
+    public function transfer($code, $amount, $fromAccount, $toAccount, $params = array ()) {
+        $this->load_markets();
+        $currency = $this->currency($code);
+        $accountsByType = $this->safe_value($this->options, 'accountsByType');
+        $fromAccountId = $this->safe_string($accountsByType, $fromAccount, $fromAccount);
+        $toAccountId = $this->safe_string($accountsByType, $toAccount, $toAccount);
+        $type = null;
+        if ($fromAccountId === 'main' && $toAccountId === 'trade') {
+            $type = 'deposit';
+        } else if ($fromAccountId === 'trade' && $toAccountId === 'main') {
+            $type = 'withdraw';
+        }
+        if ($type === null) {
+            throw new ExchangeError($this->id . ' $transfer() only allows transfers between main account and spot account');
+        }
+        $request = array(
+            'ticker' => $currency['id'],
+            'method' => $type,
+            'amount' => $this->currency_to_precision($code, $amount),
+        );
+        $response = $this->v4PrivatePostMainAccountTransfer (array_merge($request, $params));
+        //
+        //    array()
+        //
+        $transfer = $this->parse_transfer($response, $currency);
+        $transferOptions = $this->safe_value($this->options, 'transfer', array());
+        $fillTransferResponseFromRequest = $this->safe_value($transferOptions, 'fillTransferResponseFromRequest', true);
+        if ($fillTransferResponseFromRequest) {
+            $transfer['amount'] = $amount;
+            $transfer['fromAccount'] = $fromAccount;
+            $transfer['toAccount'] = $toAccount;
+        }
+        return $transfer;
+    }
+
+    public function parse_transfer($transfer, $currency) {
+        //
+        //    array()
+        //
+        return array(
+            'info' => $transfer,
+            'id' => null,
+            'timestamp' => null,
+            'datetime' => null,
+            'currency' => $this->safe_currency_code(null, $currency),
+            'amount' => null,
+            'fromAccount' => null,
+            'toAccount' => null,
+            'status' => 'pending',
+        );
+    }
+
     public function withdraw($code, $amount, $address, $tag = null, $params = array ()) {
         $this->load_markets();
         $currency = $this->currency($code); // check if it has canDeposit
@@ -1167,9 +1249,36 @@ class whitebit extends Exchange {
         //
         //     array()
         //
+        return array_merge(array( 'id' => $uniqueId ), $this->parse_transaction($response, $currency));
+    }
+
+    public function parse_transaction($transaction, $currency = null) {
+        //
+        // withdraw
+        //
+        //     array()
+        //
+        $currency = $this->safe_currency(null, $currency);
         return array(
-            'id' => $uniqueId,
-            'info' => $response,
+            'id' => null,
+            'txid' => null,
+            'timestamp' => null,
+            'datetime' => null,
+            'network' => null,
+            'addressFrom' => null,
+            'address' => null,
+            'addressTo' => null,
+            'amount' => null,
+            'type' => null,
+            'currency' => $currency['code'],
+            'status' => null,
+            'updated' => null,
+            'tagFrom' => null,
+            'tag' => null,
+            'tagTo' => null,
+            'comment' => null,
+            'fee' => null,
+            'info' => $transaction,
         );
     }
 
@@ -1218,13 +1327,15 @@ class whitebit extends Exchange {
             // For cases where we have a meaningful $status
             // array("response":null,"status":422,"errors":array("orderId":["Finished order id 435453454535 not found on your account"]),"notification":null,"warning":"Finished order id 435453454535 not found on your account","_token":null)
             $status = $this->safe_integer($response, 'status');
+            // array("code":10,"message":"Unauthorized request.")
+            $message = $this->safe_string($response, 'message');
             // For these cases where we have a generic $code variable error key
             // array("code":0,"message":"Validation failed","errors":array("amount":["Amount must be greater than 0"]))
             $code = $this->safe_integer($response, 'code');
             $hasErrorStatus = $status !== null && $status !== '200';
             if ($hasErrorStatus || $code !== null) {
                 $feedback = $this->id . ' ' . $body;
-                $errorInfo = null;
+                $errorInfo = $message;
                 if ($hasErrorStatus) {
                     $errorInfo = $status;
                 } else {

@@ -7,6 +7,7 @@ from ccxt.base.exchange import Exchange
 from ccxt.base.errors import ExchangeError
 from ccxt.base.errors import AuthenticationError
 from ccxt.base.errors import PermissionDenied
+from ccxt.base.errors import AccountNotEnabled
 from ccxt.base.errors import ArgumentsRequired
 from ccxt.base.errors import BadRequest
 from ccxt.base.errors import BadSymbol
@@ -29,9 +30,9 @@ class cryptocom(Exchange):
             'has': {
                 'CORS': False,
                 'spot': True,
-                'margin': None,
-                'swap': None,
-                'future': None,
+                'margin': None,  # has but not fully implemented
+                'swap': None,  # has but not fully implemented
+                'future': None,  # has but not fully implemented
                 'option': None,
                 'cancelAllOrders': True,
                 'cancelOrder': True,
@@ -43,11 +44,9 @@ class cryptocom(Exchange):
                 'fetchDepositAddress': True,
                 'fetchDepositAddressesByNetwork': True,
                 'fetchDeposits': True,
-                'fetchFundingFees': False,
                 'fetchFundingHistory': False,
                 'fetchFundingRate': False,
                 'fetchFundingRates': False,
-                'fetchIsolatedPositions': False,
                 'fetchMarkets': True,
                 'fetchMyTrades': True,
                 'fetchOHLCV': True,
@@ -63,6 +62,7 @@ class cryptocom(Exchange):
                 'fetchTrades': True,
                 'fetchTradingFee': False,
                 'fetchTradingFees': False,
+                'fetchTransactionFees': False,
                 'fetchTransactions': False,
                 'fetchTransfers': True,
                 'fetchWithdrawals': True,
@@ -223,6 +223,7 @@ class cryptocom(Exchange):
             'options': {
                 'defaultType': 'spot',
                 'accountsByType': {
+                    'funding': 'SPOT',
                     'spot': 'SPOT',
                     'derivatives': 'DERIVATIVES',
                     'swap': 'DERIVATIVES',
@@ -246,6 +247,7 @@ class cryptocom(Exchange):
                     '10009': BadRequest,
                     '20001': BadRequest,
                     '20002': InsufficientFunds,
+                    '20005': AccountNotEnabled,  # {"id":"123xxx","method":"private/margin/xxx","code":"20005","message":"ACCOUNT_NOT_FOUND"}
                     '30003': BadSymbol,
                     '30004': BadRequest,
                     '30005': BadRequest,
@@ -275,31 +277,29 @@ class cryptocom(Exchange):
         })
 
     def fetch_markets(self, params={}):
-        # {
-        #     "id": 11,
-        #     "method": "public/get-instruments",
-        #     "code": 0,
-        #     "result": {
-        #       "instruments": [
-        #         {
-        #           "instrument_name": "BTC_USDT",
-        #           "quote_currency": "BTC",
-        #           "base_currency": "USDT",
-        #           "price_decimals": 2,
-        #           "quantity_decimals": 6,
-        #           "margin_trading_enabled": True
-        #         },
-        #         {
-        #           "instrument_name": "CRO_BTC",
-        #           "quote_currency": "BTC",
-        #           "base_currency": "CRO",
-        #           "price_decimals": 8,
-        #           "quantity_decimals": 2,
-        #           "margin_trading_enabled": False
-        #         }
-        #       ]
-        #     }
-        #  }
+        #
+        #    {
+        #        id: 11,
+        #        method: 'public/get-instruments',
+        #        code: 0,
+        #        result: {
+        #            'instruments': [
+        #                {
+        #                    instrument_name: 'NEAR_BTC',
+        #                    quote_currency: 'BTC',
+        #                    base_currency: 'NEAR',
+        #                    price_decimals: '8',
+        #                    quantity_decimals: '2',
+        #                    margin_trading_enabled: True,
+        #                    margin_trading_enabled_5x: True,
+        #                    margin_trading_enabled_10x: True,
+        #                    max_quantity: '100000000',
+        #                    min_quantity: '0.01'
+        #               },
+        #            ]
+        #        }
+        #    }
+        #
         response = self.spotPublicGetPublicGetInstruments(params)
         resultResponse = self.safe_value(response, 'result', {})
         markets = self.safe_value(resultResponse, 'instruments', [])
@@ -311,61 +311,63 @@ class cryptocom(Exchange):
             quoteId = self.safe_string(market, 'quote_currency')
             base = self.safe_currency_code(baseId)
             quote = self.safe_currency_code(quoteId)
-            symbol = base + '/' + quote
             priceDecimals = self.safe_string(market, 'price_decimals')
             minPrice = self.parse_precision(priceDecimals)
-            precision = {
-                'amount': self.safe_integer(market, 'quantity_decimals'),
-                'price': int(priceDecimals),
-            }
             minQuantity = self.safe_string(market, 'min_quantity')
-            minCost = self.parse_number(Precise.string_mul(minQuantity, minPrice))
-            maxQuantity = self.safe_number(market, 'max_quantity')
-            margin = self.safe_value(market, 'margin_trading_enabled')
+            maxLeverage = self.parse_number('1')
+            margin_trading_enabled_5x = self.safe_value(market, 'margin_trading_enabled_5x')
+            if margin_trading_enabled_5x:
+                maxLeverage = self.parse_number('5')
+            margin_trading_enabled_10x = self.safe_value(market, 'margin_trading_enabled_10x')
+            if margin_trading_enabled_10x:
+                maxLeverage = self.parse_number('10')
             result.append({
-                'info': market,
                 'id': id,
-                'symbol': symbol,
+                'symbol': base + '/' + quote,
                 'base': base,
                 'quote': quote,
+                'settle': None,
                 'baseId': baseId,
                 'quoteId': quoteId,
-                'linear': None,
-                'inverse': None,
-                'settle': None,
                 'settleId': None,
                 'type': 'spot',
                 'spot': True,
-                'margin': margin,
-                'future': False,
+                'margin': self.safe_value(market, 'margin_trading_enabled'),
                 'swap': False,
+                'future': False,
                 'option': False,
-                'optionType': None,
-                'strike': None,
+                'active': None,
+                'contract': False,
+                'linear': None,
+                'inverse': None,
+                'contractSize': None,
                 'expiry': None,
                 'expiryDatetime': None,
-                'contract': False,
-                'contractSize': None,
-                'active': None,
-                'precision': precision,
+                'strike': None,
+                'optionType': None,
+                'precision': {
+                    'amount': self.safe_integer(market, 'quantity_decimals'),
+                    'price': int(priceDecimals),
+                },
                 'limits': {
+                    'leverage': {
+                        'min': self.parse_number('1'),
+                        'max': maxLeverage,
+                    },
                     'amount': {
                         'min': self.parse_number(minQuantity),
-                        'max': maxQuantity,
+                        'max': self.safe_number(market, 'max_quantity'),
                     },
                     'price': {
                         'min': self.parse_number(minPrice),
                         'max': None,
                     },
                     'cost': {
-                        'min': minCost,
-                        'max': None,
-                    },
-                    'leverage': {
-                        'min': None,
+                        'min': self.parse_number(Precise.string_mul(minQuantity, minPrice)),
                         'max': None,
                     },
                 },
+                'info': market,
             })
         futuresResponse = self.derivativesPublicGetPublicGetInstruments()
         #
@@ -418,41 +420,39 @@ class cryptocom(Exchange):
                 type = 'future'
                 symbol = symbol + '-' + self.yymmdd(expiry)
             contractSize = self.safe_number(market, 'contract_size')
-            marketId = self.safe_string(market, 'symbol')
-            maxLeverage = self.safe_number(market, 'max_leverage')
-            active = self.safe_value(market, 'tradable')
-            pricePrecision = self.safe_integer(market, 'quote_decimals')
-            amountPrecision = self.safe_integer(market, 'quantity_decimals')
             result.append({
-                'info': market,
-                'id': marketId,
+                'id': self.safe_string(market, 'symbol'),
                 'symbol': symbol,
                 'base': base,
                 'quote': quote,
+                'settle': quote,
                 'baseId': baseId,
                 'quoteId': quoteId,
-                'linear': True,
-                'inverse': False,
-                'settle': quote,
                 'settleId': quoteId,
                 'type': type,
                 'spot': False,
                 'margin': False,
-                'future': future,
                 'swap': swap,
+                'future': future,
                 'option': False,
-                'optionType': None,
-                'strike': None,
+                'active': self.safe_value(market, 'tradable'),
+                'contract': True,
+                'linear': True,
+                'inverse': False,
+                'contractSize': contractSize,
                 'expiry': expiry,
                 'expiryDatetime': self.iso8601(expiry),
-                'contract': True,
-                'contractSize': contractSize,
-                'active': active,
+                'strike': None,
+                'optionType': None,
                 'precision': {
-                    'price': pricePrecision,
-                    'amount': amountPrecision,
+                    'price': self.safe_integer(market, 'quote_decimals'),
+                    'amount': self.safe_integer(market, 'quantity_decimals'),
                 },
                 'limits': {
+                    'leverage': {
+                        'min': self.parse_number('1'),
+                        'max': self.safe_number(market, 'max_leverage'),
+                    },
                     'amount': {
                         'min': self.parse_number(contractSize),
                         'max': None,
@@ -465,11 +465,8 @@ class cryptocom(Exchange):
                         'min': None,
                         'max': None,
                     },
-                    'leverage': {
-                        'min': None,
-                        'max': maxLeverage,
-                    },
                 },
+                'info': market,
             })
         return result
 
@@ -514,7 +511,7 @@ class cryptocom(Exchange):
         }
         marketType, query = self.handle_market_type_and_params('fetchTicker', market, params)
         if marketType != 'spot':
-            raise NotSupported(self.id + ' fetchTicker only supports spot markets')
+            raise NotSupported(self.id + ' fetchTicker() only supports spot markets')
         response = self.spotPublicGetPublicGetTicker(self.extend(request, query))
         # {
         #     "code":0,
@@ -891,7 +888,7 @@ class cryptocom(Exchange):
         if postOnly:
             request['exec_inst'] = 'POST_ONLY'
             params = self.omit(params, ['postOnly'])
-        marketType, query = self.handle_market_type_and_params('cancelAllOrders', market, params)
+        marketType, query = self.handle_market_type_and_params('createOrder', market, params)
         method = self.get_supported_mapping(marketType, {
             'spot': 'spotPrivatePostPrivateCreateOrder',
             'future': 'derivativesPrivatePostPrivateCreateOrder',
@@ -1100,11 +1097,7 @@ class cryptocom(Exchange):
         #     }
         #
         result = self.safe_value(response, 'result')
-        id = self.safe_string(result, 'id')
-        return {
-            'info': response,
-            'id': id,
-        }
+        return self.parse_transaction(result, currency)
 
     def fetch_deposit_addresses_by_network(self, code, params={}):
         self.load_markets()
@@ -1141,7 +1134,7 @@ class cryptocom(Exchange):
         data = self.safe_value(response, 'result', {})
         addresses = self.safe_value(data, 'deposit_address_list', [])
         if len(addresses) == 0:
-            raise ExchangeError(self.id + ' generating address...')
+            raise ExchangeError(self.id + ' fetchDepositAddressesByNetwork() generating address...')
         result = {}
         for i in range(0, len(addresses)):
             value = self.safe_value(addresses, i)
@@ -1258,25 +1251,27 @@ class cryptocom(Exchange):
         fromAccount = fromAccount.lower()
         toAccount = toAccount.lower()
         accountsById = self.safe_value(self.options, 'accountsByType', {})
-        fromId = self.safe_string(accountsById, fromAccount)
-        if fromId is None:
-            keys = list(accountsById.keys())
-            raise ExchangeError(self.id + ' fromAccount must be one of ' + ', '.join(keys))
-        toId = self.safe_string(accountsById, toAccount)
-        if toId is None:
-            keys = list(accountsById.keys())
-            raise ExchangeError(self.id + ' toAccount must be one of ' + ', '.join(keys))
+        fromId = self.safe_string(accountsById, fromAccount, fromAccount)
+        toId = self.safe_string(accountsById, toAccount, toAccount)
         request = {
             'currency': currency['id'],
             'amount': float(amount),
             'from': fromId,
             'to': toId,
         }
-        return self.spotPrivatePostPrivateDerivTransfer(self.extend(request, params))
+        repsonse = self.spotPrivatePostPrivateDerivTransfer(self.extend(request, params))
+        #
+        #     {
+        #         "id": 11,
+        #         "method": "private/deriv/transfer",
+        #         "code": 0
+        #     }
+        #
+        return self.parse_transfer(repsonse, currency)
 
     def fetch_transfers(self, code=None, since=None, limit=None, params={}):
         if not ('direction' in params):
-            raise ArgumentsRequired(self.id + ' fetchTransfers requires a direction param to be either "IN" or "OUT"')
+            raise ArgumentsRequired(self.id + ' fetchTransfers() requires a direction param to be either "IN" or "OUT"')
         self.load_markets()
         currency = None
         request = {
@@ -1307,11 +1302,7 @@ class cryptocom(Exchange):
         #
         result = self.safe_value(response, 'result', {})
         transferList = self.safe_value(result, 'transfer_list', [])
-        resultArray = []
-        for i in range(0, len(transferList)):
-            transfer = transferList[i]
-            resultArray.append(self.parse_transfer(transfer, currency))
-        return self.filter_by_since_limit(resultArray, since, limit)
+        return self.parse_transfers(transferList, currency, since, limit, params)
 
     def parse_transfer_status(self, status):
         statuses = {
@@ -1346,7 +1337,7 @@ class cryptocom(Exchange):
         status = self.parse_transfer_status(rawStatus)
         return {
             'info': transfer,
-            'id': None,
+            'id': self.safe_string(transfer, 'id'),
             'timestamp': timestamp,
             'datetime': self.iso8601(timestamp),
             'currency': code,
@@ -1389,8 +1380,8 @@ class cryptocom(Exchange):
             'close': last,
             'last': last,
             'previousClose': None,
-            'change': None,
-            'percentage': relativeChange,
+            'change': relativeChange,
+            'percentage': None,
             'average': None,
             'baseVolume': self.safe_string(ticker, 'v'),
             'quoteVolume': None,
@@ -1621,30 +1612,42 @@ class cryptocom(Exchange):
         #
         # fetchDeposits
         #
-        # {
-        #     "currency": "XRP",
-        #     "fee": 1.0,
-        #     "create_time": 1607063412000,
-        #     "id": "2220",
-        #     "update_time": 1607063460000,
-        #     "amount": 100,
-        #     "address": "2NBqqD5GRJ8wHy1PYyCXTe9ke5226FhavBf?1234567890",
-        #     "status": "1"
-        # }
+        #     {
+        #         "currency": "XRP",
+        #         "fee": 1.0,
+        #         "create_time": 1607063412000,
+        #         "id": "2220",
+        #         "update_time": 1607063460000,
+        #         "amount": 100,
+        #         "address": "2NBqqD5GRJ8wHy1PYyCXTe9ke5226FhavBf?1234567890",
+        #         "status": "1"
+        #     }
         #
         # fetchWithdrawals
         #
-        # {
-        #     "currency": "XRP",
-        #     "client_wid": "my_withdrawal_002",
-        #     "fee": 1.0,
-        #     "create_time": 1607063412000,
-        #     "id": "2220",
-        #     "update_time": 1607063460000,
-        #     "amount": 100,
-        #     "address": "2NBqqD5GRJ8wHy1PYyCXTe9ke5226FhavBf?1234567890",
-        #     "status": "1"
-        # }
+        #     {
+        #         "currency": "XRP",
+        #         "client_wid": "my_withdrawal_002",
+        #         "fee": 1.0,
+        #         "create_time": 1607063412000,
+        #         "id": "2220",
+        #         "update_time": 1607063460000,
+        #         "amount": 100,
+        #         "address": "2NBqqD5GRJ8wHy1PYyCXTe9ke5226FhavBf?1234567890",
+        #         "status": "1"
+        #     }
+        #
+        # withdraw
+        #
+        #     {
+        #         "id": 2220,
+        #         "amount": 1,
+        #         "fee": 0.0004,
+        #         "symbol": "BTC",
+        #         "address": "2NBqqD5GRJ8wHy1PYyCXTe9ke5226FhavBf",
+        #         "client_wid": "my_withdrawal_002",
+        #         "create_time":1607063412000
+        #     }
         #
         type = None
         rawStatus = self.safe_string(transaction, 'status')

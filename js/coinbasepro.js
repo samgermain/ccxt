@@ -21,15 +21,17 @@ module.exports = class coinbasepro extends Exchange {
             'has': {
                 'CORS': true,
                 'spot': true,
-                'margin': undefined,
-                'swap': undefined,
-                'future': undefined,
+                'margin': undefined, // has but not fully inplemented
+                'swap': undefined, // has but not fully inplemented
+                'future': undefined, // has but not fully inplemented
                 'option': undefined,
                 'cancelAllOrders': true,
                 'cancelOrder': true,
                 'createDepositAddress': true,
                 'createOrder': true,
-                'deposit': true,
+                'createStopLimitOrder': true,
+                'createStopMarketOrder': true,
+                'createStopOrder': true,
                 'fetchAccounts': true,
                 'fetchBalance': true,
                 'fetchClosedOrders': true,
@@ -49,6 +51,8 @@ module.exports = class coinbasepro extends Exchange {
                 'fetchTickers': true,
                 'fetchTime': true,
                 'fetchTrades': true,
+                'fetchTradingFee': false,
+                'fetchTradingFees': true,
                 'fetchTransactions': true,
                 'fetchWithdrawals': true,
                 'withdraw': true,
@@ -166,8 +170,8 @@ module.exports = class coinbasepro extends Exchange {
                 'trading': {
                     'tierBased': true, // complicated tier system per coin
                     'percentage': true,
-                    'maker': 0.5 / 100, // highest fee of all tiers
-                    'taker': 0.5 / 100, // highest fee of all tiers
+                    'maker': 0.4 / 100, // highest fee of all tiers
+                    'taker': 0.6 / 100, // highest fee of all tiers
                 },
                 'funding': {
                     'tierBased': false,
@@ -282,27 +286,30 @@ module.exports = class coinbasepro extends Exchange {
     async fetchMarkets (params = {}) {
         const response = await this.publicGetProducts (params);
         //
-        //     [
-        //         {
-        //             "id":"ZEC-BTC",
-        //             "base_currency":"ZEC",
-        //             "quote_currency":"BTC",
-        //             "base_min_size":"0.01000000",
-        //             "base_max_size":"1500.00000000",
-        //             "quote_increment":"0.00000100",
-        //             "base_increment":"0.00010000",
-        //             "display_name":"ZEC/BTC",
-        //             "min_market_funds":"0.001",
-        //             "max_market_funds":"30",
-        //             "margin_enabled":false,
-        //             "post_only":false,
-        //             "limit_only":false,
-        //             "cancel_only":false,
-        //             "trading_disabled":false,
-        //             "status":"online",
-        //             "status_message":""
-        //         }
-        //     ]
+        //    [
+        //        {
+        //            "id": "ZEC-BTC",
+        //            "base_currency": "ZEC",
+        //            "quote_currency": "BTC",
+        //            "base_min_size": "0.0056",
+        //            "base_max_size": "3600",
+        //            "quote_increment": "0.000001",
+        //            "base_increment": "0.0001",
+        //            "display_name": "ZEC/BTC",
+        //            "min_market_funds": "0.000016",
+        //            "max_market_funds": "12",
+        //            "margin_enabled": false,
+        //            "fx_stablecoin": false,
+        //            "max_slippage_percentage": "0.03000000",
+        //            "post_only": false,
+        //            "limit_only": false,
+        //            "cancel_only": false,
+        //            "trading_disabled": false,
+        //            "status": "online",
+        //            "status_message": "",
+        //            "auction_mode": false
+        //          },
+        //    ]
         //
         const result = [];
         for (let i = 0; i < response.length; i++) {
@@ -312,48 +319,48 @@ module.exports = class coinbasepro extends Exchange {
             const quoteId = this.safeString (market, 'quote_currency');
             const base = this.safeCurrencyCode (baseId);
             const quote = this.safeCurrencyCode (quoteId);
-            const symbol = base + '/' + quote;
-            const priceLimits = {
-                'min': this.safeNumber (market, 'quote_increment'),
-                'max': undefined,
-            };
-            const precision = {
-                'amount': this.safeNumber (market, 'base_increment'),
-                'price': this.safeNumber (market, 'quote_increment'),
-            };
             const status = this.safeString (market, 'status');
-            const active = (status === 'online');
             result.push (this.extend (this.fees['trading'], {
                 'id': id,
-                'symbol': symbol,
-                'baseId': baseId,
-                'quoteId': quoteId,
+                'symbol': base + '/' + quote,
                 'base': base,
                 'quote': quote,
+                'settle': undefined,
+                'baseId': baseId,
+                'quoteId': quoteId,
+                'settleId': undefined,
                 'type': 'spot',
                 'spot': true,
-                'margin': false,
-                'future': false,
+                'margin': this.safeValue (market, 'margin_enabled'),
                 'swap': false,
+                'future': false,
                 'option': false,
-                'optionType': undefined,
-                'strike': undefined,
+                'active': (status === 'online'),
+                'contract': false,
                 'linear': undefined,
                 'inverse': undefined,
-                'contract': false,
                 'contractSize': undefined,
-                'settle': undefined,
-                'settleId': undefined,
                 'expiry': undefined,
                 'expiryDatetime': undefined,
-                'active': active,
-                'precision': precision,
+                'strike': undefined,
+                'optionType': undefined,
+                'precision': {
+                    'amount': this.safeNumber (market, 'base_increment'),
+                    'price': this.safeNumber (market, 'quote_increment'),
+                },
                 'limits': {
+                    'leverage': {
+                        'min': undefined,
+                        'max': undefined,
+                    },
                     'amount': {
                         'min': this.safeNumber (market, 'base_min_size'),
                         'max': this.safeNumber (market, 'base_max_size'),
                     },
-                    'price': priceLimits,
+                    'price': {
+                        'min': undefined,
+                        'max': undefined,
+                    },
                     'cost': {
                         'min': this.safeNumber (market, 'min_market_funds'),
                         'max': this.safeNumber (market, 'max_market_funds'),
@@ -633,29 +640,26 @@ module.exports = class coinbasepro extends Exchange {
         //
         const timestamp = this.parse8601 (this.safeString2 (trade, 'time', 'created_at'));
         const marketId = this.safeString (trade, 'product_id');
-        const symbol = this.safeSymbol (marketId, market, '-');
+        market = this.safeMarket (marketId, market, '-');
         let feeRate = undefined;
-        let feeCurrency = undefined;
         let takerOrMaker = undefined;
         let cost = undefined;
-        if (market !== undefined) {
-            const feeCurrencyId = this.safeStringLower (market, 'quoteId');
+        const feeCurrencyId = this.safeStringLower (market, 'quoteId');
+        if (feeCurrencyId !== undefined) {
             const costField = feeCurrencyId + '_value';
-            cost = this.safeNumber (trade, costField);
-            feeCurrency = market['quote'];
+            cost = this.safeString (trade, costField);
             const liquidity = this.safeString (trade, 'liquidity');
             if (liquidity !== undefined) {
                 takerOrMaker = (liquidity === 'T') ? 'taker' : 'maker';
-                feeRate = market[takerOrMaker];
+                feeRate = this.safeString (market, takerOrMaker);
             }
         }
-        const feeCost = this.safeNumber2 (trade, 'fill_fees', 'fee');
+        const feeCost = this.safeString2 (trade, 'fill_fees', 'fee');
         const fee = {
             'cost': feeCost,
-            'currency': feeCurrency,
+            'currency': market['quote'],
             'rate': feeRate,
         };
-        const type = undefined;
         const id = this.safeString (trade, 'trade_id');
         let side = (trade['side'] === 'buy') ? 'sell' : 'buy';
         const orderId = this.safeString (trade, 'order_id');
@@ -665,28 +669,23 @@ module.exports = class coinbasepro extends Exchange {
         if ((orderId !== undefined) || ((makerOrderId !== undefined) && (takerOrderId !== undefined))) {
             side = (trade['side'] === 'buy') ? 'buy' : 'sell';
         }
-        const priceString = this.safeString (trade, 'price');
-        const amountString = this.safeString (trade, 'size');
-        const price = this.parseNumber (priceString);
-        const amount = this.parseNumber (amountString);
-        if (cost === undefined) {
-            cost = this.parseNumber (Precise.stringMul (priceString, amountString));
-        }
-        return {
+        const price = this.safeString (trade, 'price');
+        const amount = this.safeString (trade, 'size');
+        return this.safeTrade ({
             'id': id,
             'order': orderId,
             'info': trade,
             'timestamp': timestamp,
             'datetime': this.iso8601 (timestamp),
-            'symbol': symbol,
-            'type': type,
+            'symbol': market['symbol'],
+            'type': undefined,
             'takerOrMaker': takerOrMaker,
             'side': side,
             'price': price,
             'amount': amount,
             'fee': fee,
             'cost': cost,
-        };
+        }, market);
     }
 
     async fetchMyTrades (symbol = undefined, since = undefined, limit = undefined, params = {}) {
@@ -717,6 +716,33 @@ module.exports = class coinbasepro extends Exchange {
         }
         const response = await this.publicGetProductsIdTrades (this.extend (request, params));
         return this.parseTrades (response, market, since, limit);
+    }
+
+    async fetchTradingFees (params = {}) {
+        await this.loadMarkets ();
+        const response = await this.privateGetFees (params);
+        //
+        //    {
+        //        "maker_fee_rate": "0.0050",
+        //        "taker_fee_rate": "0.0050",
+        //        "usd_volume": "43806.92"
+        //    }
+        //
+        const maker = this.safeNumber (response, 'maker_fee_rate');
+        const taker = this.safeNumber (response, 'taker_fee_rate');
+        const result = {};
+        for (let i = 0; i < this.symbols.length; i++) {
+            const symbol = this.symbols[i];
+            result[symbol] = {
+                'info': response,
+                'symbol': symbol,
+                'maker': maker,
+                'taker': taker,
+                'percentage': true,
+                'tierBased': true,
+            };
+        }
+        return result;
     }
 
     parseOHLCV (ohlcv, market = undefined) {
@@ -829,13 +855,9 @@ module.exports = class coinbasepro extends Exchange {
         const feeCost = this.safeNumber (order, 'fill_fees');
         let fee = undefined;
         if (feeCost !== undefined) {
-            let feeCurrencyCode = undefined;
-            if (market !== undefined) {
-                feeCurrencyCode = market['quote'];
-            }
             fee = {
                 'cost': feeCost,
-                'currency': feeCurrencyCode,
+                'currency': market['quote'],
                 'rate': undefined,
             };
         }
@@ -1050,6 +1072,16 @@ module.exports = class coinbasepro extends Exchange {
     }
 
     async deposit (code, amount, address, params = {}) {
+        /**
+         * @method
+         * @name coinbasepro#deposit
+         * @description Creates a new deposit address, as required by coinbasepro
+         * @param {str} code Unified CCXT currency code (e.g. `"USDT"`)
+         * @param {float} amount The amount of currency to send in the deposit (e.g. `20`)
+         * @param {str} address Not used by coinbasepro
+         * @param {dict} params Parameters specific to the exchange API endpoint (e.g. `{"network": "TRX"}`)
+         * @returns a [transaction structure]{@link https://docs.ccxt.com/en/latest/manual.html#transaction-structure}
+         */
         await this.loadMarkets ();
         const currency = this.currency (code);
         const request = {
@@ -1104,10 +1136,7 @@ module.exports = class coinbasepro extends Exchange {
         if (!response) {
             throw new ExchangeError (this.id + ' withdraw() error: ' + this.json (response));
         }
-        return {
-            'info': response,
-            'id': response['id'],
-        };
+        return this.parseTransaction (response, currency);
     }
 
     parseLedgerEntryType (type) {

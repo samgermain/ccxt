@@ -28,15 +28,16 @@ class wazirx(Exchange):
             'has': {
                 'CORS': False,
                 'spot': True,
-                'margin': None,  # exists but currently unimplemented
+                'margin': None,  # has but unimplemented
                 'swap': False,
                 'future': False,
                 'option': False,
-                'addMargin': False,
                 'cancelAllOrders': True,
                 'cancelOrder': True,
                 'createOrder': True,
-                'createReduceOnlyOrder': False,
+                'createStopLimitOrder': True,
+                'createStopMarketOrder': True,
+                'createStopOrder': True,
                 'fetchBalance': True,
                 'fetchBidsAsks': False,
                 'fetchClosedOrders': False,
@@ -44,14 +45,11 @@ class wazirx(Exchange):
                 'fetchDepositAddress': False,
                 'fetchDepositAddressesByNetwork': False,
                 'fetchDeposits': True,
-                'fetchFundingFees': False,
                 'fetchFundingHistory': False,
                 'fetchFundingRate': False,
                 'fetchFundingRateHistory': False,
                 'fetchFundingRates': False,
                 'fetchIndexOHLCV': False,
-                'fetchIsolatedPositions': False,
-                'fetchLeverage': False,
                 'fetchMarkets': True,
                 'fetchMarkOHLCV': False,
                 'fetchMyTrades': False,
@@ -60,9 +58,6 @@ class wazirx(Exchange):
                 'fetchOrder': True,
                 'fetchOrderBook': True,
                 'fetchOrders': True,
-                'fetchPosition': False,
-                'fetchPositions': False,
-                'fetchPositionsRisk': False,
                 'fetchPremiumIndexOHLCV': False,
                 'fetchStatus': True,
                 'fetchTicker': True,
@@ -71,12 +66,10 @@ class wazirx(Exchange):
                 'fetchTrades': True,
                 'fetchTradingFee': False,
                 'fetchTradingFees': False,
+                'fetchTransactionFees': False,
                 'fetchTransactions': False,
                 'fetchTransfers': False,
                 'fetchWithdrawals': False,
-                'reduceMargin': False,
-                'setLeverage': False,
-                'setPositionMode': False,
                 'transfer': False,
                 'withdraw': False,
             },
@@ -86,6 +79,7 @@ class wazirx(Exchange):
                 'www': 'https://wazirx.com',
                 'doc': 'https://docs.wazirx.com/#public-rest-api-for-wazirx',
                 'fees': 'https://wazirx.com/fees',
+                'referral': 'https://wazirx.com/invite/k7rrnks5',
             },
             'api': {
                 'public': {
@@ -108,6 +102,7 @@ class wazirx(Exchange):
                         'historicalTrades': 1,
                         'openOrders': 1,
                         'order': 1,
+                        'myTrades': 1,
                     },
                     'post': {
                         'order': 1,
@@ -213,16 +208,16 @@ class wazirx(Exchange):
                 'contract': False,
                 'linear': None,
                 'inverse': None,
-                'maker': self.parse_number(makerString),
                 'taker': self.parse_number(takerString),
+                'maker': self.parse_number(makerString),
                 'contractSize': None,
                 'expiry': None,
                 'expiryDatetime': None,
                 'strike': None,
                 'optionType': None,
                 'precision': {
-                    'price': self.safe_integer(entry, 'quoteAssetPrecision'),
                     'amount': self.safe_integer(entry, 'baseAssetPrecision'),
+                    'price': self.safe_integer(entry, 'quoteAssetPrecision'),
                 },
                 'limits': {
                     'leverage': {
@@ -357,11 +352,9 @@ class wazirx(Exchange):
         #     }
         #
         id = self.safe_string(trade, 'id')
-        timestamp = self.parse8601(self.safe_string(trade, 'time'))
+        timestamp = self.safe_integer(trade, 'time')
         datetime = self.iso8601(timestamp)
-        symbol = None
-        if market is not None:
-            symbol = market['symbol']
+        market = self.safe_market(None, market)
         isBuyerMaker = self.safe_value(trade, 'isBuyerMaker')
         side = 'sell' if isBuyerMaker else 'buy'
         price = self.safe_number(trade, 'price')
@@ -372,7 +365,7 @@ class wazirx(Exchange):
             'id': id,
             'timestamp': timestamp,
             'datetime': datetime,
-            'symbol': symbol,
+            'symbol': market['symbol'],
             'order': id,
             'type': None,
             'side': side,
@@ -381,20 +374,24 @@ class wazirx(Exchange):
             'amount': amount,
             'cost': cost,
             'fee': None,
-        })
+        }, market)
 
     async def fetch_status(self, params={}):
         response = await self.publicGetSystemStatus(params)
         #
-        #  {"status":"normal","message":"System is running normally."}
+        #     {
+        #         "status":"normal",  # normal, system maintenance
+        #         "message":"System is running normally."
+        #     }
         #
         status = self.safe_string(response, 'status')
-        status = 'ok' if (status == 'normal') else 'maintenance'
-        self.status = self.extend(self.status, {
-            'status': status,
+        return {
+            'status': 'ok' if (status == 'normal') else 'maintenance',
             'updated': self.milliseconds(),
-        })
-        return self.status
+            'eta': None,
+            'url': None,
+            'info': response,
+        }
 
     async def fetch_time(self, params={}):
         response = await self.publicGetTime(params)
@@ -483,7 +480,7 @@ class wazirx(Exchange):
 
     async def fetch_orders(self, symbol=None, since=None, limit=None, params={}):
         if symbol is None:
-            raise ArgumentsRequired(self.id + ' fetchOrders requires a `symbol` argument')
+            raise ArgumentsRequired(self.id + ' fetchOrders() requires a `symbol` argument')
         await self.load_markets()
         market = self.market(symbol)
         request = {
@@ -565,7 +562,7 @@ class wazirx(Exchange):
 
     async def cancel_all_orders(self, symbol=None, params={}):
         if symbol is None:
-            raise ArgumentsRequired(self.id + ' cancelAllOrders requires a `symbol` argument')
+            raise ArgumentsRequired(self.id + ' cancelAllOrders() requires a `symbol` argument')
         await self.load_markets()
         market = self.market(symbol)
         request = {
@@ -575,7 +572,7 @@ class wazirx(Exchange):
 
     async def cancel_order(self, id, symbol=None, params={}):
         if symbol is None:
-            raise ArgumentsRequired(self.id + ' cancelOrder requires a `symbol` argument')
+            raise ArgumentsRequired(self.id + ' cancelOrder() requires a `symbol` argument')
         await self.load_markets()
         market = self.market(symbol)
         request = {
@@ -586,7 +583,8 @@ class wazirx(Exchange):
         return self.parse_order(response)
 
     async def create_order(self, symbol, type, side, amount, price=None, params={}):
-        if not (type == 'limit') or (type == 'stop_limit'):
+        type = type.lower()
+        if (type != 'limit') and (type != 'stop_limit'):
             raise ExchangeError(self.id + ' createOrder() supports limit and stop_limit orders only')
         if price is None:
             raise ExchangeError(self.id + ' createOrder() requires a price argument')

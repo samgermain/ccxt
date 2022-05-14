@@ -33,16 +33,18 @@ class btcalpha extends Exchange {
                 'createReduceOnlyOrder' => false,
                 'fetchBalance' => true,
                 'fetchBorrowRate' => false,
+                'fetchBorrowRateHistories' => false,
                 'fetchBorrowRateHistory' => false,
                 'fetchBorrowRates' => false,
                 'fetchBorrowRatesPerSymbol' => false,
                 'fetchClosedOrders' => true,
+                'fetchDeposit' => false,
+                'fetchDeposits' => true,
                 'fetchFundingHistory' => false,
                 'fetchFundingRate' => false,
                 'fetchFundingRateHistory' => false,
                 'fetchFundingRates' => false,
                 'fetchIndexOHLCV' => false,
-                'fetchIsolatedPositions' => false,
                 'fetchLeverage' => false,
                 'fetchMarkets' => true,
                 'fetchMarkOHLCV' => false,
@@ -58,10 +60,18 @@ class btcalpha extends Exchange {
                 'fetchPremiumIndexOHLCV' => false,
                 'fetchTicker' => null,
                 'fetchTrades' => true,
+                'fetchTradingFee' => false,
+                'fetchTradingFees' => false,
+                'fetchTransfer' => false,
+                'fetchTransfers' => false,
+                'fetchWithdrawal' => false,
+                'fetchWithdrawals' => true,
                 'reduceMargin' => false,
                 'setLeverage' => false,
                 'setMarginMode' => false,
                 'setPositionMode' => false,
+                'transfer' => false,
+                'withdraw' => false,
             ),
             'timeframes' => array(
                 '1m' => '1',
@@ -128,6 +138,21 @@ class btcalpha extends Exchange {
 
     public function fetch_markets($params = array ()) {
         $response = yield $this->publicGetPairs ($params);
+        //
+        //    array(
+        //        array(
+        //            "name" => "1INCH_USDT",
+        //            "currency1" => "1INCH",
+        //            "currency2" => "USDT",
+        //            "price_precision" => 4,
+        //            "amount_precision" => 2,
+        //            "minimum_order_size" => "0.01000000",
+        //            "maximum_order_size" => "900000.00000000",
+        //            "minimum_order_value" => "10.00000000",
+        //            "liquidity_type" => 10
+        //        ),
+        //    )
+        //
         $result = array();
         for ($i = 0; $i < count($response); $i++) {
             $market = $response[$i];
@@ -240,13 +265,8 @@ class btcalpha extends Exchange {
         //          "my_side" => "buy"
         //      }
         //
-        $symbol = null;
-        if ($market === null) {
-            $market = $this->safe_value($this->markets_by_id, $trade['pair']);
-        }
-        if ($market !== null) {
-            $symbol = $market['symbol'];
-        }
+        $marketId = $this->safe_string($trade, 'pair');
+        $market = $this->safe_market($marketId, $market, '_');
         $timestamp = $this->safe_timestamp($trade, 'timestamp');
         $priceString = $this->safe_string($trade, 'price');
         $amountString = $this->safe_string($trade, 'amount');
@@ -257,7 +277,7 @@ class btcalpha extends Exchange {
             'info' => $trade,
             'timestamp' => $timestamp,
             'datetime' => $this->iso8601($timestamp),
-            'symbol' => $symbol,
+            'symbol' => $market['symbol'],
             'order' => $id,
             'type' => 'limit',
             'side' => $side,
@@ -282,6 +302,102 @@ class btcalpha extends Exchange {
         }
         $trades = yield $this->publicGetExchanges (array_merge($request, $params));
         return $this->parse_trades($trades, $market, $since, $limit);
+    }
+
+    public function fetch_deposits($code = null, $since = null, $limit = null, $params = array ()) {
+        yield $this->load_markets();
+        $response = yield $this->privateGetDeposits ($params);
+        //
+        //     array(
+        //         {
+        //             "timestamp" => 1485363039.18359,
+        //             "id" => 317,
+        //             "currency" => "BTC",
+        //             "amount" => 530.00000000
+        //         }
+        //     )
+        //
+        return $this->parse_transactions($response, $code, $since, $limit, array( 'type' => 'deposit' ));
+    }
+
+    public function fetch_withdrawals($code = null, $since = null, $limit = null, $params = array ()) {
+        yield $this->load_markets();
+        $currency = null;
+        $request = array();
+        if ($code !== null) {
+            $currency = $this->currency($code);
+            $request['currency_id'] = $currency['id'];
+        }
+        $response = yield $this->privateGetWithdraws (array_merge($request, $params));
+        //
+        //     array(
+        //         {
+        //             "id" => 403,
+        //             "timestamp" => 1485363466.868539,
+        //             "currency" => "BTC",
+        //             "amount" => 0.53000000,
+        //             "status" => 20
+        //         }
+        //     )
+        //
+        return $this->parse_transactions($response, $code, $since, $limit, array( 'type' => 'withdrawal' ));
+    }
+
+    public function parse_transaction($transaction, $currency = null) {
+        //
+        //  deposit
+        //      {
+        //          "timestamp" => 1485363039.18359,
+        //          "id" => 317,
+        //          "currency" => "BTC",
+        //          "amount" => 530.00000000
+        //      }
+        //
+        //  withdrawal
+        //      {
+        //          "id" => 403,
+        //          "timestamp" => 1485363466.868539,
+        //          "currency" => "BTC",
+        //          "amount" => 0.53000000,
+        //          "status" => 20
+        //      }
+        //
+        $timestamp = $this->safe_string($transaction, 'timestamp');
+        $timestamp = Precise::string_mul($timestamp, '1000');
+        $currencyId = $this->safe_string($transaction, 'currency');
+        $statusId = $this->safe_string($transaction, 'status');
+        return array(
+            'id' => $this->safe_string($transaction, 'id'),
+            'info' => $transaction,
+            'timestamp' => $this->parse_number($timestamp),
+            'datetime' => $this->iso8601($timestamp),
+            'network' => null,
+            'address' => null,
+            'addressTo' => null,
+            'addressFrom' => null,
+            'tag' => null,
+            'tagTo' => null,
+            'tagFrom' => null,
+            'currency' => $this->safe_currency_code($currencyId, $currency),
+            'amount' => $this->safe_number($transaction, 'amount'),
+            'txid' => null,
+            'type' => null,
+            'status' => $this->parse_transaction_status($statusId),
+            'comment' => null,
+            'fee' => null,
+            'updated' => null,
+        );
+    }
+
+    public function parse_transaction_status($status) {
+        $statuses = array(
+            '10' => 'pending',  // New
+            '20' => 'pending',  // Verified, waiting for approving
+            '30' => 'ok',       // Approved by moderator
+            '40' => 'failed',   // Refused by moderator. See your email for more details
+            '50' => 'canceled', // Cancelled by user
+        );
+        return $this->safe_string($statuses, $status, $status);
     }
 
     public function parse_ohlcv($ohlcv, $market = null) {

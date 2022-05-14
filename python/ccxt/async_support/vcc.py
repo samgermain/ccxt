@@ -41,9 +41,13 @@ class vcc(Exchange):
                 'cancelOrder': True,
                 'createOrder': True,
                 'createReduceOnlyOrder': False,
+                'createStopLimitOrder': True,
+                'createStopMarketOrder': True,
+                'createStopOrder': True,
                 'editOrder': None,
                 'fetchBalance': True,
                 'fetchBorrowRate': False,
+                'fetchBorrowRateHistories': False,
                 'fetchBorrowRateHistory': False,
                 'fetchBorrowRates': False,
                 'fetchBorrowRatesPerSymbol': False,
@@ -56,8 +60,8 @@ class vcc(Exchange):
                 'fetchFundingRateHistory': False,
                 'fetchFundingRates': False,
                 'fetchIndexOHLCV': False,
-                'fetchIsolatedPositions': False,
                 'fetchLeverage': False,
+                'fetchLeverageTiers': False,
                 'fetchMarkets': True,
                 'fetchMarkOHLCV': False,
                 'fetchMyTrades': True,
@@ -76,11 +80,15 @@ class vcc(Exchange):
                 'fetchTradingFee': True,
                 'fetchTradingFees': None,
                 'fetchTransactions': True,
+                'fetchTransfer': False,
+                'fetchTransfers': False,
                 'fetchWithdrawals': True,
                 'reduceMargin': False,
                 'setLeverage': False,
                 'setMarginMode': False,
                 'setPositionMode': False,
+                'transfer': False,
+                'withdraw': False,
             },
             'timeframes': {
                 '1m': '60000',
@@ -245,8 +253,8 @@ class vcc(Exchange):
                 'strike': None,
                 'optionType': None,
                 'precision': {
-                    'price': self.safe_integer(precision, 'price'),
                     'amount': self.safe_integer(precision, 'amount'),
+                    'price': self.safe_integer(precision, 'price'),
                     'cost': self.safe_integer(precision, 'cost'),
                 },
                 'limits': {
@@ -438,7 +446,7 @@ class vcc(Exchange):
         }
         if limit is not None:
             if (limit != 0) and (limit != 5) and (limit != 10) and (limit != 20) and (limit != 50) and (limit != 100) and (limit != 500):
-                raise BadRequest(self.id + ' fetchOrderBook limit must be 0, 5, 10, 20, 50, 100, 500 if specified')
+                raise BadRequest(self.id + ' fetchOrderBook() limit must be 0, 5, 10, 20, 50, 100, 500 if specified')
             request['depth'] = limit
         response = await self.publicGetOrderbookMarketPair(self.extend(request, params))
         #

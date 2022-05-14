@@ -37,8 +37,8 @@ class bitfinex2(bitfinex):
             'has': {
                 'CORS': None,
                 'spot': True,
-                'margin': None,
-                'swap': None,
+                'margin': None,  # has but unimplemented
+                'swap': None,  # has but unimplemented
                 'future': None,
                 'option': None,
                 'cancelAllOrders': True,
@@ -47,15 +47,17 @@ class bitfinex2(bitfinex):
                 'createLimitOrder': True,
                 'createMarketOrder': True,
                 'createOrder': True,
-                'deposit': None,
+                'createStopLimitOrder': True,
+                'createStopMarketOrder': True,
+                'createStopOrder': True,
                 'editOrder': None,
                 'fetchBalance': True,
                 'fetchClosedOrder': True,
                 'fetchClosedOrders': True,
                 'fetchCurrencies': True,
                 'fetchDepositAddress': True,
-                'fetchFundingFees': None,
                 'fetchIndexOHLCV': False,
+                'fetchLedger': True,
                 'fetchMarkOHLCV': False,
                 'fetchMyTrades': True,
                 'fetchOHLCV': True,
@@ -66,8 +68,9 @@ class bitfinex2(bitfinex):
                 'fetchStatus': True,
                 'fetchTickers': True,
                 'fetchTime': False,
-                'fetchTradingFee': None,
-                'fetchTradingFees': None,
+                'fetchTradingFee': False,
+                'fetchTradingFees': True,
+                'fetchTransactionFees': None,
                 'fetchTransactions': True,
                 'withdraw': True,
             },
@@ -328,6 +331,7 @@ class bitfinex2(bitfinex):
                     'EUR': 'EUR',
                     'JPY': 'JPY',
                     'GBP': 'GBP',
+                    'CHN': 'CHN',
                 },
                 # actually the correct names unlike the v1
                 # we don't want to self.extend self with accountsByType in v1
@@ -337,6 +341,12 @@ class bitfinex2(bitfinex):
                     'funding': 'funding',
                     'margin': 'margin',
                     'derivatives': 'margin',
+                    'future': 'margin',
+                },
+                'swap': {
+                    'fetchMarkets': {
+                        'settlementCurrencies': ['BTC', 'USDT', 'EURT'],
+                    },
                 },
             },
             'exceptions': {
@@ -358,6 +368,10 @@ class bitfinex2(bitfinex):
                     'Invalid order': InvalidOrder,
                 },
             },
+            'commonCurrencies': {
+                'EUTFO': 'EURT',
+                'USTF0': 'USDT',
+            },
         })
 
     def is_fiat(self, code):
@@ -378,29 +392,29 @@ class bitfinex2(bitfinex):
         #    [0]  # maintenance
         #
         response = await self.publicGetPlatformStatus(params)
-        status = self.safe_integer(response, 0)
-        formattedStatus = 'ok' if (status == 1) else 'maintenance'
-        self.status = self.extend(self.status, {
-            'status': formattedStatus,
+        statusRaw = self.safe_string(response, 0)
+        return {
+            'status': self.safe_string({'0': 'maintenance', '1': 'ok'}, statusRaw, statusRaw),
             'updated': self.milliseconds(),
-        })
-        return self.status
+            'eta': None,
+            'url': None,
+            'info': response,
+        }
 
     async def fetch_markets(self, params={}):
         # todo drop v1 in favor of v2 configs  ( temp-reference for v2update: https://pastebin.com/raw/S8CmqSHQ )
         # pub:list:pair:exchange,pub:list:pair:margin,pub:list:pair:futures,pub:info:pair
         v2response = await self.publicGetConfPubListPairFutures(params)
         v1response = await self.v1GetSymbolsDetails(params)
-        futuresMarketIds = self.safe_value(v2response, 0, [])
+        swapMarketIds = self.safe_value(v2response, 0, [])
         result = []
         for i in range(0, len(v1response)):
             market = v1response[i]
             id = self.safe_string_upper(market, 'pair')
             spot = True
-            if self.in_array(id, futuresMarketIds):
+            if self.in_array(id, swapMarketIds):
                 spot = False
-            future = not spot
-            type = 'spot' if spot else 'future'
+            swap = not spot
             baseId = None
             quoteId = None
             if id.find(':') >= 0:
@@ -412,47 +426,68 @@ class bitfinex2(bitfinex):
                 quoteId = id[3:6]
             base = self.safe_currency_code(baseId)
             quote = self.safe_currency_code(quoteId)
+            splitBase = base.split('F0')
+            splitQuote = quote.split('F0')
+            base = self.safe_string(splitBase, 0)
+            quote = self.safe_string(splitQuote, 0)
             symbol = base + '/' + quote
-            id = 't' + id
             baseId = self.get_currency_id(baseId)
             quoteId = self.get_currency_id(quoteId)
-            precision = {
-                'price': self.safe_integer(market, 'price_precision'),
-                'amount': 8,  # https://github.com/ccxt/ccxt/issues/7310
-            }
+            settleId = None
+            settle = None
+            if swap:
+                settleId = quoteId
+                settle = self.safe_currency_code(settleId)
+                symbol = symbol + ':' + settle
             minOrderSizeString = self.safe_string(market, 'minimum_order_size')
             maxOrderSizeString = self.safe_string(market, 'maximum_order_size')
-            limits = {
-                'amount': {
-                    'min': self.parse_number(minOrderSizeString),
-                    'max': self.parse_number(maxOrderSizeString),
-                },
-                'price': {
-                    'min': self.parse_number('1e-8'),
-                    'max': None,
-                },
-            }
-            limits['cost'] = {
-                'min': None,
-                'max': None,
-            }
-            margin = self.safe_value(market, 'margin')
             result.append({
-                'id': id,
+                'id': 't' + id,
                 'symbol': symbol,
                 'base': base,
                 'quote': quote,
+                'settle': settle,
                 'baseId': baseId,
                 'quoteId': quoteId,
-                'active': True,
-                'precision': precision,
-                'limits': limits,
-                'info': market,
-                'type': type,
-                'swap': False,
+                'settleId': settleId,
+                'type': 'spot' if spot else 'swap',
                 'spot': spot,
-                'margin': margin,
-                'future': future,
+                'margin': self.safe_value(market, 'margin', False),
+                'swap': swap,
+                'future': False,
+                'option': False,
+                'active': True,
+                'contract': swap,
+                'linear': True if swap else None,
+                'inverse': False if swap else None,
+                'contractSize': self.parse_number('1') if swap else None,
+                'expiry': None,
+                'expiryDatetime': None,
+                'strike': None,
+                'optionType': None,
+                'precision': {
+                    'amount': int('8'),  # https://github.com/ccxt/ccxt/issues/7310
+                    'price': self.safe_integer(market, 'price_precision'),
+                },
+                'limits': {
+                    'leverage': {
+                        'min': None,
+                        'max': None,
+                    },
+                    'amount': {
+                        'min': self.parse_number(minOrderSizeString),
+                        'max': self.parse_number(maxOrderSizeString),
+                    },
+                    'price': {
+                        'min': self.parse_number('1e-8'),
+                        'max': None,
+                    },
+                    'cost': {
+                        'min': None,
+                        'max': None,
+                    },
+                },
+                'info': market,
             })
         return result
 
@@ -605,10 +640,10 @@ class bitfinex2(bitfinex):
         await self.load_markets()
         accountsByType = self.safe_value(self.options, 'v2AccountsByType', {})
         requestedType = self.safe_string(params, 'type', 'exchange')
-        accountType = self.safe_string(accountsByType, requestedType)
+        accountType = self.safe_string(accountsByType, requestedType, requestedType)
         if accountType is None:
             keys = list(accountsByType.keys())
-            raise ExchangeError(self.id + ' fetchBalance type parameter must be one of ' + ', '.join(keys))
+            raise ExchangeError(self.id + ' fetchBalance() type parameter must be one of ' + ', '.join(keys))
         isDerivative = requestedType == 'derivatives'
         query = self.omit(params, 'type')
         response = await self.privatePostAuthRWallets(query)
@@ -637,11 +672,11 @@ class bitfinex2(bitfinex):
         fromId = self.safe_string(accountsByType, fromAccount)
         if fromId is None:
             keys = list(accountsByType.keys())
-            raise ExchangeError(self.id + ' transfer fromAccount must be one of ' + ', '.join(keys))
+            raise ArgumentsRequired(self.id + ' transfer() fromAccount must be one of ' + ', '.join(keys))
         toId = self.safe_string(accountsByType, toAccount)
         if toId is None:
             keys = list(accountsByType.keys())
-            raise ExchangeError(self.id + ' transfer toAccount must be one of ' + ', '.join(keys))
+            raise ArgumentsRequired(self.id + ' transfer() toAccount must be one of ' + ', '.join(keys))
         currency = self.currency(code)
         fromCurrencyId = self.convert_derivatives_id(currency, fromAccount)
         toCurrencyId = self.convert_derivatives_id(currency, toAccount)
@@ -704,7 +739,7 @@ class bitfinex2(bitfinex):
         return currencyId
 
     async def fetch_order(self, id, symbol=None, params={}):
-        raise NotSupported(self.id + ' fetchOrder is not implemented yet')
+        raise NotSupported(self.id + ' fetchOrder() is not supported yet')
 
     async def fetch_order_book(self, symbol, limit=None, params={}):
         await self.load_markets()
@@ -739,10 +774,50 @@ class bitfinex2(bitfinex):
         return result
 
     def parse_ticker(self, ticker, market=None):
+        #
+        # on trading pairs(ex. tBTCUSD)
+        #
+        #     [
+        #         SYMBOL,
+        #         BID,
+        #         BID_SIZE,
+        #         ASK,
+        #         ASK_SIZE,
+        #         DAILY_CHANGE,
+        #         DAILY_CHANGE_RELATIVE,
+        #         LAST_PRICE,
+        #         VOLUME,
+        #         HIGH,
+        #         LOW
+        #     ]
+        #
+        # on funding currencies(ex. fUSD)
+        #
+        #     [
+        #         SYMBOL,
+        #         FRR,
+        #         BID,
+        #         BID_PERIOD,
+        #         BID_SIZE,
+        #         ASK,
+        #         ASK_PERIOD,
+        #         ASK_SIZE,
+        #         DAILY_CHANGE,
+        #         DAILY_CHANGE_RELATIVE,
+        #         LAST_PRICE,
+        #         VOLUME,
+        #         HIGH,
+        #         LOW,
+        #         _PLACEHOLDER,
+        #         _PLACEHOLDER,
+        #         FRR_AMOUNT_AVAILABLE
+        #     ]
+        #
         timestamp = self.milliseconds()
         symbol = self.safe_symbol(None, market)
         length = len(ticker)
         last = self.safe_string(ticker, length - 4)
+        percentage = self.safe_string(ticker, length - 5)
         return self.safe_ticker({
             'symbol': symbol,
             'timestamp': timestamp,
@@ -759,7 +834,7 @@ class bitfinex2(bitfinex):
             'last': last,
             'previousClose': None,
             'change': self.safe_string(ticker, length - 6),
-            'percentage': self.safe_string(ticker, length - 5) * 100,
+            'percentage': Precise.string_mul(percentage, '100'),
             'average': None,
             'baseVolume': self.safe_string(ticker, length - 3),
             'quoteVolume': None,
@@ -775,6 +850,45 @@ class bitfinex2(bitfinex):
         else:
             request['symbols'] = 'ALL'
         tickers = await self.publicGetTickers(self.extend(request, params))
+        #
+        #     [
+        #         # on trading pairs(ex. tBTCUSD)
+        #         [
+        #             SYMBOL,
+        #             BID,
+        #             BID_SIZE,
+        #             ASK,
+        #             ASK_SIZE,
+        #             DAILY_CHANGE,
+        #             DAILY_CHANGE_RELATIVE,
+        #             LAST_PRICE,
+        #             VOLUME,
+        #             HIGH,
+        #             LOW
+        #         ],
+        #         # on funding currencies(ex. fUSD)
+        #         [
+        #             SYMBOL,
+        #             FRR,
+        #             BID,
+        #             BID_PERIOD,
+        #             BID_SIZE,
+        #             ASK,
+        #             ASK_PERIOD,
+        #             ASK_SIZE,
+        #             DAILY_CHANGE,
+        #             DAILY_CHANGE_RELATIVE,
+        #             LAST_PRICE,
+        #             VOLUME,
+        #             HIGH,
+        #             LOW,
+        #             _PLACEHOLDER,
+        #             _PLACEHOLDER,
+        #             FRR_AMOUNT_AVAILABLE
+        #         ],
+        #         ...
+        #     ]
+        #
         result = {}
         for i in range(0, len(tickers)):
             ticker = tickers[i]
@@ -1386,8 +1500,7 @@ class bitfinex2(bitfinex):
         elif transactionLength == 22:
             id = self.safe_string(transaction, 0)
             currencyId = self.safe_string(transaction, 1)
-            currency = self.safe_currency(currencyId, currency)
-            code = currency['code']
+            code = self.safe_currency_code(currencyId, currency)
             timestamp = self.safe_integer(transaction, 5)
             updated = self.safe_integer(transaction, 6)
             status = self.parse_transaction_status(self.safe_string(transaction, 9))
@@ -1426,6 +1539,108 @@ class bitfinex2(bitfinex):
                 'rate': None,
             },
         }
+
+    async def fetch_trading_fees(self, params={}):
+        await self.load_markets()
+        response = await self.privatePostAuthRSummary(params)
+        #
+        #      Response Spec:
+        #      [
+        #         PLACEHOLDER,
+        #         PLACEHOLDER,
+        #         PLACEHOLDER,
+        #         PLACEHOLDER,
+        #         [
+        #            [
+        #             MAKER_FEE,
+        #             MAKER_FEE,
+        #             MAKER_FEE,
+        #             PLACEHOLDER,
+        #             PLACEHOLDER,
+        #             DERIV_REBATE
+        #            ],
+        #            [
+        #             TAKER_FEE_TO_CRYPTO,
+        #             TAKER_FEE_TO_STABLE,
+        #             TAKER_FEE_TO_FIAT,
+        #             PLACEHOLDER,
+        #             PLACEHOLDER,
+        #             DERIV_TAKER_FEE
+        #            ]
+        #         ],
+        #         PLACEHOLDER,
+        #         PLACEHOLDER,
+        #         PLACEHOLDER,
+        #         PLACEHOLDER,
+        #         {
+        #             LEO_LEV,
+        #             LEO_AMOUNT_AVG
+        #         }
+        #     ]
+        #
+        #      Example response:
+        #
+        #     [
+        #         null,
+        #         null,
+        #         null,
+        #         null,
+        #         [
+        #          [0.001, 0.001, 0.001, null, null, 0.0002],
+        #          [0.002, 0.002, 0.002, null, null, 0.00065]
+        #         ],
+        #         [
+        #          [
+        #              {
+        #              curr: 'Total(USD)',
+        #              vol: '0',
+        #              vol_safe: '0',
+        #              vol_maker: '0',
+        #              vol_BFX: '0',
+        #              vol_BFX_safe: '0',
+        #              vol_BFX_maker: '0'
+        #              }
+        #          ],
+        #          {},
+        #          0
+        #         ],
+        #         [null, {}, 0],
+        #         null,
+        #         null,
+        #         {leo_lev: '0', leo_amount_avg: '0'}
+        #     ]
+        #
+        result = {}
+        fiat = self.safe_value(self.options, 'fiat', {})
+        feeData = self.safe_value(response, 4, [])
+        makerData = self.safe_value(feeData, 0, [])
+        takerData = self.safe_value(feeData, 1, [])
+        makerFee = self.safe_number(makerData, 0)
+        makerFeeFiat = self.safe_number(makerData, 2)
+        makerFeeDeriv = self.safe_number(makerData, 5)
+        takerFee = self.safe_number(takerData, 0)
+        takerFeeFiat = self.safe_number(takerData, 2)
+        takerFeeDeriv = self.safe_number(takerData, 5)
+        for i in range(0, len(self.symbols)):
+            symbol = self.symbols[i]
+            market = self.market(symbol)
+            fee = {
+                'info': response,
+                'symbol': symbol,
+                'percentage': True,
+                'tierBased': True,
+            }
+            if market['quote'] in fiat:
+                fee['maker'] = makerFeeFiat
+                fee['taker'] = takerFeeFiat
+            elif market['contract']:
+                fee['maker'] = makerFeeDeriv
+                fee['taker'] = takerFeeDeriv
+            else:  # TODO check if stable coin
+                fee['maker'] = makerFee
+                fee['taker'] = takerFee
+            result[symbol] = fee
+        return result
 
     async def fetch_transactions(self, code=None, since=None, limit=None, params={}):
         await self.load_markets()
@@ -1518,7 +1733,7 @@ class bitfinex2(bitfinex):
 
     async def fetch_positions(self, symbols=None, params={}):
         await self.load_markets()
-        response = await self.privatePostPositions(params)
+        response = await self.privatePostAuthRPositions(params)
         #
         #     [
         #         [
@@ -1604,3 +1819,99 @@ class bitfinex2(bitfinex):
             self.throw_broadly_matched_exception(self.exceptions['broad'], errorText, feedback)
             raise ExchangeError(self.id + ' ' + errorText + '(#' + errorCode + ')')
         return response
+
+    def parse_ledger_entry_type(self, type):
+        if type is None:
+            return None
+        elif type.find('fee') >= 0 or type.find('charged') >= 0:
+            return 'fee'
+        elif type.find('exchange') >= 0 or type.find('position') >= 0:
+            return 'trade'
+        elif type.find('rebate') >= 0:
+            return 'rebate'
+        elif type.find('deposit') >= 0 or type.find('withdrawal') >= 0:
+            return 'transaction'
+        elif type.find('transfer') >= 0:
+            return 'transfer'
+        elif type.find('payment') >= 0:
+            return 'payout'
+        else:
+            return type
+
+    def parse_ledger_entry(self, item, currency=None):
+        #
+        #     [
+        #         [
+        #             2531822314,  # ID: Ledger identifier
+        #             "USD",  # CURRENCY: The symbol of the currency(ex. "BTC")
+        #             null,  # PLACEHOLDER
+        #             1573521810000,  # MTS: Timestamp in milliseconds
+        #             null,  # PLACEHOLDER
+        #             0.01644445,  # AMOUNT: Amount of funds moved
+        #             0,  # BALANCE: New balance
+        #             null,  # PLACEHOLDER
+        #             "Settlement @ 185.79 on wallet margin"  # DESCRIPTION: Description of ledger transaction
+        #         ]
+        #     ]
+        #
+        type = None
+        id = self.safe_string(item, 0)
+        currencyId = self.safe_string(item, 1)
+        code = self.safe_currency_code(currencyId, currency)
+        timestamp = self.safe_integer(item, 3)
+        amount = self.safe_number(item, 5)
+        after = self.safe_number(item, 6)
+        description = self.safe_string(item, 8)
+        if description is not None:
+            parts = description.split(' @ ')
+            first = self.safe_string_lower(parts, 0)
+            type = self.parse_ledger_entry_type(first)
+        return {
+            'id': id,
+            'direction': None,
+            'account': None,
+            'referenceId': id,
+            'referenceAccount': None,
+            'type': type,
+            'currency': code,
+            'amount': amount,
+            'timestamp': timestamp,
+            'datetime': self.iso8601(timestamp),
+            'before': None,
+            'after': after,
+            'status': None,
+            'fee': None,
+            'info': item,
+        }
+
+    async def fetch_ledger(self, code=None, since=None, limit=None, params={}):
+        await self.load_markets()
+        await self.load_markets()
+        currency = None
+        request = {}
+        method = 'privatePostAuthRLedgersHist'
+        if code is not None:
+            currency = self.currency(code)
+            request['currency'] = currency['uppercaseId']
+            method = 'privatePostAuthRLedgersCurrencyHist'
+        if since is not None:
+            request['start'] = since
+        if limit is not None:
+            request['limit'] = limit  # max 2500
+        response = await getattr(self, method)(self.extend(request, params))
+        #
+        #     [
+        #         [
+        #             2531822314,  # ID: Ledger identifier
+        #             "USD",  # CURRENCY: The symbol of the currency(ex. "BTC")
+        #             null,  # PLACEHOLDER
+        #             1573521810000,  # MTS: Timestamp in milliseconds
+        #             null,  # PLACEHOLDER
+        #             0.01644445,  # AMOUNT: Amount of funds moved
+        #             0,  # BALANCE: New balance
+        #             null,  # PLACEHOLDER
+        #             "Settlement @ 185.79 on wallet margin"  # DESCRIPTION: Description of ledger transaction
+        #         ]
+        #     ]
+        #
+        return self.parse_ledger(response, currency, since, limit)

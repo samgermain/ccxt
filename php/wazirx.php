@@ -21,15 +21,16 @@ class wazirx extends Exchange {
             'has' => array(
                 'CORS' => false,
                 'spot' => true,
-                'margin' => null, // exists but currently unimplemented
+                'margin' => null, // has but unimplemented
                 'swap' => false,
                 'future' => false,
                 'option' => false,
-                'addMargin' => false,
                 'cancelAllOrders' => true,
                 'cancelOrder' => true,
                 'createOrder' => true,
-                'createReduceOnlyOrder' => false,
+                'createStopLimitOrder' => true,
+                'createStopMarketOrder' => true,
+                'createStopOrder' => true,
                 'fetchBalance' => true,
                 'fetchBidsAsks' => false,
                 'fetchClosedOrders' => false,
@@ -37,14 +38,11 @@ class wazirx extends Exchange {
                 'fetchDepositAddress' => false,
                 'fetchDepositAddressesByNetwork' => false,
                 'fetchDeposits' => true,
-                'fetchFundingFees' => false,
                 'fetchFundingHistory' => false,
                 'fetchFundingRate' => false,
                 'fetchFundingRateHistory' => false,
                 'fetchFundingRates' => false,
                 'fetchIndexOHLCV' => false,
-                'fetchIsolatedPositions' => false,
-                'fetchLeverage' => false,
                 'fetchMarkets' => true,
                 'fetchMarkOHLCV' => false,
                 'fetchMyTrades' => false,
@@ -53,9 +51,6 @@ class wazirx extends Exchange {
                 'fetchOrder' => true,
                 'fetchOrderBook' => true,
                 'fetchOrders' => true,
-                'fetchPosition' => false,
-                'fetchPositions' => false,
-                'fetchPositionsRisk' => false,
                 'fetchPremiumIndexOHLCV' => false,
                 'fetchStatus' => true,
                 'fetchTicker' => true,
@@ -64,12 +59,10 @@ class wazirx extends Exchange {
                 'fetchTrades' => true,
                 'fetchTradingFee' => false,
                 'fetchTradingFees' => false,
+                'fetchTransactionFees' => false,
                 'fetchTransactions' => false,
                 'fetchTransfers' => false,
                 'fetchWithdrawals' => false,
-                'reduceMargin' => false,
-                'setLeverage' => false,
-                'setPositionMode' => false,
                 'transfer' => false,
                 'withdraw' => false,
             ),
@@ -79,6 +72,7 @@ class wazirx extends Exchange {
                 'www' => 'https://wazirx.com',
                 'doc' => 'https://docs.wazirx.com/#public-rest-api-for-wazirx',
                 'fees' => 'https://wazirx.com/fees',
+                'referral' => 'https://wazirx.com/invite/k7rrnks5',
             ),
             'api' => array(
                 'public' => array(
@@ -101,6 +95,7 @@ class wazirx extends Exchange {
                         'historicalTrades' => 1,
                         'openOrders' => 1,
                         'order' => 1,
+                        'myTrades' => 1,
                     ),
                     'post' => array(
                         'order' => 1,
@@ -209,16 +204,16 @@ class wazirx extends Exchange {
                 'contract' => false,
                 'linear' => null,
                 'inverse' => null,
-                'maker' => $this->parse_number($makerString),
                 'taker' => $this->parse_number($takerString),
+                'maker' => $this->parse_number($makerString),
                 'contractSize' => null,
                 'expiry' => null,
                 'expiryDatetime' => null,
                 'strike' => null,
                 'optionType' => null,
                 'precision' => array(
-                    'price' => $this->safe_integer($entry, 'quoteAssetPrecision'),
                     'amount' => $this->safe_integer($entry, 'baseAssetPrecision'),
+                    'price' => $this->safe_integer($entry, 'quoteAssetPrecision'),
                 ),
                 'limits' => array(
                     'leverage' => array(
@@ -362,12 +357,9 @@ class wazirx extends Exchange {
         //     }
         //
         $id = $this->safe_string($trade, 'id');
-        $timestamp = $this->parse8601($this->safe_string($trade, 'time'));
+        $timestamp = $this->safe_integer($trade, 'time');
         $datetime = $this->iso8601($timestamp);
-        $symbol = null;
-        if ($market !== null) {
-            $symbol = $market['symbol'];
-        }
+        $market = $this->safe_market(null, $market);
         $isBuyerMaker = $this->safe_value($trade, 'isBuyerMaker');
         $side = $isBuyerMaker ? 'sell' : 'buy';
         $price = $this->safe_number($trade, 'price');
@@ -378,7 +370,7 @@ class wazirx extends Exchange {
             'id' => $id,
             'timestamp' => $timestamp,
             'datetime' => $datetime,
-            'symbol' => $symbol,
+            'symbol' => $market['symbol'],
             'order' => $id,
             'type' => null,
             'side' => $side,
@@ -387,21 +379,25 @@ class wazirx extends Exchange {
             'amount' => $amount,
             'cost' => $cost,
             'fee' => null,
-        ));
+        ), $market);
     }
 
     public function fetch_status($params = array ()) {
         $response = $this->publicGetSystemStatus ($params);
         //
-        //  array( "status":"normal","message":"System is running normally." )
+        //     {
+        //         "status":"normal", // normal, system maintenance
+        //         "message":"System is running normally."
+        //     }
         //
         $status = $this->safe_string($response, 'status');
-        $status = ($status === 'normal') ? 'ok' : 'maintenance';
-        $this->status = array_merge($this->status, array(
-            'status' => $status,
+        return array(
+            'status' => ($status === 'normal') ? 'ok' : 'maintenance',
             'updated' => $this->milliseconds(),
-        ));
-        return $this->status;
+            'eta' => null,
+            'url' => null,
+            'info' => $response,
+        );
     }
 
     public function fetch_time($params = array ()) {
@@ -496,7 +492,7 @@ class wazirx extends Exchange {
 
     public function fetch_orders($symbol = null, $since = null, $limit = null, $params = array ()) {
         if ($symbol === null) {
-            throw new ArgumentsRequired($this->id . ' fetchOrders requires a `$symbol` argument');
+            throw new ArgumentsRequired($this->id . ' fetchOrders() requires a `$symbol` argument');
         }
         $this->load_markets();
         $market = $this->market($symbol);
@@ -584,7 +580,7 @@ class wazirx extends Exchange {
 
     public function cancel_all_orders($symbol = null, $params = array ()) {
         if ($symbol === null) {
-            throw new ArgumentsRequired($this->id . ' cancelAllOrders requires a `$symbol` argument');
+            throw new ArgumentsRequired($this->id . ' cancelAllOrders() requires a `$symbol` argument');
         }
         $this->load_markets();
         $market = $this->market($symbol);
@@ -596,7 +592,7 @@ class wazirx extends Exchange {
 
     public function cancel_order($id, $symbol = null, $params = array ()) {
         if ($symbol === null) {
-            throw new ArgumentsRequired($this->id . ' cancelOrder requires a `$symbol` argument');
+            throw new ArgumentsRequired($this->id . ' cancelOrder() requires a `$symbol` argument');
         }
         $this->load_markets();
         $market = $this->market($symbol);
@@ -609,7 +605,8 @@ class wazirx extends Exchange {
     }
 
     public function create_order($symbol, $type, $side, $amount, $price = null, $params = array ()) {
-        if (!($type === 'limit') || ($type === 'stop_limit')) {
+        $type = strtolower($type);
+        if (($type !== 'limit') && ($type !== 'stop_limit')) {
             throw new ExchangeError($this->id . ' createOrder() supports limit and stop_limit orders only');
         }
         if ($price === null) {

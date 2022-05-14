@@ -36,6 +36,7 @@ class probit extends Exchange {
                 'createReduceOnlyOrder' => false,
                 'fetchBalance' => true,
                 'fetchBorrowRate' => false,
+                'fetchBorrowRateHistories' => false,
                 'fetchBorrowRateHistory' => false,
                 'fetchBorrowRates' => false,
                 'fetchBorrowRatesPerSymbol' => false,
@@ -48,8 +49,8 @@ class probit extends Exchange {
                 'fetchFundingRateHistory' => false,
                 'fetchFundingRates' => false,
                 'fetchIndexOHLCV' => false,
-                'fetchIsolatedPositions' => false,
                 'fetchLeverage' => false,
+                'fetchLeverageTiers' => false,
                 'fetchMarkets' => true,
                 'fetchMarkOHLCV' => false,
                 'fetchMyTrades' => true,
@@ -65,11 +66,18 @@ class probit extends Exchange {
                 'fetchTickers' => true,
                 'fetchTime' => true,
                 'fetchTrades' => true,
+                'fetchTradingFee' => false,
+                'fetchTradingFees' => false,
+                'fetchTransfer' => false,
+                'fetchTransfers' => false,
+                'fetchWithdrawal' => false,
+                'fetchWithdrawals' => false,
                 'reduceMargin' => false,
                 'setLeverage' => false,
                 'setMarginMode' => false,
                 'setPositionMode' => false,
                 'signIn' => true,
+                'transfer' => false,
                 'withdraw' => true,
             ),
             'timeframes' => array(
@@ -184,6 +192,7 @@ class probit extends Exchange {
             ),
             'commonCurrencies' => array(
                 'AUTO' => 'Cube',
+                'AZU' => 'Azultec',
                 'BCC' => 'BCC',
                 'BDP' => 'BidiPass',
                 'BIRD' => 'Birdchain',
@@ -191,7 +200,11 @@ class probit extends Exchange {
                 'BTCBULL' => 'BULL',
                 'CBC' => 'CryptoBharatCoin',
                 'CHE' => 'Chellit',
+                'CLR' => 'Color Platform',
+                'CTK' => 'Cryptyk',
+                'CTT' => 'Castweet',
                 'DIP' => 'Dipper',
+                'DKT' => 'DAKOTA',
                 'EGC' => 'EcoG9coin',
                 'EPS' => 'Epanus',  // conflict with EPS Ellipsis https://github.com/ccxt/ccxt/issues/8909
                 'FX' => 'Fanzy',
@@ -201,12 +214,17 @@ class probit extends Exchange {
                 'GOL' => 'Goldofir',
                 'GRB' => 'Global Reward Bank',
                 'HBC' => 'Hybrid Bank Cash',
+                'HUSL' => 'The Hustle App',
+                'LAND' => 'Landbox',
                 'LBK' => 'Legal Block',
                 'ORC' => 'Oracle System',
+                'PXP' => 'PIXSHOP COIN',
+                'PYE' => 'CreamPYE',
                 'ROOK' => 'Reckoon',
                 'SOC' => 'Soda Coin',
                 'SST' => 'SocialSwap',
                 'TCT' => 'Top Coin Token',
+                'TOR' => 'Torex',
                 'TPAY' => 'Tetra Pay',
                 'UNI' => 'UNICORN Token',
                 'UNISWAP' => 'UNI',
@@ -285,8 +303,8 @@ class probit extends Exchange {
                 'strike' => null,
                 'optionType' => null,
                 'precision' => array(
-                    'price' => $this->safe_number($market, 'price_increment'),
                     'amount' => $this->parse_number($amountTickSize),
+                    'price' => $this->safe_number($market, 'price_increment'),
                     'cost' => $this->parse_number($costTickSize),
                 ),
                 'limits' => array(
@@ -717,21 +735,18 @@ class probit extends Exchange {
         $side = $this->safe_string($trade, 'side');
         $priceString = $this->safe_string($trade, 'price');
         $amountString = $this->safe_string($trade, 'quantity');
-        $price = $this->parse_number($priceString);
-        $amount = $this->parse_number($amountString);
-        $cost = $this->parse_number(Precise::string_mul($priceString, $amountString));
         $orderId = $this->safe_string($trade, 'order_id');
-        $feeCost = $this->safe_number($trade, 'fee_amount');
+        $feeCostString = $this->safe_string($trade, 'fee_amount');
         $fee = null;
-        if ($feeCost !== null) {
+        if ($feeCostString !== null) {
             $feeCurrencyId = $this->safe_string($trade, 'fee_currency_id');
             $feeCurrencyCode = $this->safe_currency_code($feeCurrencyId);
             $fee = array(
-                'cost' => $feeCost,
+                'cost' => $feeCostString,
                 'currency' => $feeCurrencyCode,
             );
         }
-        return array(
+        return $this->safe_trade(array(
             'id' => $id,
             'info' => $trade,
             'timestamp' => $timestamp,
@@ -741,11 +756,11 @@ class probit extends Exchange {
             'type' => null,
             'side' => $side,
             'takerOrMaker' => null,
-            'price' => $price,
-            'amount' => $amount,
-            'cost' => $cost,
+            'price' => $priceString,
+            'amount' => $amountString,
+            'cost' => null,
             'fee' => $fee,
-        );
+        ), $market);
     }
 
     public function fetch_time($params = array ()) {
@@ -1141,7 +1156,7 @@ class probit extends Exchange {
         $data = $this->safe_value($response, 'data', array());
         $firstAddress = $this->safe_value($data, 0);
         if ($firstAddress === null) {
-            throw new InvalidAddress($this->id . ' fetchDepositAddress returned an empty response');
+            throw new InvalidAddress($this->id . ' fetchDepositAddress() returned an empty response');
         }
         return $this->parse_deposit_address($firstAddress, $currency);
     }

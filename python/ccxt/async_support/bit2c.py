@@ -4,19 +4,13 @@
 # https://github.com/ccxt/ccxt/blob/master/CONTRIBUTING.md#how-to-contribute-code
 
 from ccxt.async_support.base.exchange import Exchange
-
-# -----------------------------------------------------------------------------
-
-try:
-    basestring  # Python 3
-except NameError:
-    basestring = str  # Python 2
 import hashlib
 from ccxt.base.errors import ExchangeError
 from ccxt.base.errors import AuthenticationError
 from ccxt.base.errors import PermissionDenied
 from ccxt.base.errors import ArgumentsRequired
 from ccxt.base.errors import InvalidNonce
+from ccxt.base.precise import Precise
 
 
 class bit2c(Exchange):
@@ -30,18 +24,46 @@ class bit2c(Exchange):
             'has': {
                 'CORS': None,
                 'spot': True,
-                'margin': None,
-                'swap': None,
-                'future': None,
-                'option': None,
+                'margin': False,
+                'swap': False,
+                'future': False,
+                'option': False,
+                'addMargin': False,
                 'cancelOrder': True,
                 'createOrder': True,
+                'createReduceOnlyOrder': False,
                 'fetchBalance': True,
+                'fetchBorrowRate': False,
+                'fetchBorrowRateHistories': False,
+                'fetchBorrowRateHistory': False,
+                'fetchBorrowRates': False,
+                'fetchBorrowRatesPerSymbol': False,
+                'fetchFundingHistory': False,
+                'fetchFundingRate': False,
+                'fetchFundingRateHistory': False,
+                'fetchFundingRates': False,
+                'fetchIndexOHLCV': False,
+                'fetchLeverage': False,
+                'fetchLeverageTiers': False,
+                'fetchMarkOHLCV': False,
                 'fetchMyTrades': True,
                 'fetchOpenOrders': True,
                 'fetchOrderBook': True,
+                'fetchPosition': False,
+                'fetchPositions': False,
+                'fetchPositionsRisk': False,
+                'fetchPremiumIndexOHLCV': False,
                 'fetchTicker': True,
                 'fetchTrades': True,
+                'fetchTradingFee': False,
+                'fetchTradingFees': True,
+                'fetchTransfer': False,
+                'fetchTransfers': False,
+                'reduceMargin': False,
+                'setLeverage': False,
+                'setMarginMode': False,
+                'setPositionMode': False,
+                'transfer': False,
             },
             'urls': {
                 'logo': 'https://user-images.githubusercontent.com/1294454/27766119-3593220e-5ece-11e7-8b3a-5a041f6bcc3f.jpg',
@@ -233,7 +255,7 @@ class bit2c(Exchange):
     async def fetch_trades(self, symbol, since=None, limit=None, params={}):
         await self.load_markets()
         market = self.market(symbol)
-        method = self.options['fetchTradesMethod']
+        method = self.options['fetchTradesMethod']  # public_get_exchanges_pair_trades or public_get_exchanges_pair_lasttrades
         request = {
             'pair': market['id'],
         }
@@ -242,9 +264,56 @@ class bit2c(Exchange):
         if limit is not None:
             request['limit'] = limit  # max 100000
         response = await getattr(self, method)(self.extend(request, params))
-        if isinstance(response, basestring):
+        #
+        #     [
+        #         {"date":1651785980,"price":127975.68,"amount":0.3750321,"isBid":true,"tid":1261018},
+        #         {"date":1651785980,"price":127987.70,"amount":0.0389527820303982335802581029,"isBid":true,"tid":1261020},
+        #         {"date":1651786701,"price":128084.03,"amount":0.0015614749161156156626239821,"isBid":true,"tid":1261022},
+        #     ]
+        #
+        if isinstance(response, str):
             raise ExchangeError(response)
         return self.parse_trades(response, market, since, limit)
+
+    async def fetch_trading_fees(self, params={}):
+        await self.load_markets()
+        response = await self.privateGetAccountBalance(params)
+        #
+        #     {
+        #         "AVAILABLE_NIS": 0.0,
+        #         "NIS": 0.0,
+        #         "LOCKED_NIS": 0.0,
+        #         "AVAILABLE_BTC": 0.0,
+        #         "BTC": 0.0,
+        #         "LOCKED_BTC": 0.0,
+        #         ...
+        #         "Fees": {
+        #             "BtcNis": {"FeeMaker": 1.0, "FeeTaker": 1.0},
+        #             "EthNis": {"FeeMaker": 1.0, "FeeTaker": 1.0},
+        #             ...
+        #         }
+        #     }
+        #
+        fees = self.safe_value(response, 'Fees', {})
+        keys = list(fees.keys())
+        result = {}
+        for i in range(0, len(keys)):
+            marketId = keys[i]
+            symbol = self.safe_symbol(marketId)
+            fee = self.safe_value(fees, marketId)
+            makerString = self.safe_string(fee, 'FeeMaker')
+            takerString = self.safe_string(fee, 'FeeTaker')
+            maker = self.parse_number(Precise.string_div(makerString, '100'))
+            taker = self.parse_number(Precise.string_div(takerString, '100'))
+            result[symbol] = {
+                'info': fee,
+                'symbol': symbol,
+                'taker': taker,
+                'maker': maker,
+                'percentage': True,
+                'tierBased': False,
+            }
+        return result
 
     async def create_order(self, symbol, type, side, amount, price=None, params={}):
         await self.load_markets()
@@ -289,9 +358,7 @@ class bit2c(Exchange):
         timestamp = self.safe_integer(order, 'created')
         price = self.safe_string(order, 'price')
         amount = self.safe_string(order, 'amount')
-        symbol = None
-        if market is not None:
-            symbol = market['symbol']
+        market = self.safe_market(None, market)
         side = self.safe_value(order, 'type')
         if side == 0:
             side = 'buy'
@@ -306,7 +373,7 @@ class bit2c(Exchange):
             'datetime': self.iso8601(timestamp),
             'lastTradeTimestamp': None,
             'status': status,
-            'symbol': symbol,
+            'symbol': market['symbol'],
             'type': None,
             'timeInForce': None,
             'postOnly': None,
@@ -337,9 +404,78 @@ class bit2c(Exchange):
             market = self.market(symbol)
             request['pair'] = market['id']
         response = await self.privateGetOrderOrderHistory(self.extend(request, params))
+        #
+        #     [
+        #         {
+        #             "ticks":1574767951,
+        #             "created":"26/11/19 13:32",
+        #             "action":1,
+        #             "price":"1000",
+        #             "pair":"EthNis",
+        #             "reference":"EthNis|10867390|10867377",
+        #             "fee":"0.5",
+        #             "feeAmount":"0.08",
+        #             "feeCoin":"₪",
+        #             "firstAmount":"-0.015",
+        #             "firstAmountBalance":"9",
+        #             "secondAmount":"14.93",
+        #             "secondAmountBalance":"130,233.28",
+        #             "firstCoin":"ETH",
+        #             "secondCoin":"₪"
+        #         },
+        #         {
+        #             "ticks":1574767951,
+        #             "created":"26/11/19 13:32",
+        #             "action":0,
+        #             "price":"1000",
+        #             "pair":"EthNis",
+        #             "reference":"EthNis|10867390|10867377",
+        #             "fee":"0.5",
+        #             "feeAmount":"0.08",
+        #             "feeCoin":"₪",
+        #             "firstAmount":"0.015",
+        #             "firstAmountBalance":"9.015",
+        #             "secondAmount":"-15.08",
+        #             "secondAmountBalance":"130,218.35",
+        #             "firstCoin":"ETH",
+        #             "secondCoin":"₪"
+        #         }
+        #     ]
+        #
         return self.parse_trades(response, market, since, limit)
 
     def parse_trade(self, trade, market=None):
+        #
+        # public fetchTrades
+        #
+        #     {
+        #         "date":1651785980,
+        #         "price":127975.68,
+        #         "amount":0.3750321,
+        #         "isBid":true,
+        #         "tid":1261018
+        #     }
+        #
+        # private fetchMyTrades
+        #
+        #     {
+        #         "ticks":1574767951,
+        #         "created":"26/11/19 13:32",
+        #         "action":1,
+        #         "price":"1000",
+        #         "pair":"EthNis",
+        #         "reference":"EthNis|10867390|10867377",
+        #         "fee":"0.5",
+        #         "feeAmount":"0.08",
+        #         "feeCoin":"₪",
+        #         "firstAmount":"-0.015",
+        #         "firstAmountBalance":"9",
+        #         "secondAmount":"14.93",
+        #         "secondAmountBalance":"130,233.28",
+        #         "firstCoin":"ETH",
+        #         "secondCoin":"₪"
+        #     }
+        #
         timestamp = None
         id = None
         price = None
@@ -353,12 +489,9 @@ class bit2c(Exchange):
             price = self.safe_string(trade, 'price')
             amount = self.safe_string(trade, 'firstAmount')
             reference_parts = reference.split('|')  # reference contains 'pair|orderId|tradeId'
-            if market is None:
-                marketId = self.safe_string(trade, 'pair')
-                if marketId in self.markets_by_id[marketId]:
-                    market = self.markets_by_id[marketId]
-                elif reference_parts[0] in self.markets_by_id:
-                    market = self.markets_by_id[reference_parts[0]]
+            marketId = self.safe_string(trade, 'pair')
+            market = self.safe_market(marketId, market)
+            market = self.safe_market(reference_parts[0], market)
             orderId = reference_parts[1]
             id = reference_parts[2]
             side = self.safe_integer(trade, 'action')
@@ -383,15 +516,13 @@ class bit2c(Exchange):
                     side = 'buy'
                 else:
                     side = 'sell'
-        symbol = None
-        if market is not None:
-            symbol = market['symbol']
+        market = self.safe_market(None, market)
         return self.safe_trade({
             'info': trade,
             'id': id,
             'timestamp': timestamp,
             'datetime': self.iso8601(timestamp),
-            'symbol': symbol,
+            'symbol': market['symbol'],
             'order': orderId,
             'type': None,
             'side': side,

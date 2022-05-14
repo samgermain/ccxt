@@ -15,11 +15,14 @@ module.exports = class aax extends Exchange {
             'id': 'aax',
             'name': 'AAX',
             'countries': [ 'MT' ], // Malta
-            'enableRateLimit': true,
-            'rateLimit': 500,
+            // 6000 /  hour => 100 per minute => 1.66 requests per second => rateLimit = 600
+            // market endpoints ratelimits arent mentioned in docs so they are also set to "all other authenticated endpoints"
+            // 5000 / hour => weight = 1.2 ("all other authenticated endpoints")
+            // 600 / hour => weight = 10
+            // 200 / hour => weight = 30
+            'rateLimit': 600,
             'version': 'v2',
             'hostname': 'aaxpro.com', // aax.com
-            'certified': true,
             'pro': true,
             'has': {
                 'CORS': undefined,
@@ -27,21 +30,23 @@ module.exports = class aax extends Exchange {
                 'margin': false,
                 'swap': true,
                 'future': false,
-                'option': undefined,
+                'option': false,
                 'addMargin': undefined,
                 'cancelAllOrders': true,
                 'cancelOrder': true,
                 'cancelOrders': undefined,
                 'createDepositAddress': undefined,
                 'createOrder': true,
-                'createReduceOnlyOrder': undefined,
-                'deposit': undefined,
+                'createReduceOnlyOrder': false,
+                'createStopLimitOrder': true,
+                'createStopMarketOrder': true,
+                'createStopOrder': true,
                 'editOrder': true,
                 'fetchAccounts': undefined,
-                'fetchAllTradingFees': undefined,
                 'fetchBalance': true,
                 'fetchBidsAsks': undefined,
                 'fetchBorrowRate': false,
+                'fetchBorrowRateHistories': false,
                 'fetchBorrowRateHistory': false,
                 'fetchBorrowRates': false,
                 'fetchBorrowRatesPerSymbol': false,
@@ -54,20 +59,19 @@ module.exports = class aax extends Exchange {
                 'fetchDepositAddresses': undefined,
                 'fetchDepositAddressesByNetwork': undefined,
                 'fetchDeposits': true,
-                'fetchFundingFee': undefined,
-                'fetchFundingFees': undefined,
                 'fetchFundingHistory': true,
                 'fetchFundingRate': true,
                 'fetchFundingRateHistory': true,
-                'fetchFundingRates': undefined,
-                'fetchIndexOHLCV': true,
-                'fetchIsolatedPositions': undefined,
+                'fetchFundingRates': false,
+                'fetchIndexOHLCV': false,
                 'fetchL3OrderBook': undefined,
                 'fetchLedger': undefined,
                 'fetchLedgerEntry': undefined,
                 'fetchLeverage': undefined,
+                'fetchLeverageTiers': false,
+                'fetchMarketLeverageTiers': false,
                 'fetchMarkets': true,
-                'fetchMarkOHLCV': true,
+                'fetchMarkOHLCV': false,
                 'fetchMyBuys': undefined,
                 'fetchMySells': undefined,
                 'fetchMyTrades': true,
@@ -79,31 +83,33 @@ module.exports = class aax extends Exchange {
                 'fetchOrderBooks': undefined,
                 'fetchOrders': true,
                 'fetchOrderTrades': undefined,
-                'fetchPosition': undefined,
-                'fetchPositions': undefined,
-                'fetchPositionsRisk': undefined,
-                'fetchPremiumIndexOHLCV': true,
+                'fetchPosition': true,
+                'fetchPositions': true,
+                'fetchPositionsRisk': false,
+                'fetchPremiumIndexOHLCV': false,
                 'fetchStatus': true,
                 'fetchTicker': 'emulated',
                 'fetchTickers': true,
                 'fetchTime': true,
                 'fetchTrades': true,
-                'fetchTradingFee': undefined,
-                'fetchTradingFees': undefined,
+                'fetchTradingFee': false,
+                'fetchTradingFees': false,
                 'fetchTradingLimits': undefined,
+                'fetchTransactionFee': undefined,
+                'fetchTransactionFees': undefined,
                 'fetchTransactions': undefined,
-                'fetchTransfers': undefined,
-                'fetchWithdrawal': undefined,
+                'fetchTransfer': false,
+                'fetchTransfers': true,
+                'fetchWithdrawal': false,
                 'fetchWithdrawals': true,
                 'fetchWithdrawalWhitelist': undefined,
-                'loadLeverageBrackets': undefined,
                 'reduceMargin': undefined,
                 'setLeverage': true,
-                'setMarginMode': undefined,
+                'setMarginMode': false,
                 'setPositionMode': undefined,
                 'signIn': undefined,
-                'transfer': undefined,
-                'withdraw': undefined,
+                'transfer': true,
+                'withdraw': false,
             },
             'timeframes': {
                 '1m': '1m',
@@ -151,64 +157,65 @@ module.exports = class aax extends Exchange {
                     //     'tickers', // Get ticker of all markets
                     //     'tickers/{market}', // Get ticker of specific market
                     // ],
-                    'get': [
-                        'currencies',
-                        'announcement/maintenance', // System Maintenance Notice
-                        'time',
-                        'instruments', // Retrieve all trading pairs information
-                        'market/orderbook', // Order Book
-                        'futures/position/openInterest', // Open Interest
-                        'market/tickers', // Get the Last 24h Market Summary
-                        'market/candles', // Get Current Candlestick
-                        'market/history/candles', // Get Current Candlestick
-                        'market/trades', // Get the Most Recent Trades
-                        'market/markPrice', // Get Current Mark Price
-                        'futures/funding/predictedFunding/{symbol}', // Get Predicted Funding Rate
-                        'futures/funding/prevFundingRate/{symbol}', // Get Last Funding Rate
-                        'futures/funding/fundingRate',
-                        'market/candles/index', // * Deprecated
-                        'market/index/candles',
-                    ],
+                    'get': {
+                        'currencies': 1.2,
+                        'announcement/maintenance': 1.2, // System Maintenance Notice
+                        'time': 1.2,
+                        'instruments': 1.2, // Retrieve all trading pairs information
+                        'market/orderbook': 1.2, // Order Book
+                        'futures/position/openInterest': 1.2, // Open Interest
+                        'market/tickers': 1.2, // Get the Last 24h Market Summary
+                        'market/candles': 1.2, // Get Current Candlestick
+                        'market/history/candles': 1.2, // Get Current Candlestick
+                        'market/trades': 1.2, // Get the Most Recent Trades
+                        'market/markPrice': 1.2, // Get Current Mark Price
+                        'futures/funding/predictedFunding/{symbol}': 1.2, // Get Predicted Funding Rate
+                        'futures/funding/prevFundingRate/{symbol}': 1.2, // Get Last Funding Rate
+                        'futures/funding/fundingRate': 1.2,
+                        'market/candles/index': 1.2, // * Deprecated
+                        'market/index/candles': 1.2,
+                    },
                 },
                 'private': {
-                    'get': [
-                        'user/info', // Retrieve user information
-                        'account/balances', // Get Account Balances
-                        'account/deposit/address', // undocumented
-                        'account/deposits', // Get account deposits history
-                        'account/withdraws', // Get account withdrawals history
-                        'spot/trades', // Retrieve trades details for a spot order
-                        'spot/openOrders', // Retrieve spot open orders
-                        'spot/orders', // Retrieve historical spot orders
-                        'futures/position', // Get positions for all contracts
-                        'futures/position/closed', // Get closed positions
-                        'futures/trades', // Retrieve trade details for a futures order
-                        'futures/openOrders', // Retrieve futures open orders
-                        'futures/orders', // Retrieve historical futures orders
-                        'futures/funding/fundingFee',
-                        'futures/funding/predictedFundingFee/{symbol}', // Get predicted funding fee
-                    ],
-                    'post': [
-                        'account/transfer', // Asset Transfer
-                        'spot/orders', // Create a new spot order
-                        'spot/orders/cancelAllOnTimeout', // Automatically cancel all your spot orders after a specified timeout.
-                        'futures/orders', // Create a new futures order
-                        'futures/orders/cancelAllOnTimeout', // Automatically cancel all your futures orders after a specified timeout.
-                        'futures/position/sltp', // Set take profit and stop loss orders for an opening position
-                        'futures/position/close', // Close position
-                        'futures/position/leverage', // Update leverage for position
-                        'futures/position/margin', // Modify Isolated Position Margin
-                    ],
-                    'put': [
-                        'spot/orders', // Amend spot order
-                        'futures/orders', // Amend the quantity of an open futures order
-                    ],
-                    'delete': [
-                        'spot/orders/cancel/{orderID}', // Cancel a spot order
-                        'spot/orders/cancel/all', // Batch cancel spot orders
-                        'futures/orders/cancel/{orderID}', // Cancel a futures order
-                        'futures/orders/cancel/all', // Batch cancel futures orders
-                    ],
+                    'get': {
+                        'user/info': 1.2, // Retrieve user information
+                        'account/balances': 1.2, // Get Account Balances
+                        'account/deposit/address': 1.2, // undocumented
+                        'account/deposits': 1.2, // Get account deposits history
+                        'account/transfer': 1.2,
+                        'account/withdraws': 1.2, // Get account withdrawals history
+                        'spot/trades': 1.2, // Retrieve trades details for a spot order
+                        'spot/openOrders': 1.2, // Retrieve spot open orders
+                        'spot/orders': 1.2, // Retrieve historical spot orders
+                        'futures/position': 1.2, // Get positions for all contracts
+                        'futures/position/closed': 1.2, // Get closed positions
+                        'futures/trades': 1.2, // Retrieve trade details for a futures order
+                        'futures/openOrders': 1.2, // Retrieve futures open orders
+                        'futures/orders': 1.2, // Retrieve historical futures orders
+                        'futures/funding/fundingFee': 1.2,
+                        'futures/funding/predictedFundingFee/{symbol}': 1.2, // Get predicted funding fee
+                    },
+                    'post': {
+                        'account/transfer': 1.2, // Asset Transfer
+                        'spot/orders': 1.2, // Create a new spot order
+                        'spot/orders/cancelAllOnTimeout': 10, // Automatically cancel all your spot orders after a specified timeout.
+                        'futures/orders': 1.2, // Create a new futures order
+                        'futures/orders/cancelAllOnTimeout': 10, // Automatically cancel all your futures orders after a specified timeout.
+                        'futures/position/sltp': 1.2, // Set take profit and stop loss orders for an opening position
+                        'futures/position/close': 1.2, // Close position
+                        'futures/position/leverage': 30, // Update leverage for position
+                        'futures/position/margin': 1.2, // Modify Isolated Position Margin
+                    },
+                    'put': {
+                        'spot/orders': 1.2, // Amend spot order
+                        'futures/orders': 1.2, // Amend the quantity of an open futures order
+                    },
+                    'delete': {
+                        'spot/orders/cancel/{orderID}': 1, // Cancel a spot order
+                        'spot/orders/cancel/all': 10, // Batch cancel spot orders
+                        'futures/orders/cancel/{orderID}': 1, // Cancel a futures order
+                        'futures/orders/cancel/all': 10, // Batch cancel futures orders
+                    },
                 },
             },
             'fees': {
@@ -302,22 +309,19 @@ module.exports = class aax extends Exchange {
             'precisionMode': TICK_SIZE,
             'options': {
                 'defaultType': 'spot', // 'spot', 'future'
-                'types': {
+                'accountsByType': {
                     'spot': 'SPTP',
                     'future': 'FUTP',
                     'otc': 'F2CP',
                     'saving': 'VLTP',
                 },
-                'accounts': {
-                    'SPTP': 'spot',
-                    'FUTP': 'future',
-                    'F2CP': 'otc',
-                    'VLTP': 'saving',
-                },
                 'networks': {
                     'ETH': 'ERC20',
                     'TRX': 'TRC20',
                     'SOL': 'SPL',
+                },
+                'transfer': {
+                    'fillResponseFromRequest': true,
                 },
             },
         });
@@ -339,32 +343,53 @@ module.exports = class aax extends Exchange {
     async fetchStatus (params = {}) {
         const response = await this.publicGetAnnouncementMaintenance (params);
         //
+        // note, when there is no maintenance, then data is `null`
+        //
         //     {
         //         "code": 1,
         //         "data": {
         //             "startTime":"2020-06-25T02:15:00.000Z",
         //             "endTime":"2020-06-25T02:45:00.000Z"，
-        //             "description":"Spot Trading :UTC Jun 25, 2020 02:15 to 02:45 (HKT Jun 25 10:15 to 10:45),Futures Trading: UTC Jun 25, 2020 02:15 to 02:45 (HKT Jun 25 10:15 to 10:45).We apologize for any inconvenience caused. Thank you for your patience and understanding.Should you have any enquiries, please do not hesitate our live chat support or via email at cs@aax.com."
+        //             "description":"Spot Trading :UTC Jun 25, 2020 02:15 to 02:45 (HKT Jun 25 10:15 to 10:45),Futures Trading: UTC Jun 25, 2020 02:15 to 02:45 (HKT Jun 25 10:15 to 10:45).We apologize for any inconvenience caused. Thank you for your patience and understanding.Should you have any enquiries, please do not hesitate our live chat support or via email at cs@aax.com.",
+        //             "haltReason":1,
+        //             "systemStatus":{
+        //                 "spotTrading":"readOnly",
+        //                 "futuresTreading":"closeOnly",
+        //                 "walletOperating":"enable",
+        //                 "otcTrading":"disable"
+        //             },
         //         },
         //         "message":"success",
         //         "ts":1593043237000
         //     }
         //
-        const data = this.safeValue (response, 'data', {});
         const timestamp = this.milliseconds ();
-        const startTime = this.parse8601 (this.safeString (data, 'startTime'));
-        const endTime = this.parse8601 (this.safeString (data, 'endTime'));
-        const update = {
-            'updated': this.safeInteger (response, 'ts', timestamp),
-        };
-        if (endTime !== undefined) {
-            const startTimeIsOk = (startTime === undefined) ? true : (timestamp < startTime);
-            const isOk = (timestamp > endTime) || startTimeIsOk;
-            update['eta'] = endTime;
-            update['status'] = isOk ? 'ok' : 'maintenance';
+        const updated = this.safeInteger (response, 'ts', timestamp);
+        const data = this.safeValue (response, 'data', {});
+        let status = undefined;
+        let eta = undefined;
+        if (data) {
+            const startTime = this.parse8601 (this.safeString (data, 'startTime'));
+            const endTime = this.parse8601 (this.safeString (data, 'endTime'));
+            if (endTime !== undefined) {
+                const startTimeIsOk = (startTime === undefined) ? true : (updated < startTime);
+                const isOk = (updated > endTime) || startTimeIsOk;
+                eta = endTime;
+                status = isOk ? 'ok' : 'maintenance';
+            } else {
+                status = data;
+            }
+        } else {
+            eta = undefined;
+            status = 'ok';
         }
-        this.status = this.extend (this.status, update);
-        return this.status;
+        return {
+            'status': status,
+            'updated': updated,
+            'eta': eta,
+            'url': undefined,
+            'info': response,
+        };
     }
 
     async fetchMarkets (params = {}) {
@@ -468,10 +493,15 @@ module.exports = class aax extends Exchange {
             let symbol = base + '/' + quote;
             let type = 'spot';
             let contractSize = undefined;
+            let minLeverage = undefined;
+            let maxLeverage = undefined;
             if (swap) {
                 symbol = symbol + ':' + settle;
                 type = 'swap';
                 contractSize = this.safeNumber (market, 'multiplier');
+                minLeverage = '1';
+                const imRate = this.safeString (market, 'imRate');
+                maxLeverage = Precise.stringDiv ('1', imRate);
             }
             result.push ({
                 'id': id,
@@ -488,34 +518,34 @@ module.exports = class aax extends Exchange {
                 'swap': swap,
                 'future': false,
                 'option': false,
+                'active': (status === 'enable'),
                 'contract': swap,
                 'linear': linear,
                 'inverse': inverse,
+                'quanto': quanto,
                 'taker': this.safeNumber (market, 'takerFee'),
                 'maker': this.safeNumber (market, 'makerFee'),
                 'contractSize': contractSize,
-                'active': (status === 'enable'),
                 'expiry': undefined,
                 'expiryDatetime': undefined,
                 'strike': undefined,
                 'optionType': undefined,
-                'quanto': quanto,
                 'precision': {
                     'amount': this.safeNumber (market, 'lotSize'),
                     'price': this.safeNumber (market, 'tickSize'),
                 },
                 'limits': {
                     'leverage': {
-                        'min': this.parseNumber ('1'),
-                        'max': undefined,
+                        'min': this.parseNumber (minLeverage),
+                        'max': this.parseNumber (maxLeverage),
                     },
                     'amount': {
-                        'min': this.safeString (market, 'minQuantity'),
-                        'max': this.safeString (market, 'maxQuantity'),
+                        'min': this.safeNumber (market, 'minQuantity'),
+                        'max': this.safeNumber (market, 'maxQuantity'),
                     },
                     'price': {
-                        'min': this.safeString (market, 'minPrice'),
-                        'max': this.safeString (market, 'maxPrice'),
+                        'min': this.safeNumber (market, 'minPrice'),
+                        'max': this.safeNumber (market, 'maxPrice'),
                     },
                     'cost': {
                         'min': undefined,
@@ -763,7 +793,6 @@ module.exports = class aax extends Exchange {
         id = this.safeString (trade, 'i', id);
         const marketId = this.safeString (trade, 'symbol');
         market = this.safeMarket (marketId, market);
-        const symbol = market['symbol'];
         let priceString = this.safeString2 (trade, 'p', 'filledPrice');
         const amountString = this.safeString2 (trade, 'q', 'filledQty');
         const orderId = this.safeString (trade, 'orderID');
@@ -787,12 +816,10 @@ module.exports = class aax extends Exchange {
         const feeCost = this.safeString (trade, 'commission');
         if (feeCost !== undefined) {
             let feeCurrency = undefined;
-            if (market !== undefined) {
-                if (side === 'buy') {
-                    feeCurrency = market['base'];
-                } else if (side === 'sell') {
-                    feeCurrency = market['quote'];
-                }
+            if (side === 'buy') {
+                feeCurrency = market['base'];
+            } else if (side === 'sell') {
+                feeCurrency = market['quote'];
             }
             fee = {
                 'currency': feeCurrency,
@@ -804,7 +831,7 @@ module.exports = class aax extends Exchange {
             'id': id,
             'timestamp': timestamp,
             'datetime': this.iso8601 (timestamp),
-            'symbol': symbol,
+            'symbol': market['symbol'],
             'type': orderType,
             'side': side,
             'order': orderId,
@@ -814,6 +841,38 @@ module.exports = class aax extends Exchange {
             'cost': undefined,
             'fee': fee,
         }, market);
+    }
+
+    async fetchTransfers (code = undefined, since = undefined, limit = undefined, params = {}) {
+        await this.loadMarkets ();
+        let currency = undefined;
+        const request = {};
+        if (code !== undefined) {
+            currency = this.currency (code);
+            request['currency'] = currency['id'];
+        }
+        if (since !== undefined) {
+            request['startTime'] = since;
+        }
+        const response = await this.privateGetAccountTransfer (this.extend (request, params));
+        //
+        //      {
+        //          code: '1',
+        //          data: [{
+        //                  quantity: '0.000010000000',
+        //                  transferID: '480975741034369024',
+        //                  transferTime: '2022-03-24T13:53:07.042Z',
+        //                  fromPurse: 'VLTP',
+        //                  toPurse: 'SPTP',
+        //                  currency: 'ETH'
+        //              },
+        //          ],
+        //          message: 'success',
+        //          ts: '1648338516932'
+        //      }
+        //
+        const transfers = this.safeValue (response, 'data', []);
+        return this.parseTransfers (transfers, currency, since, limit);
     }
 
     async fetchTrades (symbol, since = undefined, limit = undefined, params = {}) {
@@ -896,32 +955,11 @@ module.exports = class aax extends Exchange {
         return this.parseOHLCVs (data, market, timeframe, since, limit);
     }
 
-    async fetchMarkOHLCV (symbol, timeframe = '1m', since = undefined, limit = undefined, params = {}) {
-        const request = {
-            'price': 'mark',
-        };
-        return await this.fetchOHLCV (symbol, timeframe, since, limit, this.extend (request, params));
-    }
-
-    async fetchPremiumIndexOHLCV (symbol, timeframe = '1m', since = undefined, limit = undefined, params = {}) {
-        const request = {
-            'price': 'premiumIndex',
-        };
-        return await this.fetchOHLCV (symbol, timeframe, since, limit, this.extend (request, params));
-    }
-
-    async fetchIndexOHLCV (symbol, timeframe = '1m', since = undefined, limit = undefined, params = {}) {
-        const request = {
-            'price': 'index',
-        };
-        return await this.fetchOHLCV (symbol, timeframe, since, limit, this.extend (request, params));
-    }
-
     async fetchBalance (params = {}) {
         await this.loadMarkets ();
         const defaultType = this.safeString2 (this.options, 'fetchBalance', 'defaultType', 'spot');
         const type = this.safeString (params, 'type', defaultType);
-        const types = this.safeValue (this.options, 'types', {});
+        const types = this.safeValue (this.options, 'accountsByType', {});
         const purseType = this.safeString (types, type, type);
         const request = {
             'purseType': purseType,
@@ -1737,7 +1775,6 @@ module.exports = class aax extends Exchange {
         const clientOrderId = this.safeString (order, 'clOrdID');
         const marketId = this.safeString (order, 'symbol');
         market = this.safeMarket (marketId, market);
-        const symbol = market['symbol'];
         const price = this.safeString (order, 'price');
         const stopPrice = this.safeNumber (order, 'stopPrice');
         const timeInForce = this.parseTimeInForce (this.safeString (order, 'timeInForce'));
@@ -1758,12 +1795,10 @@ module.exports = class aax extends Exchange {
         const feeCost = this.safeNumber (order, 'commission');
         if (feeCost !== undefined) {
             let feeCurrency = undefined;
-            if (market !== undefined) {
-                if (side === 'buy') {
-                    feeCurrency = market['base'];
-                } else if (side === 'sell') {
-                    feeCurrency = market['quote'];
-                }
+            if (side === 'buy') {
+                feeCurrency = market['base'];
+            } else if (side === 'sell') {
+                feeCurrency = market['quote'];
             }
             fee = {
                 'currency': feeCurrency,
@@ -1778,7 +1813,7 @@ module.exports = class aax extends Exchange {
             'datetime': this.iso8601 (timestamp),
             'lastTradeTimestamp': lastTradeTimestamp,
             'status': status,
-            'symbol': symbol,
+            'symbol': market['symbol'],
             'type': type,
             'timeInForce': timeInForce,
             'postOnly': postOnly,
@@ -2232,7 +2267,7 @@ module.exports = class aax extends Exchange {
             });
         }
         const sorted = this.sortBy (rates, 'timestamp');
-        return this.filterBySymbolSinceLimit (sorted, symbol, since, limit);
+        return this.filterBySymbolSinceLimit (sorted, market['symbol'], since, limit);
     }
 
     async fetchFundingHistory (symbol = undefined, since = undefined, limit = undefined, params = {}) {
@@ -2306,6 +2341,295 @@ module.exports = class aax extends Exchange {
             'leverage': leverage,
         };
         return await this.privatePostFuturesPositionLeverage (this.extend (request, params));
+    }
+
+    parseTransfer (transfer, currency = undefined) {
+        //     {
+        //          quantity: '0.000010000000',
+        //          transferID: '480975741034369024',
+        //          transferTime: '2022-03-24T13:53:07.042Z',
+        //          fromPurse: 'VLTP',
+        //          toPurse: 'SPTP',
+        //          currency: 'ETH'
+        //     },
+        const id = this.safeString (transfer, 'transferID');
+        const amount = this.safeNumber (transfer, 'quantity');
+        const timestamp = this.parse8601 (this.safeString (transfer, 'transferTime'));
+        const accounts = this.safeValue (this.options, 'accounts', {});
+        const fromId = this.safeString (transfer, 'fromPurse');
+        const toId = this.safeString (transfer, 'toPurse');
+        const fromAccount = this.safeString (accounts, fromId);
+        const toAccount = this.safeString (accounts, toId);
+        const currencyId = this.safeString (transfer, 'currency');
+        const currencyCode = this.safeCurrencyCode (currencyId, currency);
+        return {
+            'info': transfer,
+            'id': id,
+            'timestamp': timestamp,
+            'datetime': this.iso8601 (timestamp),
+            'currency': currencyCode,
+            'amount': amount,
+            'fromAccount': fromAccount,
+            'toAccount': toAccount,
+            'status': undefined,
+        };
+    }
+
+    parseTransferStatus (status) {
+        const statuses = {
+            '1': 'ok',
+        };
+        return this.safeString (statuses, status, 'canceled');
+    }
+
+    async transfer (code, amount, fromAccount, toAccount, params = {}) {
+        await this.loadMarkets ();
+        const currency = this.currency (code);
+        const accountTypes = this.safeValue (this.options, 'accountsByType', {});
+        const fromId = this.safeString (accountTypes, fromAccount, fromAccount);
+        const toId = this.safeString (accountTypes, toAccount, toAccount);
+        const request = {
+            'currency': currency['id'],
+            'fromPurse': fromId,
+            'toPurse': toId,
+            'quantity': amount,
+        };
+        const response = await this.privatePostAccountTransfer (this.extend (request, params));
+        //
+        //     {
+        //         "code": 1,
+        //         "data": {
+        //             "transferID": 888561,
+        //             "transferTime": "2022-03-22T15:29:05.197Z"
+        //         },
+        //         "message": "success",
+        //         "ts": 1647962945151
+        //     }
+        //
+        const data = this.safeValue (response, 'data', {});
+        const transfer = this.parseTransfer (data, currency);
+        const transferOptions = this.safeValue (this.options, 'transfer', {});
+        const fillResponseFromRequest = this.safeValue (transferOptions, 'fillResponseFromRequest', true);
+        if (fillResponseFromRequest) {
+            if (transfer['fromAccount'] === undefined) {
+                transfer['fromAccount'] = fromAccount;
+            }
+            if (transfer['toAccount'] === undefined) {
+                transfer['toAccount'] = toAccount;
+            }
+            if (transfer['amount'] === undefined) {
+                transfer['amount'] = amount;
+            }
+        }
+        transfer['status'] = this.parseTransferStatus (this.safeString (response, 'code'));
+        return transfer;
+    }
+
+    parsePosition (position, market = undefined) {
+        //
+        //    {
+        //        "autoMarginCall": false,
+        //        "avgEntryPrice": "3706.03",
+        //        "bankruptPrice": "2963.3415880000",
+        //        "base": "ETH",
+        //        "code": "FP",
+        //        "commission": "0.02964824",
+        //        "currentQty": "2",
+        //        "funding": "-0.04827355",
+        //        "fundingStatus": null,
+        //        "id": "385839395735639395",
+        //        "leverage": "5",
+        //        "liquidationPrice": "2983.07",
+        //        "marketPrice": "3731.84",
+        //        "openTime": "2021-12-31T18:57:25.930Z",
+        //        "posLeverage": "5.00",
+        //        "posMargin": "14.85376824",
+        //        "quote": "USDT",
+        //        "realisedPnl": "-0.07792179",
+        //        "riskLimit": "10000000",
+        //        "riskyPrice": "3272.25",
+        //        "settleType": "VANILLA",
+        //        "stopLossPrice": "0",
+        //        "stopLossSource": 1,
+        //        "symbol": "ETHUSDTFP",
+        //        "takeProfitPrice": "0",
+        //        "takeProfitSource": 1,
+        //        "unrealisedPnl": "0.51620000",
+        //        "userID": "3829384",
+        //        "ts": 1641027194500
+        //    }
+        //
+        const contract = this.safeString (position, 'symbol');
+        market = this.safeMarket (contract, market);
+        const size = this.safeString (position, 'currentQty');
+        let side = undefined;
+        if (Precise.stringGt (size, '0')) {
+            side = 'long';
+        } else if (Precise.stringLt (size, '0')) {
+            side = 'short';
+        }
+        const leverage = this.safeString (position, 'leverage');
+        const unrealisedPnl = this.safeString (position, 'unrealisedPnl');
+        const currentQty = this.safeString (position, 'currentQty');
+        const contractSize = this.safeString (market, 'contractSize');
+        const initialQuote = Precise.stringMul (currentQty, contractSize);
+        const marketPrice = this.safeString (position, 'marketPrice');
+        const notional = Precise.stringMul (initialQuote, marketPrice);
+        const timestamp = this.safeInteger (position, 'ts');
+        const liquidationPrice = this.safeString (position, 'liquidationPrice');
+        const marginMode = this.safeString (position, 'settleType');
+        return {
+            'info': position,
+            'symbol': this.safeString (market, 'symbol'),
+            'timestamp': timestamp,
+            'datetime': this.iso8601 (timestamp),
+            'initialMargin': undefined,
+            'initialMarginPercentage': undefined,
+            'maintenanceMargin': undefined,
+            'maintenanceMarginPercentage': undefined,
+            'entryPrice': this.safeNumber (position, 'avgEntryPrice'),
+            'notional': this.parseNumber (notional),
+            'leverage': this.parseNumber (leverage),
+            'unrealizedPnl': this.parseNumber (unrealisedPnl),
+            'contracts': this.parseNumber (size),
+            'contractSize': this.parseNumber (contractSize),
+            'marginRatio': undefined,
+            'liquidationPrice': liquidationPrice,
+            'markPrice': this.safeNumber (position, 'marketPrice'),
+            'collateral': this.safeNumber (position, 'posMargin'),
+            'marginMode': marginMode,
+            'marginType': marginMode, // deprecated
+            'side': side,
+            'percentage': undefined,
+        };
+    }
+
+    async fetchPosition (symbol = undefined, params = {}) {
+        await this.loadMarkets ();
+        const market = this.market (symbol);
+        const request = {
+            'symbol': market['id'],
+        };
+        const response = await this.privateGetFuturesPosition (this.extend (request, params));
+        //
+        //    {
+        //        "code": 1,
+        //        "data": [
+        //            {
+        //                "autoMarginCall": false,
+        //                "avgEntryPrice": "3706.03",
+        //                "bankruptPrice": "2963.3415880000",
+        //                "base": "ETH",
+        //                "code": "FP",
+        //                "commission": "0.02964824",
+        //                "currentQty": "2",
+        //                "funding": "-0.04827355",
+        //                "fundingStatus": null,
+        //                "id": "385839395735639395",
+        //                "leverage": "5",
+        //                "liquidationPrice": "2983.07",
+        //                "marketPrice": "3731.84",
+        //                "openTime": "2021-12-31T18:57:25.930Z",
+        //                "posLeverage": "5.00",
+        //                "posMargin": "14.85376824",
+        //                "quote": "USDT",
+        //                "realisedPnl": "-0.07792179",
+        //                "riskLimit": "10000000",
+        //                "riskyPrice": "3272.25",
+        //                "settleType": "VANILLA",
+        //                "stopLossPrice": "0",
+        //                "stopLossSource": 1,
+        //                "symbol": "ETHUSDTFP",
+        //                "takeProfitPrice": "0",
+        //                "takeProfitSource": 1,
+        //                "unrealisedPnl": "0.51620000",
+        //                "userID": "3829384"
+        //            }
+        //            ...
+        //        ],
+        //        "message": "success",
+        //        "ts": 1641026778068
+        //    }
+        //
+        const positions = this.safeValue (response, 'data', []);
+        const timestamp = this.safeInteger (response, 'ts');
+        const first = this.safeValue (positions, 0);
+        const position = this.parsePosition (first);
+        return this.extend (position, {
+            'timestamp': timestamp,
+            'datetime': this.iso8601 (timestamp),
+        });
+    }
+
+    async fetchPositions (symbols = undefined, params = {}) {
+        await this.loadMarkets ();
+        const request = {};
+        if (symbols !== undefined) {
+            let symbol = undefined;
+            if (Array.isArray (symbols)) {
+                const symbolsLength = symbols.length;
+                if (symbolsLength > 1) {
+                    throw new BadRequest (this.id + ' fetchPositions() symbols argument cannot contain more than 1 symbol');
+                }
+                symbol = symbols[0];
+            } else {
+                symbol = symbols;
+            }
+            const market = this.market (symbol);
+            request['symbol'] = market['id'];
+        }
+        const response = await this.privateGetFuturesPosition (this.extend (request, params));
+        //
+        //    {
+        //        "code": 1,
+        //        "data": [
+        //            {
+        //                "autoMarginCall": false,
+        //                "avgEntryPrice": "3706.03",
+        //                "bankruptPrice": "2963.3415880000",
+        //                "base": "ETH",
+        //                "code": "FP",
+        //                "commission": "0.02964824",
+        //                "currentQty": "2",
+        //                "funding": "-0.04827355",
+        //                "fundingStatus": null,
+        //                "id": "385839395735639395",
+        //                "leverage": "5",
+        //                "liquidationPrice": "2983.07",
+        //                "marketPrice": "3731.84",
+        //                "openTime": "2021-12-31T18:57:25.930Z",
+        //                "posLeverage": "5.00",
+        //                "posMargin": "14.85376824",
+        //                "quote": "USDT",
+        //                "realisedPnl": "-0.07792179",
+        //                "riskLimit": "10000000",
+        //                "riskyPrice": "3272.25",
+        //                "settleType": "VANILLA",
+        //                "stopLossPrice": "0",
+        //                "stopLossSource": 1,
+        //                "symbol": "ETHUSDTFP",
+        //                "takeProfitPrice": "0",
+        //                "takeProfitSource": 1,
+        //                "unrealisedPnl": "0.51620000",
+        //                "userID": "3829384"
+        //            }
+        //            ...
+        //        ],
+        //        "message": "success",
+        //        "ts": 1641026778068
+        //    }
+        //
+        const result = [];
+        const positions = this.safeValue (response, 'data', []);
+        const timestamp = this.safeInteger (response, 'ts');
+        for (let i = 0; i < positions.length; i++) {
+            const position = this.parsePosition (positions[i]);
+            result.push (this.extend (position, {
+                'timestamp': timestamp,
+                'datetime': this.iso8601 (timestamp),
+            }));
+        }
+        return this.filterByArray (result, 'symbol', symbols, false);
     }
 
     nonce () {

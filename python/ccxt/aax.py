@@ -4,13 +4,6 @@
 # https://github.com/ccxt/ccxt/blob/master/CONTRIBUTING.md#how-to-contribute-code
 
 from ccxt.base.exchange import Exchange
-
-# -----------------------------------------------------------------------------
-
-try:
-    basestring  # Python 3
-except NameError:
-    basestring = str  # Python 2
 from ccxt.base.errors import ExchangeError
 from ccxt.base.errors import AuthenticationError
 from ccxt.base.errors import PermissionDenied
@@ -34,11 +27,14 @@ class aax(Exchange):
             'id': 'aax',
             'name': 'AAX',
             'countries': ['MT'],  # Malta
-            'enableRateLimit': True,
-            'rateLimit': 500,
+            # 6000 /  hour => 100 per minute => 1.66 requests per second => rateLimit = 600
+            # market endpoints ratelimits arent mentioned in docs so they are also set to "all other authenticated endpoints"
+            # 5000 / hour => weight = 1.2("all other authenticated endpoints")
+            # 600 / hour => weight = 10
+            # 200 / hour => weight = 30
+            'rateLimit': 600,
             'version': 'v2',
             'hostname': 'aaxpro.com',  # aax.com
-            'certified': True,
             'pro': True,
             'has': {
                 'CORS': None,
@@ -46,21 +42,23 @@ class aax(Exchange):
                 'margin': False,
                 'swap': True,
                 'future': False,
-                'option': None,
+                'option': False,
                 'addMargin': None,
                 'cancelAllOrders': True,
                 'cancelOrder': True,
                 'cancelOrders': None,
                 'createDepositAddress': None,
                 'createOrder': True,
-                'createReduceOnlyOrder': None,
-                'deposit': None,
+                'createReduceOnlyOrder': False,
+                'createStopLimitOrder': True,
+                'createStopMarketOrder': True,
+                'createStopOrder': True,
                 'editOrder': True,
                 'fetchAccounts': None,
-                'fetchAllTradingFees': None,
                 'fetchBalance': True,
                 'fetchBidsAsks': None,
                 'fetchBorrowRate': False,
+                'fetchBorrowRateHistories': False,
                 'fetchBorrowRateHistory': False,
                 'fetchBorrowRates': False,
                 'fetchBorrowRatesPerSymbol': False,
@@ -73,20 +71,19 @@ class aax(Exchange):
                 'fetchDepositAddresses': None,
                 'fetchDepositAddressesByNetwork': None,
                 'fetchDeposits': True,
-                'fetchFundingFee': None,
-                'fetchFundingFees': None,
                 'fetchFundingHistory': True,
                 'fetchFundingRate': True,
                 'fetchFundingRateHistory': True,
-                'fetchFundingRates': None,
-                'fetchIndexOHLCV': True,
-                'fetchIsolatedPositions': None,
+                'fetchFundingRates': False,
+                'fetchIndexOHLCV': False,
                 'fetchL3OrderBook': None,
                 'fetchLedger': None,
                 'fetchLedgerEntry': None,
                 'fetchLeverage': None,
+                'fetchLeverageTiers': False,
+                'fetchMarketLeverageTiers': False,
                 'fetchMarkets': True,
-                'fetchMarkOHLCV': True,
+                'fetchMarkOHLCV': False,
                 'fetchMyBuys': None,
                 'fetchMySells': None,
                 'fetchMyTrades': True,
@@ -98,31 +95,33 @@ class aax(Exchange):
                 'fetchOrderBooks': None,
                 'fetchOrders': True,
                 'fetchOrderTrades': None,
-                'fetchPosition': None,
-                'fetchPositions': None,
-                'fetchPositionsRisk': None,
-                'fetchPremiumIndexOHLCV': True,
+                'fetchPosition': True,
+                'fetchPositions': True,
+                'fetchPositionsRisk': False,
+                'fetchPremiumIndexOHLCV': False,
                 'fetchStatus': True,
                 'fetchTicker': 'emulated',
                 'fetchTickers': True,
                 'fetchTime': True,
                 'fetchTrades': True,
-                'fetchTradingFee': None,
-                'fetchTradingFees': None,
+                'fetchTradingFee': False,
+                'fetchTradingFees': False,
                 'fetchTradingLimits': None,
+                'fetchTransactionFee': None,
+                'fetchTransactionFees': None,
                 'fetchTransactions': None,
-                'fetchTransfers': None,
-                'fetchWithdrawal': None,
+                'fetchTransfer': False,
+                'fetchTransfers': True,
+                'fetchWithdrawal': False,
                 'fetchWithdrawals': True,
                 'fetchWithdrawalWhitelist': None,
-                'loadLeverageBrackets': None,
                 'reduceMargin': None,
                 'setLeverage': True,
-                'setMarginMode': None,
+                'setMarginMode': False,
                 'setPositionMode': None,
                 'signIn': None,
-                'transfer': None,
-                'withdraw': None,
+                'transfer': True,
+                'withdraw': False,
             },
             'timeframes': {
                 '1m': '1m',
@@ -170,64 +169,65 @@ class aax(Exchange):
                     #     'tickers',  # Get ticker of all markets
                     #     'tickers/{market}',  # Get ticker of specific market
                     # ],
-                    'get': [
-                        'currencies',
-                        'announcement/maintenance',  # System Maintenance Notice
-                        'time',
-                        'instruments',  # Retrieve all trading pairs information
-                        'market/orderbook',  # Order Book
-                        'futures/position/openInterest',  # Open Interest
-                        'market/tickers',  # Get the Last 24h Market Summary
-                        'market/candles',  # Get Current Candlestick
-                        'market/history/candles',  # Get Current Candlestick
-                        'market/trades',  # Get the Most Recent Trades
-                        'market/markPrice',  # Get Current Mark Price
-                        'futures/funding/predictedFunding/{symbol}',  # Get Predicted Funding Rate
-                        'futures/funding/prevFundingRate/{symbol}',  # Get Last Funding Rate
-                        'futures/funding/fundingRate',
-                        'market/candles/index',  # * Deprecated
-                        'market/index/candles',
-                    ],
+                    'get': {
+                        'currencies': 1.2,
+                        'announcement/maintenance': 1.2,  # System Maintenance Notice
+                        'time': 1.2,
+                        'instruments': 1.2,  # Retrieve all trading pairs information
+                        'market/orderbook': 1.2,  # Order Book
+                        'futures/position/openInterest': 1.2,  # Open Interest
+                        'market/tickers': 1.2,  # Get the Last 24h Market Summary
+                        'market/candles': 1.2,  # Get Current Candlestick
+                        'market/history/candles': 1.2,  # Get Current Candlestick
+                        'market/trades': 1.2,  # Get the Most Recent Trades
+                        'market/markPrice': 1.2,  # Get Current Mark Price
+                        'futures/funding/predictedFunding/{symbol}': 1.2,  # Get Predicted Funding Rate
+                        'futures/funding/prevFundingRate/{symbol}': 1.2,  # Get Last Funding Rate
+                        'futures/funding/fundingRate': 1.2,
+                        'market/candles/index': 1.2,  # * Deprecated
+                        'market/index/candles': 1.2,
+                    },
                 },
                 'private': {
-                    'get': [
-                        'user/info',  # Retrieve user information
-                        'account/balances',  # Get Account Balances
-                        'account/deposit/address',  # undocumented
-                        'account/deposits',  # Get account deposits history
-                        'account/withdraws',  # Get account withdrawals history
-                        'spot/trades',  # Retrieve trades details for a spot order
-                        'spot/openOrders',  # Retrieve spot open orders
-                        'spot/orders',  # Retrieve historical spot orders
-                        'futures/position',  # Get positions for all contracts
-                        'futures/position/closed',  # Get closed positions
-                        'futures/trades',  # Retrieve trade details for a futures order
-                        'futures/openOrders',  # Retrieve futures open orders
-                        'futures/orders',  # Retrieve historical futures orders
-                        'futures/funding/fundingFee',
-                        'futures/funding/predictedFundingFee/{symbol}',  # Get predicted funding fee
-                    ],
-                    'post': [
-                        'account/transfer',  # Asset Transfer
-                        'spot/orders',  # Create a new spot order
-                        'spot/orders/cancelAllOnTimeout',  # Automatically cancel all your spot orders after a specified timeout.
-                        'futures/orders',  # Create a new futures order
-                        'futures/orders/cancelAllOnTimeout',  # Automatically cancel all your futures orders after a specified timeout.
-                        'futures/position/sltp',  # Set take profit and stop loss orders for an opening position
-                        'futures/position/close',  # Close position
-                        'futures/position/leverage',  # Update leverage for position
-                        'futures/position/margin',  # Modify Isolated Position Margin
-                    ],
-                    'put': [
-                        'spot/orders',  # Amend spot order
-                        'futures/orders',  # Amend the quantity of an open futures order
-                    ],
-                    'delete': [
-                        'spot/orders/cancel/{orderID}',  # Cancel a spot order
-                        'spot/orders/cancel/all',  # Batch cancel spot orders
-                        'futures/orders/cancel/{orderID}',  # Cancel a futures order
-                        'futures/orders/cancel/all',  # Batch cancel futures orders
-                    ],
+                    'get': {
+                        'user/info': 1.2,  # Retrieve user information
+                        'account/balances': 1.2,  # Get Account Balances
+                        'account/deposit/address': 1.2,  # undocumented
+                        'account/deposits': 1.2,  # Get account deposits history
+                        'account/transfer': 1.2,
+                        'account/withdraws': 1.2,  # Get account withdrawals history
+                        'spot/trades': 1.2,  # Retrieve trades details for a spot order
+                        'spot/openOrders': 1.2,  # Retrieve spot open orders
+                        'spot/orders': 1.2,  # Retrieve historical spot orders
+                        'futures/position': 1.2,  # Get positions for all contracts
+                        'futures/position/closed': 1.2,  # Get closed positions
+                        'futures/trades': 1.2,  # Retrieve trade details for a futures order
+                        'futures/openOrders': 1.2,  # Retrieve futures open orders
+                        'futures/orders': 1.2,  # Retrieve historical futures orders
+                        'futures/funding/fundingFee': 1.2,
+                        'futures/funding/predictedFundingFee/{symbol}': 1.2,  # Get predicted funding fee
+                    },
+                    'post': {
+                        'account/transfer': 1.2,  # Asset Transfer
+                        'spot/orders': 1.2,  # Create a new spot order
+                        'spot/orders/cancelAllOnTimeout': 10,  # Automatically cancel all your spot orders after a specified timeout.
+                        'futures/orders': 1.2,  # Create a new futures order
+                        'futures/orders/cancelAllOnTimeout': 10,  # Automatically cancel all your futures orders after a specified timeout.
+                        'futures/position/sltp': 1.2,  # Set take profit and stop loss orders for an opening position
+                        'futures/position/close': 1.2,  # Close position
+                        'futures/position/leverage': 30,  # Update leverage for position
+                        'futures/position/margin': 1.2,  # Modify Isolated Position Margin
+                    },
+                    'put': {
+                        'spot/orders': 1.2,  # Amend spot order
+                        'futures/orders': 1.2,  # Amend the quantity of an open futures order
+                    },
+                    'delete': {
+                        'spot/orders/cancel/{orderID}': 1,  # Cancel a spot order
+                        'spot/orders/cancel/all': 10,  # Batch cancel spot orders
+                        'futures/orders/cancel/{orderID}': 1,  # Cancel a futures order
+                        'futures/orders/cancel/all': 10,  # Batch cancel futures orders
+                    },
                 },
             },
             'fees': {
@@ -321,22 +321,19 @@ class aax(Exchange):
             'precisionMode': TICK_SIZE,
             'options': {
                 'defaultType': 'spot',  # 'spot', 'future'
-                'types': {
+                'accountsByType': {
                     'spot': 'SPTP',
                     'future': 'FUTP',
                     'otc': 'F2CP',
                     'saving': 'VLTP',
                 },
-                'accounts': {
-                    'SPTP': 'spot',
-                    'FUTP': 'future',
-                    'F2CP': 'otc',
-                    'VLTP': 'saving',
-                },
                 'networks': {
                     'ETH': 'ERC20',
                     'TRX': 'TRC20',
                     'SOL': 'SPL',
+                },
+                'transfer': {
+                    'fillResponseFromRequest': True,
                 },
             },
         })
@@ -356,31 +353,51 @@ class aax(Exchange):
     def fetch_status(self, params={}):
         response = self.publicGetAnnouncementMaintenance(params)
         #
+        # note, when there is no maintenance, then data is `null`
+        #
         #     {
         #         "code": 1,
         #         "data": {
         #             "startTime":"2020-06-25T02:15:00.000Z",
         #             "endTime":"2020-06-25T02:45:00.000Z"，
-        #             "description":"Spot Trading :UTC Jun 25, 2020 02:15 to 02:45(HKT Jun 25 10:15 to 10:45),Futures Trading: UTC Jun 25, 2020 02:15 to 02:45(HKT Jun 25 10:15 to 10:45).We apologize for any inconvenience caused. Thank you for your patience and understanding.Should you have any enquiries, please do not hesitate our live chat support or via email at cs@aax.com."
+        #             "description":"Spot Trading :UTC Jun 25, 2020 02:15 to 02:45(HKT Jun 25 10:15 to 10:45),Futures Trading: UTC Jun 25, 2020 02:15 to 02:45(HKT Jun 25 10:15 to 10:45).We apologize for any inconvenience caused. Thank you for your patience and understanding.Should you have any enquiries, please do not hesitate our live chat support or via email at cs@aax.com.",
+        #             "haltReason":1,
+        #             "systemStatus":{
+        #                 "spotTrading":"readOnly",
+        #                 "futuresTreading":"closeOnly",
+        #                 "walletOperating":"enable",
+        #                 "otcTrading":"disable"
+        #             },
         #         },
         #         "message":"success",
         #         "ts":1593043237000
         #     }
         #
-        data = self.safe_value(response, 'data', {})
         timestamp = self.milliseconds()
-        startTime = self.parse8601(self.safe_string(data, 'startTime'))
-        endTime = self.parse8601(self.safe_string(data, 'endTime'))
-        update = {
-            'updated': self.safe_integer(response, 'ts', timestamp),
+        updated = self.safe_integer(response, 'ts', timestamp)
+        data = self.safe_value(response, 'data', {})
+        status = None
+        eta = None
+        if data:
+            startTime = self.parse8601(self.safe_string(data, 'startTime'))
+            endTime = self.parse8601(self.safe_string(data, 'endTime'))
+            if endTime is not None:
+                startTimeIsOk = True if (startTime is None) else (updated < startTime)
+                isOk = (updated > endTime) or startTimeIsOk
+                eta = endTime
+                status = 'ok' if isOk else 'maintenance'
+            else:
+                status = data
+        else:
+            eta = None
+            status = 'ok'
+        return {
+            'status': status,
+            'updated': updated,
+            'eta': eta,
+            'url': None,
+            'info': response,
         }
-        if endTime is not None:
-            startTimeIsOk = True if (startTime is None) else (timestamp < startTime)
-            isOk = (timestamp > endTime) or startTimeIsOk
-            update['eta'] = endTime
-            update['status'] = 'ok' if isOk else 'maintenance'
-        self.status = self.extend(self.status, update)
-        return self.status
 
     def fetch_markets(self, params={}):
         response = self.publicGetInstruments(params)
@@ -482,10 +499,15 @@ class aax(Exchange):
             symbol = base + '/' + quote
             type = 'spot'
             contractSize = None
+            minLeverage = None
+            maxLeverage = None
             if swap:
                 symbol = symbol + ':' + settle
                 type = 'swap'
                 contractSize = self.safe_number(market, 'multiplier')
+                minLeverage = '1'
+                imRate = self.safe_string(market, 'imRate')
+                maxLeverage = Precise.string_div('1', imRate)
             result.append({
                 'id': id,
                 'symbol': symbol,
@@ -501,34 +523,34 @@ class aax(Exchange):
                 'swap': swap,
                 'future': False,
                 'option': False,
+                'active': (status == 'enable'),
                 'contract': swap,
                 'linear': linear,
                 'inverse': inverse,
+                'quanto': quanto,
                 'taker': self.safe_number(market, 'takerFee'),
                 'maker': self.safe_number(market, 'makerFee'),
                 'contractSize': contractSize,
-                'active': (status == 'enable'),
                 'expiry': None,
                 'expiryDatetime': None,
                 'strike': None,
                 'optionType': None,
-                'quanto': quanto,
                 'precision': {
                     'amount': self.safe_number(market, 'lotSize'),
                     'price': self.safe_number(market, 'tickSize'),
                 },
                 'limits': {
                     'leverage': {
-                        'min': self.parse_number('1'),
-                        'max': None,
+                        'min': self.parse_number(minLeverage),
+                        'max': self.parse_number(maxLeverage),
                     },
                     'amount': {
-                        'min': self.safe_string(market, 'minQuantity'),
-                        'max': self.safe_string(market, 'maxQuantity'),
+                        'min': self.safe_number(market, 'minQuantity'),
+                        'max': self.safe_number(market, 'maxQuantity'),
                     },
                     'price': {
-                        'min': self.safe_string(market, 'minPrice'),
-                        'max': self.safe_string(market, 'maxPrice'),
+                        'min': self.safe_number(market, 'minPrice'),
+                        'max': self.safe_number(market, 'maxPrice'),
                     },
                     'cost': {
                         'min': None,
@@ -765,7 +787,6 @@ class aax(Exchange):
         id = self.safe_string(trade, 'i', id)
         marketId = self.safe_string(trade, 'symbol')
         market = self.safe_market(marketId, market)
-        symbol = market['symbol']
         priceString = self.safe_string_2(trade, 'p', 'filledPrice')
         amountString = self.safe_string_2(trade, 'q', 'filledQty')
         orderId = self.safe_string(trade, 'orderID')
@@ -786,11 +807,10 @@ class aax(Exchange):
         feeCost = self.safe_string(trade, 'commission')
         if feeCost is not None:
             feeCurrency = None
-            if market is not None:
-                if side == 'buy':
-                    feeCurrency = market['base']
-                elif side == 'sell':
-                    feeCurrency = market['quote']
+            if side == 'buy':
+                feeCurrency = market['base']
+            elif side == 'sell':
+                feeCurrency = market['quote']
             fee = {
                 'currency': feeCurrency,
                 'cost': feeCost,
@@ -800,7 +820,7 @@ class aax(Exchange):
             'id': id,
             'timestamp': timestamp,
             'datetime': self.iso8601(timestamp),
-            'symbol': symbol,
+            'symbol': market['symbol'],
             'type': orderType,
             'side': side,
             'order': orderId,
@@ -810,6 +830,35 @@ class aax(Exchange):
             'cost': None,
             'fee': fee,
         }, market)
+
+    def fetch_transfers(self, code=None, since=None, limit=None, params={}):
+        self.load_markets()
+        currency = None
+        request = {}
+        if code is not None:
+            currency = self.currency(code)
+            request['currency'] = currency['id']
+        if since is not None:
+            request['startTime'] = since
+        response = self.privateGetAccountTransfer(self.extend(request, params))
+        #
+        #      {
+        #          code: '1',
+        #          data: [{
+        #                  quantity: '0.000010000000',
+        #                  transferID: '480975741034369024',
+        #                  transferTime: '2022-03-24T13:53:07.042Z',
+        #                  fromPurse: 'VLTP',
+        #                  toPurse: 'SPTP',
+        #                  currency: 'ETH'
+        #              },
+        #          ],
+        #          message: 'success',
+        #          ts: '1648338516932'
+        #      }
+        #
+        transfers = self.safe_value(response, 'data', [])
+        return self.parse_transfers(transfers, currency, since, limit)
 
     def fetch_trades(self, symbol, since=None, limit=None, params={}):
         self.load_markets()
@@ -887,29 +936,11 @@ class aax(Exchange):
         data = self.safe_value(response, 'data', [])
         return self.parse_ohlcvs(data, market, timeframe, since, limit)
 
-    def fetch_mark_ohlcv(self, symbol, timeframe='1m', since=None, limit=None, params={}):
-        request = {
-            'price': 'mark',
-        }
-        return self.fetch_ohlcv(symbol, timeframe, since, limit, self.extend(request, params))
-
-    def fetch_premium_index_ohlcv(self, symbol, timeframe='1m', since=None, limit=None, params={}):
-        request = {
-            'price': 'premiumIndex',
-        }
-        return self.fetch_ohlcv(symbol, timeframe, since, limit, self.extend(request, params))
-
-    def fetch_index_ohlcv(self, symbol, timeframe='1m', since=None, limit=None, params={}):
-        request = {
-            'price': 'index',
-        }
-        return self.fetch_ohlcv(symbol, timeframe, since, limit, self.extend(request, params))
-
     def fetch_balance(self, params={}):
         self.load_markets()
         defaultType = self.safe_string_2(self.options, 'fetchBalance', 'defaultType', 'spot')
         type = self.safe_string(params, 'type', defaultType)
-        types = self.safe_value(self.options, 'types', {})
+        types = self.safe_value(self.options, 'accountsByType', {})
         purseType = self.safe_string(types, type, type)
         request = {
             'purseType': purseType,
@@ -1671,7 +1702,7 @@ class aax(Exchange):
         #
         # sometimes the timestamp is returned in milliseconds
         timestamp = self.safe_value(order, 'createTime')
-        if isinstance(timestamp, basestring):
+        if isinstance(timestamp, str):
             timestamp = self.parse8601(timestamp)
         status = self.parse_order_status(self.safe_string(order, 'orderStatus'))
         type = self.parse_order_type(self.safe_string(order, 'orderType'))
@@ -1684,7 +1715,6 @@ class aax(Exchange):
         clientOrderId = self.safe_string(order, 'clOrdID')
         marketId = self.safe_string(order, 'symbol')
         market = self.safe_market(marketId, market)
-        symbol = market['symbol']
         price = self.safe_string(order, 'price')
         stopPrice = self.safe_number(order, 'stopPrice')
         timeInForce = self.parse_time_in_force(self.safe_string(order, 'timeInForce'))
@@ -1697,17 +1727,16 @@ class aax(Exchange):
         if (Precise.string_equals(filled, '0')) and (Precise.string_equals(remaining, '0')):
             remaining = None
         lastTradeTimestamp = self.safe_value(order, 'transactTime')
-        if isinstance(lastTradeTimestamp, basestring):
+        if isinstance(lastTradeTimestamp, str):
             lastTradeTimestamp = self.parse8601(lastTradeTimestamp)
         fee = None
         feeCost = self.safe_number(order, 'commission')
         if feeCost is not None:
             feeCurrency = None
-            if market is not None:
-                if side == 'buy':
-                    feeCurrency = market['base']
-                elif side == 'sell':
-                    feeCurrency = market['quote']
+            if side == 'buy':
+                feeCurrency = market['base']
+            elif side == 'sell':
+                feeCurrency = market['quote']
             fee = {
                 'currency': feeCurrency,
                 'cost': feeCost,
@@ -1720,7 +1749,7 @@ class aax(Exchange):
             'datetime': self.iso8601(timestamp),
             'lastTradeTimestamp': lastTradeTimestamp,
             'status': status,
-            'symbol': symbol,
+            'symbol': market['symbol'],
             'type': type,
             'timeInForce': timeInForce,
             'postOnly': postOnly,
@@ -2146,7 +2175,7 @@ class aax(Exchange):
                 'datetime': datetime,
             })
         sorted = self.sort_by(rates, 'timestamp')
-        return self.filter_by_symbol_since_limit(sorted, symbol, since, limit)
+        return self.filter_by_symbol_since_limit(sorted, market['symbol'], since, limit)
 
     def fetch_funding_history(self, symbol=None, since=None, limit=None, params={}):
         self.load_markets()
@@ -2211,6 +2240,280 @@ class aax(Exchange):
             'leverage': leverage,
         }
         return self.privatePostFuturesPositionLeverage(self.extend(request, params))
+
+    def parse_transfer(self, transfer, currency=None):
+        #     {
+        #          quantity: '0.000010000000',
+        #          transferID: '480975741034369024',
+        #          transferTime: '2022-03-24T13:53:07.042Z',
+        #          fromPurse: 'VLTP',
+        #          toPurse: 'SPTP',
+        #          currency: 'ETH'
+        #     },
+        id = self.safe_string(transfer, 'transferID')
+        amount = self.safe_number(transfer, 'quantity')
+        timestamp = self.parse8601(self.safe_string(transfer, 'transferTime'))
+        accounts = self.safe_value(self.options, 'accounts', {})
+        fromId = self.safe_string(transfer, 'fromPurse')
+        toId = self.safe_string(transfer, 'toPurse')
+        fromAccount = self.safe_string(accounts, fromId)
+        toAccount = self.safe_string(accounts, toId)
+        currencyId = self.safe_string(transfer, 'currency')
+        currencyCode = self.safe_currency_code(currencyId, currency)
+        return {
+            'info': transfer,
+            'id': id,
+            'timestamp': timestamp,
+            'datetime': self.iso8601(timestamp),
+            'currency': currencyCode,
+            'amount': amount,
+            'fromAccount': fromAccount,
+            'toAccount': toAccount,
+            'status': None,
+        }
+
+    def parse_transfer_status(self, status):
+        statuses = {
+            '1': 'ok',
+        }
+        return self.safe_string(statuses, status, 'canceled')
+
+    def transfer(self, code, amount, fromAccount, toAccount, params={}):
+        self.load_markets()
+        currency = self.currency(code)
+        accountTypes = self.safe_value(self.options, 'accountsByType', {})
+        fromId = self.safe_string(accountTypes, fromAccount, fromAccount)
+        toId = self.safe_string(accountTypes, toAccount, toAccount)
+        request = {
+            'currency': currency['id'],
+            'fromPurse': fromId,
+            'toPurse': toId,
+            'quantity': amount,
+        }
+        response = self.privatePostAccountTransfer(self.extend(request, params))
+        #
+        #     {
+        #         "code": 1,
+        #         "data": {
+        #             "transferID": 888561,
+        #             "transferTime": "2022-03-22T15:29:05.197Z"
+        #         },
+        #         "message": "success",
+        #         "ts": 1647962945151
+        #     }
+        #
+        data = self.safe_value(response, 'data', {})
+        transfer = self.parse_transfer(data, currency)
+        transferOptions = self.safe_value(self.options, 'transfer', {})
+        fillResponseFromRequest = self.safe_value(transferOptions, 'fillResponseFromRequest', True)
+        if fillResponseFromRequest:
+            if transfer['fromAccount'] is None:
+                transfer['fromAccount'] = fromAccount
+            if transfer['toAccount'] is None:
+                transfer['toAccount'] = toAccount
+            if transfer['amount'] is None:
+                transfer['amount'] = amount
+        transfer['status'] = self.parse_transfer_status(self.safe_string(response, 'code'))
+        return transfer
+
+    def parse_position(self, position, market=None):
+        #
+        #    {
+        #        "autoMarginCall": False,
+        #        "avgEntryPrice": "3706.03",
+        #        "bankruptPrice": "2963.3415880000",
+        #        "base": "ETH",
+        #        "code": "FP",
+        #        "commission": "0.02964824",
+        #        "currentQty": "2",
+        #        "funding": "-0.04827355",
+        #        "fundingStatus": null,
+        #        "id": "385839395735639395",
+        #        "leverage": "5",
+        #        "liquidationPrice": "2983.07",
+        #        "marketPrice": "3731.84",
+        #        "openTime": "2021-12-31T18:57:25.930Z",
+        #        "posLeverage": "5.00",
+        #        "posMargin": "14.85376824",
+        #        "quote": "USDT",
+        #        "realisedPnl": "-0.07792179",
+        #        "riskLimit": "10000000",
+        #        "riskyPrice": "3272.25",
+        #        "settleType": "VANILLA",
+        #        "stopLossPrice": "0",
+        #        "stopLossSource": 1,
+        #        "symbol": "ETHUSDTFP",
+        #        "takeProfitPrice": "0",
+        #        "takeProfitSource": 1,
+        #        "unrealisedPnl": "0.51620000",
+        #        "userID": "3829384",
+        #        "ts": 1641027194500
+        #    }
+        #
+        contract = self.safe_string(position, 'symbol')
+        market = self.safe_market(contract, market)
+        size = self.safe_string(position, 'currentQty')
+        side = None
+        if Precise.string_gt(size, '0'):
+            side = 'long'
+        elif Precise.string_lt(size, '0'):
+            side = 'short'
+        leverage = self.safe_string(position, 'leverage')
+        unrealisedPnl = self.safe_string(position, 'unrealisedPnl')
+        currentQty = self.safe_string(position, 'currentQty')
+        contractSize = self.safe_string(market, 'contractSize')
+        initialQuote = Precise.string_mul(currentQty, contractSize)
+        marketPrice = self.safe_string(position, 'marketPrice')
+        notional = Precise.string_mul(initialQuote, marketPrice)
+        timestamp = self.safe_integer(position, 'ts')
+        liquidationPrice = self.safe_string(position, 'liquidationPrice')
+        marginMode = self.safe_string(position, 'settleType')
+        return {
+            'info': position,
+            'symbol': self.safe_string(market, 'symbol'),
+            'timestamp': timestamp,
+            'datetime': self.iso8601(timestamp),
+            'initialMargin': None,
+            'initialMarginPercentage': None,
+            'maintenanceMargin': None,
+            'maintenanceMarginPercentage': None,
+            'entryPrice': self.safe_number(position, 'avgEntryPrice'),
+            'notional': self.parse_number(notional),
+            'leverage': self.parse_number(leverage),
+            'unrealizedPnl': self.parse_number(unrealisedPnl),
+            'contracts': self.parse_number(size),
+            'contractSize': self.parse_number(contractSize),
+            'marginRatio': None,
+            'liquidationPrice': liquidationPrice,
+            'markPrice': self.safe_number(position, 'marketPrice'),
+            'collateral': self.safe_number(position, 'posMargin'),
+            'marginMode': marginMode,
+            'marginType': marginMode,  # deprecated
+            'side': side,
+            'percentage': None,
+        }
+
+    def fetch_position(self, symbol=None, params={}):
+        self.load_markets()
+        market = self.market(symbol)
+        request = {
+            'symbol': market['id'],
+        }
+        response = self.privateGetFuturesPosition(self.extend(request, params))
+        #
+        #    {
+        #        "code": 1,
+        #        "data": [
+        #            {
+        #                "autoMarginCall": False,
+        #                "avgEntryPrice": "3706.03",
+        #                "bankruptPrice": "2963.3415880000",
+        #                "base": "ETH",
+        #                "code": "FP",
+        #                "commission": "0.02964824",
+        #                "currentQty": "2",
+        #                "funding": "-0.04827355",
+        #                "fundingStatus": null,
+        #                "id": "385839395735639395",
+        #                "leverage": "5",
+        #                "liquidationPrice": "2983.07",
+        #                "marketPrice": "3731.84",
+        #                "openTime": "2021-12-31T18:57:25.930Z",
+        #                "posLeverage": "5.00",
+        #                "posMargin": "14.85376824",
+        #                "quote": "USDT",
+        #                "realisedPnl": "-0.07792179",
+        #                "riskLimit": "10000000",
+        #                "riskyPrice": "3272.25",
+        #                "settleType": "VANILLA",
+        #                "stopLossPrice": "0",
+        #                "stopLossSource": 1,
+        #                "symbol": "ETHUSDTFP",
+        #                "takeProfitPrice": "0",
+        #                "takeProfitSource": 1,
+        #                "unrealisedPnl": "0.51620000",
+        #                "userID": "3829384"
+        #            }
+        #            ...
+        #        ],
+        #        "message": "success",
+        #        "ts": 1641026778068
+        #    }
+        #
+        positions = self.safe_value(response, 'data', [])
+        timestamp = self.safe_integer(response, 'ts')
+        first = self.safe_value(positions, 0)
+        position = self.parse_position(first)
+        return self.extend(position, {
+            'timestamp': timestamp,
+            'datetime': self.iso8601(timestamp),
+        })
+
+    def fetch_positions(self, symbols=None, params={}):
+        self.load_markets()
+        request = {}
+        if symbols is not None:
+            symbol = None
+            if isinstance(symbols, list):
+                symbolsLength = len(symbols)
+                if symbolsLength > 1:
+                    raise BadRequest(self.id + ' fetchPositions() symbols argument cannot contain more than 1 symbol')
+                symbol = symbols[0]
+            else:
+                symbol = symbols
+            market = self.market(symbol)
+            request['symbol'] = market['id']
+        response = self.privateGetFuturesPosition(self.extend(request, params))
+        #
+        #    {
+        #        "code": 1,
+        #        "data": [
+        #            {
+        #                "autoMarginCall": False,
+        #                "avgEntryPrice": "3706.03",
+        #                "bankruptPrice": "2963.3415880000",
+        #                "base": "ETH",
+        #                "code": "FP",
+        #                "commission": "0.02964824",
+        #                "currentQty": "2",
+        #                "funding": "-0.04827355",
+        #                "fundingStatus": null,
+        #                "id": "385839395735639395",
+        #                "leverage": "5",
+        #                "liquidationPrice": "2983.07",
+        #                "marketPrice": "3731.84",
+        #                "openTime": "2021-12-31T18:57:25.930Z",
+        #                "posLeverage": "5.00",
+        #                "posMargin": "14.85376824",
+        #                "quote": "USDT",
+        #                "realisedPnl": "-0.07792179",
+        #                "riskLimit": "10000000",
+        #                "riskyPrice": "3272.25",
+        #                "settleType": "VANILLA",
+        #                "stopLossPrice": "0",
+        #                "stopLossSource": 1,
+        #                "symbol": "ETHUSDTFP",
+        #                "takeProfitPrice": "0",
+        #                "takeProfitSource": 1,
+        #                "unrealisedPnl": "0.51620000",
+        #                "userID": "3829384"
+        #            }
+        #            ...
+        #        ],
+        #        "message": "success",
+        #        "ts": 1641026778068
+        #    }
+        #
+        result = []
+        positions = self.safe_value(response, 'data', [])
+        timestamp = self.safe_integer(response, 'ts')
+        for i in range(0, len(positions)):
+            position = self.parse_position(positions[i])
+            result.append(self.extend(position, {
+                'timestamp': timestamp,
+                'datetime': self.iso8601(timestamp),
+            }))
+        return self.filter_by_array(result, 'symbol', symbols, False)
 
     def nonce(self):
         return self.milliseconds()

@@ -31,48 +31,44 @@ class whitebit(Exchange):
             'has': {
                 'CORS': None,
                 'spot': True,
-                'margin': None,
+                'margin': None,  # has but unimplemented
                 'swap': False,
                 'future': False,
                 'option': False,
-                'addMargin': False,
                 'cancelOrder': True,
                 'createDepositAddress': None,
                 'createLimitOrder': None,
                 'createMarketOrder': None,
                 'createOrder': True,
-                'createReduceOnlyOrder': False,
-                'deposit': None,
+                'createStopLimitOrder': True,
+                'createStopMarketOrder': True,
+                'createStopOrder': True,
                 'editOrder': None,
                 'fetchBalance': True,
                 'fetchBidsAsks': None,
                 'fetchClosedOrders': True,
                 'fetchCurrencies': True,
                 'fetchDepositAddress': True,
-                'fetchFundingFees': True,
                 'fetchFundingHistory': False,
                 'fetchFundingRate': False,
                 'fetchFundingRateHistory': False,
                 'fetchFundingRates': False,
                 'fetchIndexOHLCV': False,
-                'fetchIsolatedPositions': False,
                 'fetchMarkets': True,
                 'fetchMarkOHLCV': False,
                 'fetchOHLCV': True,
                 'fetchOpenOrders': True,
                 'fetchOrderBook': True,
                 'fetchOrderTrades': True,
-                'fetchPosition': False,
-                'fetchPositions': False,
-                'fetchPositionsRisk': False,
                 'fetchPremiumIndexOHLCV': False,
                 'fetchTicker': True,
                 'fetchTickers': True,
                 'fetchTime': True,
                 'fetchTrades': True,
+                'fetchTradingFee': False,
                 'fetchTradingFees': True,
-                'reduceMargin': False,
-                'setPositionMode': False,
+                'fetchTransactionFees': True,
+                'transfer': True,
                 'withdraw': True,
             },
             'timeframes': {
@@ -180,6 +176,7 @@ class whitebit(Exchange):
                             'main-account/history',
                             'main-account/withdraw',
                             'main-account/withdraw-pay',
+                            'main-account/transfer',
                             'trade-account/balance',
                             'trade-account/executed-history',
                             'trade-account/order',
@@ -206,6 +203,14 @@ class whitebit(Exchange):
             'options': {
                 'createMarketBuyOrderRequiresPrice': True,
                 'fiatCurrencies': ['EUR', 'USD', 'RUB', 'UAH'],
+                'accountsByType': {
+                    'main': 'main',
+                    'spot': 'trade',
+                    'margin': 'margin',  # api does not suppot transfers to margin
+                },
+                'transfer': {
+                    'fillTransferResponseFromRequest': True,
+                },
             },
             'exceptions': {
                 'exact': {
@@ -370,7 +375,7 @@ class whitebit(Exchange):
             }
         return result
 
-    def fetch_funding_fees(self, params={}):
+    def fetch_transaction_fees(self, codes=None, params={}):
         self.load_markets()
         response = self.v4PublicGetFee(params)
         #
@@ -416,12 +421,42 @@ class whitebit(Exchange):
         }
 
     def fetch_trading_fees(self, params={}):
-        response = self.v2PublicGetFee(params)
-        fees = self.safe_value(response, 'result')
-        return {
-            'maker': self.safe_number(fees, 'makerFee'),
-            'taker': self.safe_number(fees, 'takerFee'),
-        }
+        response = self.v4PublicGetAssets(params)
+        #
+        #      {
+        #          '1INCH': {
+        #              name: '1inch',
+        #              unified_cryptoasset_id: '8104',
+        #              can_withdraw: True,
+        #              can_deposit: True,
+        #              min_withdraw: '33',
+        #              max_withdraw: '0',
+        #              maker_fee: '0.1',
+        #              taker_fee: '0.1',
+        #              min_deposit: '30',
+        #              max_deposit: '0'
+        #            },
+        #            ...
+        #      }
+        #
+        result = {}
+        for i in range(0, len(self.symbols)):
+            symbol = self.symbols[i]
+            market = self.market(symbol)
+            fee = self.safe_value(response, market['baseId'], {})
+            makerFee = self.safe_string(fee, 'maker_fee')
+            takerFee = self.safe_string(fee, 'taker_fee')
+            makerFee = Precise.string_div(makerFee, '100')
+            takerFee = Precise.string_div(takerFee, '100')
+            result[symbol] = {
+                'info': fee,
+                'symbol': market['symbol'],
+                'percentage': True,
+                'tierBased': False,
+                'maker': self.parse_number(makerFee),
+                'taker': self.parse_number(takerFee),
+            }
+        return result
 
     def fetch_ticker(self, symbol, params={}):
         self.load_markets()
@@ -451,40 +486,37 @@ class whitebit(Exchange):
         return self.parse_ticker(ticker, market)
 
     def parse_ticker(self, ticker, market=None):
+        #
         #  FetchTicker(v1)
         #
-        #      {
-        #          "bid":"0.021979",
-        #          "ask":"0.021996",
-        #          "open":"0.02182",
-        #          "high":"0.022039",
-        #          "low":"0.02161",
-        #          "last":"0.021987",
-        #          "volume":"2810.267",
-        #          "deal":"61.383565474",
-        #          "change":"0.76",
-        #      }
+        #    {
+        #        "bid": "0.021979",
+        #        "ask": "0.021996",
+        #        "open": "0.02182",
+        #        "high": "0.022039",
+        #        "low": "0.02161",
+        #        "last": "0.021987",
+        #        "volume": "2810.267",
+        #        "deal": "61.383565474",
+        #        "change": "0.76",
+        #    }
         #
         # FetchTickers(v4)
         #
-        #      "BCH_RUB":{
-        #          "base_id":1831,
-        #          "quote_id":0,
-        #          "last_price":"32830.21",
-        #          "quote_volume":"1494659.8024096",
-        #          "base_volume":"46.1083",
-        #          "isFrozen":false,
-        #          "change":"2.12"  # in percent
-        #      },
+        #    "BCH_RUB": {
+        #        "base_id": 1831,
+        #        "quote_id": 0,
+        #        "last_price": "32830.21",
+        #        "quote_volume": "1494659.8024096",
+        #        "base_volume": "46.1083",
+        #        "isFrozen": False,
+        #        "change": "2.12"  # in percent
+        #    }
         #
-        symbol = None
-        if market is not None:
-            symbol = market['symbol']
+        market = self.safe_market(None, market)
         last = self.safe_string(ticker, 'last_price')
-        change = self.safe_string(ticker, 'change')
-        percentage = Precise.string_mul(change, '0.01')
         return self.safe_ticker({
-            'symbol': symbol,
+            'symbol': market['symbol'],
             'timestamp': None,
             'datetime': None,
             'high': self.safe_string(ticker, 'high'),
@@ -499,7 +531,7 @@ class whitebit(Exchange):
             'last': last,
             'previousClose': None,
             'change': None,
-            'percentage': percentage,
+            'percentage': self.safe_string(ticker, 'change'),
             'average': None,
             'baseVolume': self.safe_string_2(ticker, 'base_volume', 'volume'),
             'quoteVolume': self.safe_string_2(ticker, 'quote_volume', 'deal'),
@@ -706,13 +738,14 @@ class whitebit(Exchange):
         #          "pong"
         #      ]
         #
-        status = self.safe_string(response, 0, None)
-        status = 'maintenance' if (status is None) else 'ok'
-        self.status = self.extend(self.status, {
-            'status': status,
+        status = self.safe_string(response, 0)
+        return {
+            'status': 'ok' if (status == 'pong') else status,
             'updated': self.milliseconds(),
-        })
-        return self.status
+            'eta': None,
+            'url': None,
+            'info': response,
+        }
 
     def fetch_time(self, params={}):
         response = self.v4PublicGetTime(params)
@@ -752,7 +785,7 @@ class whitebit(Exchange):
         # aggregate common assignments regardless stop or not
         if type == 'limit' or type == 'stopLimit':
             if price is None:
-                raise ArgumentsRequired(self.id + ' createOrder requires a price argument for a stopLimit order')
+                raise ArgumentsRequired(self.id + ' createOrder() requires a price argument for a stopLimit order')
             convertedPrice = self.price_to_precision(symbol, price)
             request['price'] = convertedPrice
         if type == 'market' or type == 'stopMarket':
@@ -769,7 +802,7 @@ class whitebit(Exchange):
                     cost = amount if (cost is None) else cost
                 request['amount'] = self.cost_to_precision(symbol, cost)
         if method is None:
-            raise ArgumentsRequired(self.id + 'Invalid type:  createOrder() requires one of the following order types: market, limit, stopLimit or stopMarket')
+            raise ArgumentsRequired(self.id + ' createOrder() requires one of the following order types: market, limit, stopLimit or stopMarket')
         response = getattr(self, method)(self.extend(request, params))
         return self.parse_order(response)
 
@@ -847,6 +880,7 @@ class whitebit(Exchange):
         market = None
         if symbol is not None:
             market = self.market(symbol)
+            symbol = market['symbol']
             request['market'] = market['id']
         if limit is not None:
             request['limit'] = limit  # default 50 max 100
@@ -951,12 +985,9 @@ class whitebit(Exchange):
         dealFee = self.safe_string(order, 'dealFee')
         fee = None
         if dealFee is not None:
-            feeCurrencyCode = None
-            if market is not None:
-                feeCurrencyCode = market['quote']
             fee = {
                 'cost': self.parse_number(dealFee),
-                'currency': feeCurrencyCode,
+                'currency': market['quote'],
             }
         timestamp = self.safe_timestamp_2(order, 'ctime', 'timestamp')
         lastTradeTimestamp = self.safe_timestamp(order, 'ftime')
@@ -1078,6 +1109,53 @@ class whitebit(Exchange):
             'info': response,
         }
 
+    def transfer(self, code, amount, fromAccount, toAccount, params={}):
+        self.load_markets()
+        currency = self.currency(code)
+        accountsByType = self.safe_value(self.options, 'accountsByType')
+        fromAccountId = self.safe_string(accountsByType, fromAccount, fromAccount)
+        toAccountId = self.safe_string(accountsByType, toAccount, toAccount)
+        type = None
+        if fromAccountId == 'main' and toAccountId == 'trade':
+            type = 'deposit'
+        elif fromAccountId == 'trade' and toAccountId == 'main':
+            type = 'withdraw'
+        if type is None:
+            raise ExchangeError(self.id + ' transfer() only allows transfers between main account and spot account')
+        request = {
+            'ticker': currency['id'],
+            'method': type,
+            'amount': self.currency_to_precision(code, amount),
+        }
+        response = self.v4PrivatePostMainAccountTransfer(self.extend(request, params))
+        #
+        #    []
+        #
+        transfer = self.parse_transfer(response, currency)
+        transferOptions = self.safe_value(self.options, 'transfer', {})
+        fillTransferResponseFromRequest = self.safe_value(transferOptions, 'fillTransferResponseFromRequest', True)
+        if fillTransferResponseFromRequest:
+            transfer['amount'] = amount
+            transfer['fromAccount'] = fromAccount
+            transfer['toAccount'] = toAccount
+        return transfer
+
+    def parse_transfer(self, transfer, currency):
+        #
+        #    []
+        #
+        return {
+            'info': transfer,
+            'id': None,
+            'timestamp': None,
+            'datetime': None,
+            'currency': self.safe_currency_code(None, currency),
+            'amount': None,
+            'fromAccount': None,
+            'toAccount': None,
+            'status': 'pending',
+        }
+
     def withdraw(self, code, amount, address, tag=None, params={}):
         self.load_markets()
         currency = self.currency(code)  # check if it has canDeposit
@@ -1104,9 +1182,35 @@ class whitebit(Exchange):
         #
         #     []
         #
+        return self.extend({'id': uniqueId}, self.parse_transaction(response, currency))
+
+    def parse_transaction(self, transaction, currency=None):
+        #
+        # withdraw
+        #
+        #     []
+        #
+        currency = self.safe_currency(None, currency)
         return {
-            'id': uniqueId,
-            'info': response,
+            'id': None,
+            'txid': None,
+            'timestamp': None,
+            'datetime': None,
+            'network': None,
+            'addressFrom': None,
+            'address': None,
+            'addressTo': None,
+            'amount': None,
+            'type': None,
+            'currency': currency['code'],
+            'status': None,
+            'updated': None,
+            'tagFrom': None,
+            'tag': None,
+            'tagTo': None,
+            'comment': None,
+            'fee': None,
+            'info': transaction,
         }
 
     def is_fiat(self, currency):
@@ -1147,13 +1251,15 @@ class whitebit(Exchange):
             # For cases where we have a meaningful status
             # {"response":null,"status":422,"errors":{"orderId":["Finished order id 435453454535 not found on your account"]},"notification":null,"warning":"Finished order id 435453454535 not found on your account","_token":null}
             status = self.safe_integer(response, 'status')
+            # {"code":10,"message":"Unauthorized request."}
+            message = self.safe_string(response, 'message')
             # For these cases where we have a generic code variable error key
             # {"code":0,"message":"Validation failed","errors":{"amount":["Amount must be greater than 0"]}}
             code = self.safe_integer(response, 'code')
             hasErrorStatus = status is not None and status != '200'
             if hasErrorStatus or code is not None:
                 feedback = self.id + ' ' + body
-                errorInfo = None
+                errorInfo = message
                 if hasErrorStatus:
                     errorInfo = status
                 else:

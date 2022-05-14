@@ -33,9 +33,9 @@ class digifinex(Exchange):
             'has': {
                 'CORS': None,
                 'spot': True,
-                'margin': None,
-                'swap': False,
-                'future': False,
+                'margin': None,  # has but unimplemented
+                'swap': None,  # has but unimplemented
+                'future': None,  # has but unimplemented
                 'option': False,
                 'cancelOrder': True,
                 'cancelOrders': True,
@@ -44,34 +44,23 @@ class digifinex(Exchange):
                 'fetchCurrencies': True,
                 'fetchDepositAddress': True,
                 'fetchDeposits': True,
-                'fetchFundingHistory': False,
-                'fetchFundingRate': False,
-                'fetchFundingRateHistory': False,
-                'fetchFundingRates': False,
-                'fetchIndexOHLCV': False,
-                'fetchIsolatedPositions': False,
                 'fetchLedger': True,
-                'fetchLeverage': False,
                 'fetchMarkets': True,
-                'fetchMarkOHLCV': False,
                 'fetchMyTrades': True,
                 'fetchOHLCV': True,
                 'fetchOpenOrders': True,
                 'fetchOrder': True,
                 'fetchOrderBook': True,
                 'fetchOrders': True,
-                'fetchPositions': False,
-                'fetchPositionsRisk': False,
-                'fetchPremiumIndexOHLCV': False,
                 'fetchStatus': True,
                 'fetchTicker': True,
                 'fetchTickers': True,
                 'fetchTime': True,
                 'fetchTrades': True,
+                'fetchTradingFee': False,
+                'fetchTradingFees': False,
                 'fetchWithdrawals': True,
-                'reduceMargin': False,
-                'setLeverage': False,
-                'setPositionMode': False,
+                'transfer': True,
                 'withdraw': True,
             },
             'timeframes': {
@@ -110,7 +99,7 @@ class digifinex(Exchange):
                         'trades',
                         'trades/symbols',
                         'ticker',
-                        'currencies',  # todo add fetchCurrencies
+                        'currencies',
                     ],
                 },
                 'private': {
@@ -118,7 +107,7 @@ class digifinex(Exchange):
                         '{market}/financelog',
                         '{market}/mytrades',
                         '{market}/order',
-                        '{market}​/order​/detail',  # todo add fetchOrder
+                        '{market}/order/detail',
                         '{market}/order/current',
                         '{market}/order/history',
                         'margin/assets',
@@ -135,28 +124,28 @@ class digifinex(Exchange):
                         'spot/order',
                         'spot/order/current',
                         'spot/order/history',
-                        'deposit/address',  # todo add fetchDepositAddress
-                        'deposit/history',  # todo add fetchDeposits
-                        'withdraw/history',  # todo add fetchWithdrawals
+                        'deposit/address',
+                        'deposit/history',
+                        'withdraw/history',
                     ],
                     'post': [
                         '{market}/order/cancel',
                         '{market}/order/new',
-                        '{market}​/order​/batch_new',
+                        '{market}/order/batch_new',
                         'margin/order/cancel',
                         'margin/order/new',
                         'margin/position/close',
                         'spot/order/cancel',
                         'spot/order/new',
                         'transfer',
-                        'withdraw/new',  # todo add withdraw()
+                        'withdraw/new',
                         'withdraw/cancel',
                     ],
                 },
             },
             'fees': {
                 'trading': {
-                    'tierBased': False,
+                    'tierBased': True,
                     'percentage': True,
                     'maker': self.parse_number('0.002'),
                     'taker': self.parse_number('0.002'),
@@ -218,6 +207,11 @@ class digifinex(Exchange):
             'options': {
                 'defaultType': 'spot',
                 'types': ['spot', 'margin', 'otc'],
+                'accountsByType': {
+                    'spot': '1',
+                    'margin': '2',
+                    'OTC': '3',
+                },
             },
             'commonCurrencies': {
                 'BHT': 'Black House Test',
@@ -367,7 +361,7 @@ class digifinex(Exchange):
                 'settleId': None,
                 'type': 'spot',
                 'spot': True,
-                'margin': False,
+                'margin': None,
                 'swap': False,
                 'future': False,
                 'option': False,
@@ -431,36 +425,52 @@ class digifinex(Exchange):
             baseId, quoteId = id.split('_')
             base = self.safe_currency_code(baseId)
             quote = self.safe_currency_code(quoteId)
-            symbol = base + '/' + quote
-            precision = {
-                'amount': self.safe_integer(market, 'volume_precision'),
-                'price': self.safe_integer(market, 'price_precision'),
-            }
-            limits = {
-                'amount': {
-                    'min': self.safe_number(market, 'min_volume'),
-                    'max': None,
-                },
-                'price': {
-                    'min': None,
-                    'max': None,
-                },
-                'cost': {
-                    'min': self.safe_number(market, 'min_amount'),
-                    'max': None,
-                },
-            }
-            active = None
             result.append({
                 'id': id,
-                'symbol': symbol,
+                'symbol': base + '/' + quote,
                 'base': base,
                 'quote': quote,
+                'settle': None,
                 'baseId': baseId,
                 'quoteId': quoteId,
-                'active': active,
-                'precision': precision,
-                'limits': limits,
+                'settleId': None,
+                'type': 'spot',
+                'spot': True,
+                'margin': None,
+                'swap': False,
+                'future': False,
+                'option': False,
+                'active': None,
+                'contract': False,
+                'linear': None,
+                'inverse': None,
+                'contractSize': None,
+                'expiry': None,
+                'expiryDatetime': None,
+                'strike': None,
+                'optionType': None,
+                'precision': {
+                    'price': self.safe_integer(market, 'price_precision'),
+                    'amount': self.safe_integer(market, 'volume_precision'),
+                },
+                'limits': {
+                    'leverage': {
+                        'min': None,
+                        'max': None,
+                    },
+                    'amount': {
+                        'min': self.safe_number(market, 'min_volume'),
+                        'max': None,
+                    },
+                    'price': {
+                        'min': None,
+                        'max': None,
+                    },
+                    'cost': {
+                        'min': self.safe_number(market, 'min_amount'),
+                        'max': None,
+                    },
+                },
                 'info': market,
             })
         return result
@@ -656,7 +666,7 @@ class digifinex(Exchange):
         #         "fee": 0.096,
         #         "fee_currency": "USDT",
         #         "timestamp": 1499865549,
-        #         "side": "buy",
+        #         "side": "buy",  # or "side": "sell_market"
         #         "is_maker": True
         #     }
         #
@@ -664,6 +674,9 @@ class digifinex(Exchange):
         orderId = self.safe_string(trade, 'order_id')
         timestamp = self.safe_timestamp_2(trade, 'date', 'timestamp')
         side = self.safe_string_2(trade, 'type', 'side')
+        parts = side.split('_')
+        side = self.safe_string(parts, 0)
+        type = self.safe_string(parts, 1)
         priceString = self.safe_string(trade, 'price')
         amountString = self.safe_string(trade, 'amount')
         marketId = self.safe_string(trade, 'symbol')
@@ -684,7 +697,7 @@ class digifinex(Exchange):
             'timestamp': timestamp,
             'datetime': self.iso8601(timestamp),
             'symbol': symbol,
-            'type': None,
+            'type': type,
             'order': orderId,
             'side': side,
             'price': priceString,
@@ -705,18 +718,22 @@ class digifinex(Exchange):
         return self.safe_timestamp(response, 'server_time')
 
     def fetch_status(self, params={}):
-        self.publicGetPing(params)
+        response = self.publicGetPing(params)
         #
         #     {
         #         "msg": "pong",
         #         "code": 0
         #     }
         #
-        self.status = self.extend(self.status, {
-            'status': 'ok',
+        code = self.safe_integer(response, 'code')
+        status = 'ok' if (code == 0) else 'maintenance'
+        return {
+            'status': status,
             'updated': self.milliseconds(),
-        })
-        return self.status
+            'eta': None,
+            'url': None,
+            'info': response,
+        }
 
     def fetch_trades(self, symbol, since=None, limit=None, params={}):
         self.load_markets()
@@ -864,7 +881,7 @@ class digifinex(Exchange):
         canceledOrders = self.safe_value(response, 'success', [])
         numCanceledOrders = len(canceledOrders)
         if numCanceledOrders != 1:
-            raise OrderNotFound(self.id + ' cancelOrder ' + id + ' not found')
+            raise OrderNotFound(self.id + ' cancelOrder() ' + id + ' not found')
         return response
 
     def cancel_orders(self, ids, symbol=None, params={}):
@@ -892,7 +909,7 @@ class digifinex(Exchange):
         canceledOrders = self.safe_value(response, 'success', [])
         numCanceledOrders = len(canceledOrders)
         if numCanceledOrders < 1:
-            raise OrderNotFound(self.id + ' cancelOrders error')
+            raise OrderNotFound(self.id + ' cancelOrders() error')
         return response
 
     def parse_order_status(self, status):
@@ -1255,7 +1272,7 @@ class digifinex(Exchange):
         addresses = self.parse_deposit_addresses(data)
         address = self.safe_value(addresses, code)
         if address is None:
-            raise InvalidAddress(self.id + ' fetchDepositAddress did not return an address for ' + code + ' - create the deposit address in the user settings on the exchange website first.')
+            raise InvalidAddress(self.id + ' fetchDepositAddress() did not return an address for ' + code + ' - create the deposit address in the user settings on the exchange website first.')
         return address
 
     def fetch_transactions_by_type(self, type, code=None, since=None, limit=None, params={}):
@@ -1304,14 +1321,13 @@ class digifinex(Exchange):
         return self.fetch_transactions_by_type('withdrawal', code, since, limit, params)
 
     def parse_transaction_status(self, status):
+        # deposit state includes: 1(in deposit), 2(to be confirmed), 3(successfully deposited), 4(stopped)
+        # withdrawal state includes: 1(application in progress), 2(to be confirmed), 3(completed), 4(rejected)
         statuses = {
-            '0': 'pending',  # Email Sent
-            '1': 'canceled',  # Cancelled(different from 1 = ok in deposits)
-            '2': 'pending',  # Awaiting Approval
-            '3': 'failed',  # Rejected
-            '4': 'pending',  # Processing
-            '5': 'failed',  # Failure
-            '6': 'ok',  # Completed
+            '1': 'pending',  # in Progress
+            '2': 'pending',  # to be confirmed
+            '3': 'ok',  # Completed
+            '4': 'failed',  # Rejected
         }
         return self.safe_string(statuses, status, status)
 
@@ -1380,6 +1396,56 @@ class digifinex(Exchange):
             'updated': updated,
             'fee': fee,
         }
+
+    def parse_transfer_status(self, status):
+        statuses = {
+            '0': 'ok',
+        }
+        return self.safe_string(statuses, status, status)
+
+    def parse_transfer(self, transfer, currency=None):
+        #
+        #     {
+        #         "code": 0
+        #     }
+        #
+        return {
+            'info': transfer,
+            'id': None,
+            'timestamp': None,
+            'datetime': None,
+            'currency': self.safe_currency_code(None, currency),
+            'amount': self.safe_number(transfer, 'amount'),
+            'fromAccount': self.safe_string(transfer, 'fromAccount'),
+            'toAccount': self.safe_string(transfer, 'toAccount'),
+            'status': self.parse_transfer_status(self.safe_string(transfer, 'code')),
+        }
+
+    def transfer(self, code, amount, fromAccount, toAccount, params={}):
+        self.load_markets()
+        currency = self.currency(code)
+        accountsByType = self.safe_value(self.options, 'accountsByType', {})
+        fromId = self.safe_string(accountsByType, fromAccount, fromAccount)
+        toId = self.safe_string(accountsByType, toAccount, toAccount)
+        request = {
+            'currency_mark': currency['id'],
+            'num': float(self.currency_to_precision(code, amount)),
+            'from': fromId,  # 1 = SPOT, 2 = MARGIN, 3 = OTC
+            'to': toId,  # 1 = SPOT, 2 = MARGIN, 3 = OTC
+        }
+        response = self.privatePostTransfer(self.extend(request, params))
+        #
+        #     {
+        #         "code": 0
+        #     }
+        #
+        transfer = self.parse_transfer(response, currency)
+        return self.extend(transfer, {
+            'amount': amount,
+            'currency': code,
+            'fromAccount': fromAccount,
+            'toAccount': toAccount,
+        })
 
     def withdraw(self, code, amount, address, tag=None, params={}):
         tag, params = self.handle_withdraw_tag_and_params(tag, params)
