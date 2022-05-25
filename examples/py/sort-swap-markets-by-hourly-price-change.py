@@ -2,7 +2,6 @@
 
 import os
 import sys
-import asyncio
 import time
 from pprint import pprint
 from datetime import datetime
@@ -16,13 +15,11 @@ sys.path.append(this_folder)
 
 # -----------------------------------------------------------------------------
 
-import ccxt.async_support as ccxt_async  # noqa: E402
 import ccxt as ccxt  # noqa: E402
 
 # -----------------------------------------------------------------------------
 
 exchange = ccxt.binanceusdm()
-async_exchange = ccxt_async.binanceusdm()
 timeframe = '1h'
 ohlcvs = []
 
@@ -55,18 +52,17 @@ def getPriceChangePercent(ohlcv):
     return [increaseAsRatio, symbol]
 
 
-async def main():
+def main():
     '''
     Gets the price change as a percent of every market matching type over the last timeframe matching timeframe and prints a sorted list.
     The most immediate candle is ignored because it is incomplete
     '''
     start = time.time()
 
-    await async_exchange.load_markets()
-    allSwapSymbols = [symbol for symbol in async_exchange.symbols if async_exchange.market(symbol)['swap']]
+    exchange.load_markets()
+    allSwapSymbols = [symbol for symbol in exchange.symbols if exchange.market(symbol)['swap']]
     for symbol in allSwapSymbols:
         fetchOHLCV(symbol)
-    await async_exchange.close()
     priceChanges = [getPriceChangePercent(ohlcv) for ohlcv in ohlcvs]
     priceChanges.sort()
 
@@ -80,4 +76,5 @@ async def main():
     print()
     pprint(priceChanges)
 
-asyncio.run(main())
+
+main()
