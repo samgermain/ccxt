@@ -16,23 +16,25 @@ sys.path.append(this_folder)
 
 # -----------------------------------------------------------------------------
 
-import ccxt.async_support as ccxt  # noqa: E402
+import ccxt.async_support as ccxt_async  # noqa: E402
+import ccxt as ccxt  # noqa: E402
 
 # -----------------------------------------------------------------------------
 
 exchange = ccxt.binanceusdm()
+async_exchange = ccxt_async.binanceusdm()
 timeframe = '1h'
 ohlcvs = []
 
 
-async def fetchOHLCV(symbol):
+def fetchOHLCV(symbol):
     '''
     Wrapper around exchange.fetchOHLCV method
     :param str symbol: CCXT unified symbol
     :returns [float|str]: 1d array with a single ohlcv record with the market symbol appended
     '''
     try:
-        ohlcv = await exchange.fetchOHLCV(symbol, timeframe, None, 2)
+        ohlcv = exchange.fetchOHLCV(symbol, timeframe, None, 2)
         ohlcv[0].append(symbol)
         ohlcvs.append(ohlcv[0])
     except Exception as e:
@@ -60,15 +62,16 @@ async def main():
     '''
     start = time.time()
 
-    await exchange.load_markets()
-    allSwapSymbols = [symbol for symbol in exchange.symbols if exchange.market(symbol)['swap']]
-    await asyncio.gather(*[fetchOHLCV(symbol) for symbol in allSwapSymbols])
-    await exchange.close()
+    await async_exchange.load_markets()
+    allSwapSymbols = [symbol for symbol in async_exchange.symbols if async_exchange.market(symbol)['swap']]
+    for symbol in allSwapSymbols:
+        fetchOHLCV(symbol)
+    await async_exchange.close()
     priceChanges = [getPriceChangePercent(ohlcv) for ohlcv in ohlcvs]
     priceChanges.sort()
 
     end = time.time()
-    duration = str(end - start)
+    duration = str(int((end - start) * 1000))
     now = str(datetime.utcnow().isoformat())
 
     print('python', sys.version)
