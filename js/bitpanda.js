@@ -1534,12 +1534,12 @@ module.exports = class bitpanda extends Exchange {
             priceIsRequired = true;
         }
         if (uppercaseType === 'STOP') {
-            const triggerPrice = this.safeNumber (params, 'trigger_price');
-            if (triggerPrice === undefined) {
-                throw new ArgumentsRequired (this.id + ' createOrder() requires a trigger_price param for ' + type + ' orders');
+            const stopPrice = this.safeNumber2 (params, 'stopPrice', 'trigger_price');
+            if (stopPrice === undefined) {
+                throw new ArgumentsRequired (this.id + ' createOrder() requires a stopPrice param for ' + type + ' orders');
             }
-            request['trigger_price'] = this.priceToPrecision (symbol, triggerPrice);
-            params = this.omit (params, 'trigger_price');
+            request['trigger_price'] = this.priceToPrecision (symbol, stopPrice);
+            params = this.omit (params, [ 'stopPrice', 'trigger_price' ]);
         }
         if (priceIsRequired) {
             request['price'] = this.priceToPrecision (symbol, price);
