@@ -959,8 +959,10 @@ module.exports = class bitfinex extends Exchange {
     }
 
     async createOrder (symbol, type, side, amount, price = undefined, params = {}) {
+        // https://docs.bitfinex.com/v1/reference/rest-auth-new-order
         await this.loadMarkets ();
-        const postOnly = this.safeValue (params, 'postOnly', false);
+        const stopPrice = this.safeNumber (params, 'stopPrice');
+        const postOnly = this.isPostOnly (type, params);
         params = this.omit (params, [ 'postOnly' ]);
         const request = {
             'symbol': this.marketId (symbol),
@@ -971,6 +973,15 @@ module.exports = class bitfinex extends Exchange {
             'buy_price_oco': 0,
             'sell_price_oco': 0,
         };
+        if (stopPrice !== undefined) {
+            request['type'] = 'stop';
+            request['ocoorder'] = true;
+            if (side === 'sell') {
+                request['sell_price_oco'] = stopPrice;
+            } else {
+                request['buy_price_oco'] = stopPrice;
+            }
+        }
         if (type === 'market') {
             request['price'] = this.nonce ().toString ();
         } else {
