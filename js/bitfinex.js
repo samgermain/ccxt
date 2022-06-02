@@ -3,7 +3,7 @@
 //  ---------------------------------------------------------------------------
 
 const Exchange = require ('./base/Exchange');
-const { NotSupported, RateLimitExceeded, AuthenticationError, PermissionDenied, ArgumentsRequired, ExchangeError, ExchangeNotAvailable, InsufficientFunds, InvalidOrder, OrderNotFound, InvalidNonce, BadSymbol } = require ('./base/errors');
+const { NotSupported, RateLimitExceeded, AuthenticationError, BadRequest, PermissionDenied, ArgumentsRequired, ExchangeError, ExchangeNotAvailable, InsufficientFunds, InvalidOrder, OrderNotFound, InvalidNonce, BadSymbol } = require ('./base/errors');
 const { SIGNIFICANT_DIGITS, DECIMAL_PLACES, TRUNCATE, ROUND } = require ('./base/functions/number');
 const Precise = require ('./base/Precise');
 
@@ -31,6 +31,9 @@ module.exports = class bitfinex extends Exchange {
                 'cancelOrder': true,
                 'createDepositAddress': true,
                 'createOrder': true,
+                'createStopOrder': true,
+                'createStopMarketOrder': true,
+                'createStopLimitOrder': false,
                 'editOrder': true,
                 'fetchBalance': true,
                 'fetchClosedOrders': true,
@@ -975,11 +978,8 @@ module.exports = class bitfinex extends Exchange {
         };
         if (stopPrice !== undefined) {
             request['type'] = 'stop';
-            request['ocoorder'] = true;
-            if (side === 'sell') {
-                request['sell_price_oco'] = stopPrice;
-            } else {
-                request['buy_price_oco'] = stopPrice;
+            if (type === 'limit') {
+                throw new BadRequest (this.id + ' createOrder cannot place stop limit orders');
             }
         }
         if (type === 'market') {
