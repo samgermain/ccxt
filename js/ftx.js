@@ -1139,7 +1139,7 @@ module.exports = class ftx extends Exchange {
          * @param {int|undefined} since timestamp in ms of the earliest trade to fetch
          * @param {int|undefined} limit the maximum amount of trades to fetch
          * @param {dict} params extra parameters specific to the ftx api endpoint
-         * @returns {[dict]} a list of [trade structures]{@link https://docs.ccxt.com/en/latest/manual.html?#public-trades}
+         * @returns {[dict]} a list of [order structures]{@link https://docs.ccxt.com/en/latest/manual.html?#public-trades}
          */
         await this.loadMarkets ();
         const [ market, marketId ] = this.getMarketParams (symbol, 'market_name', params);
@@ -1996,13 +1996,13 @@ module.exports = class ftx extends Exchange {
         /**
          * @method
          * @name ftx#fetchMyTrades
-         * @description fetch trades specific to you account
-         * @param {str} symbol unified market symbol
-         * @param {int} since timestamp in ms of the earliest trade
-         * @param {int} limit not sent to exchange but filtered internally by CCXT
-         * @param {dict} params exchange specific parameters
-         * @param {int} params.till timestamp in ms of the latest trade
-         * @returns A list of [trade structures]{@link https://docs.ccxt.com/en/latest/manual.html#trade-structure}
+         * @description fetch all trades made by the user
+         * @param {str|undefined} symbol unified market symbol
+         * @param {int|undefined} since timestamp in ms of the earliest trade
+         * @param {int|undefined} limit not sent to exchange but filtered internally by CCXT
+         * @param {dict} params extra parameters specific to the ftx api endpoint
+         * @param {int|undefined} params.till timestamp in ms of the latest trade
+         * @returns {[dict]} a list of [order structures]{@link https://docs.ccxt.com/en/latest/manual.html#trade-structure}
          */
         await this.loadMarkets ();
         const [ market, marketId ] = this.getMarketParams (symbol, 'market', params);

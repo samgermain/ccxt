@@ -2304,7 +2304,7 @@ module.exports = class gateio extends Exchange {
          * @param {int|undefined} since timestamp in ms of the earliest trade to fetch
          * @param {int|undefined} limit the maximum amount of trades to fetch
          * @param {dict} params extra parameters specific to the gateio api endpoint
-         * @returns {[dict]} a list of [trade structures]{@link https://docs.ccxt.com/en/latest/manual.html?#public-trades}
+         * @returns {[dict]} a list of [order structures]{@link https://docs.ccxt.com/en/latest/manual.html?#public-trades}
          */
         await this.loadMarkets ();
         const market = this.market (symbol);
@@ -2392,7 +2392,7 @@ module.exports = class gateio extends Exchange {
          * @param {int} params.offset *contract only* list offset, starting from 0
          * @param {str} params.last_id *contract only* specify list staring point using the id of last record in previous list-query results
          * @param {int} params.count_total *contract only* whether to return total number matched, default to 0(no return)
-         * @returns a list of [order structures]{@link https://docs.ccxt.com/en/latest/manual.html#order-structure}
+         * @returns {[dict]} a list of [order structures]{@link https://docs.ccxt.com/en/latest/manual.html#trade-structure}
          */
         await this.loadMarkets ();
         let type = undefined;
