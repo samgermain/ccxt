@@ -974,6 +974,14 @@ class probit extends Exchange {
     }
 
     public function fetch_closed_orders($symbol = null, $since = null, $limit = null, $params = array ()) {
+        /**
+         * fetches information on multiple closed orders made by the user
+         * @param {str|null} $symbol unified $market $symbol of the $market orders were made in
+         * @param {int|null} $since the earliest time in ms to fetch orders for
+         * @param {int|null} $limit the maximum number of  orde structures to retrieve
+         * @param {dict} $params extra parameters specific to the probit api endpoint
+         * @return {[dict]} a list of [order structures]{@link https://docs.ccxt.com/en/latest/manual.html#order-structure
+         */
         $this->load_markets();
         $request = array(
             'start_time' => $this->iso8601(0),
@@ -1259,6 +1267,12 @@ class probit extends Exchange {
     }
 
     public function fetch_deposit_addresses($codes = null, $params = array ()) {
+        /**
+         * fetch deposit addresses for multiple currencies and chain types
+         * @param {[str]|null} $codes list of unified $currency $codes, default is null
+         * @param {dict} $params extra parameters specific to the probit api endpoint
+         * @return {dict} a list of {@link https://docs.ccxt.com/en/latest/manual.html#address-structure address structures}
+         */
         $this->load_markets();
         $request = array();
         if ($codes) {

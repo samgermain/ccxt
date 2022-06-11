@@ -5,7 +5,6 @@
 
 from ccxt.async_support.base.exchange import Exchange
 import hashlib
-import math
 from ccxt.base.errors import ExchangeError
 from ccxt.base.errors import AuthenticationError
 from ccxt.base.errors import PermissionDenied
@@ -21,7 +20,7 @@ from ccxt.base.errors import DDoSProtection
 from ccxt.base.errors import ExchangeNotAvailable
 from ccxt.base.errors import OnMaintenance
 from ccxt.base.decimal_to_precision import TRUNCATE
-from ccxt.base.decimal_to_precision import DECIMAL_PLACES
+from ccxt.base.decimal_to_precision import TICK_SIZE
 
 
 class bittrex(Exchange):
@@ -205,6 +204,7 @@ class bittrex(Exchange):
                     'percentage': False,
                 },
             },
+            'precisionMode': TICK_SIZE,
             'exceptions': {
                 'exact': {
                     'BAD_REQUEST': BadRequest,  # {"code":"BAD_REQUEST","detail":"Refer to the data field for specific field validation failures.","data":{"invalidRequestParameter":"day"}}
@@ -284,11 +284,8 @@ class bittrex(Exchange):
             },
         })
 
-    def cost_to_precision(self, symbol, cost):
-        return self.decimal_to_precision(cost, TRUNCATE, self.markets[symbol]['precision']['price'], DECIMAL_PLACES)
-
     def fee_to_precision(self, symbol, fee):
-        return self.decimal_to_precision(fee, TRUNCATE, self.markets[symbol]['precision']['price'], DECIMAL_PLACES)
+        return self.decimal_to_precision(fee, TRUNCATE, self.markets[symbol]['precision']['price'], self.precisionMode)
 
     async def fetch_markets(self, params={}):
         """
@@ -353,8 +350,8 @@ class bittrex(Exchange):
                 'strike': None,
                 'optionType': None,
                 'precision': {
-                    'amount': int('8'),
-                    'price': self.safe_integer(market, 'precision', 8),
+                    'amount': self.parse_number(self.parse_precision('8')),
+                    'price': self.parse_number(self.parse_precision(self.safe_string(market, 'precision', '8'))),
                 },
                 'limits': {
                     'leverage': {
@@ -467,7 +464,7 @@ class bittrex(Exchange):
             currency = response[i]
             id = self.safe_string(currency, 'symbol')
             code = self.safe_currency_code(id)
-            precision = 8  # default precision, todo: fix "magic constants"
+            precision = self.parse_number(self.parse_precision('8'))  # default precision, todo: fix "magic constants"
             fee = self.safe_number(currency, 'txFee')  # todo: redesign
             isActive = self.safe_string(currency, 'status')
             result[code] = {
@@ -484,7 +481,7 @@ class bittrex(Exchange):
                 'precision': precision,
                 'limits': {
                     'amount': {
-                        'min': 1 / math.pow(10, precision),
+                        'min': precision,
                         'max': None,
                     },
                     'withdraw': {
@@ -1594,6 +1591,14 @@ class bittrex(Exchange):
         return self.filter_by_symbol_since_limit(trades, symbol, since, limit)
 
     async def fetch_closed_orders(self, symbol=None, since=None, limit=None, params={}):
+        """
+        fetches information on multiple closed orders made by the user
+        :param str|None symbol: unified market symbol of the market orders were made in
+        :param int|None since: the earliest time in ms to fetch orders for
+        :param int|None limit: the maximum number of  orde structures to retrieve
+        :param dict params: extra parameters specific to the bittrex api endpoint
+        :returns [dict]: a list of [order structures]{@link https://docs.ccxt.com/en/latest/manual.html#order-structure
+        """
         await self.load_markets()
         stop = self.safe_value(params, 'stop')
         request = {}
@@ -1663,6 +1668,12 @@ class bittrex(Exchange):
         return self.parse_orders(response, market, since, limit)
 
     async def create_deposit_address(self, code, params={}):
+        """
+        create a currency deposit address
+        :param str code: unified currency code of the currency for the deposit address
+        :param dict params: extra parameters specific to the bittrex api endpoint
+        :returns dict: an `address structure <https://docs.ccxt.com/en/latest/manual.html#address-structure>`
+        """
         await self.load_markets()
         currency = self.currency(code)
         request = {

@@ -798,6 +798,11 @@ class okx extends Exchange {
     }
 
     public function fetch_accounts($params = array ()) {
+        /**
+         * fetch all the accounts associated with a profile
+         * @param {dict} $params extra parameters specific to the okx api endpoint
+         * @return {dict} a dictionary of {@link https://docs.ccxt.com/en/latest/manual.html#$account-structure $account structures} indexed by the $account $type
+         */
         $response = $this->privateGetAccountConfig ($params);
         //
         //     {
@@ -2110,6 +2115,13 @@ class okx extends Exchange {
     }
 
     public function cancel_orders($ids, $symbol = null, $params = array ()) {
+        /**
+         * cancel multiple orders
+         * @param {[str]} $ids order $ids
+         * @param {str} $symbol unified $market $symbol
+         * @param {dict} $params extra parameters specific to the okx api endpoint
+         * @return {dict} an list of {@link https://docs.ccxt.com/en/latest/manual.html#order-structure order structures}
+         */
         // TODO : the original endpoint signature differs, according to that you can skip individual $symbol and assign $ids in batch. At this moment, `$params` is not being used too.
         if ($symbol === null) {
             throw new ArgumentsRequired($this->id . ' cancelOrders() requires a $symbol argument');
@@ -2675,6 +2687,14 @@ class okx extends Exchange {
     }
 
     public function fetch_canceled_orders($symbol = null, $since = null, $limit = null, $params = array ()) {
+        /**
+         * fetches information on multiple canceled orders made by the user
+         * @param {str|null} $symbol unified $market $symbol of the $market orders were made in
+         * @param {int|null} $since timestamp in ms of the earliest order, default is null
+         * @param {int|null} $limit max number of orders to return, default is null
+         * @param {dict} $params extra parameters specific to the okx api endpoint
+         * @return {dict} a list of {@link https://docs.ccxt.com/en/latest/manual.html#order-structure order structures}
+         */
         $this->load_markets();
         $request = array(
             // 'instType' => strtoupper($type), // SPOT, MARGIN, SWAP, FUTURES, OPTION
@@ -2813,6 +2833,14 @@ class okx extends Exchange {
     }
 
     public function fetch_closed_orders($symbol = null, $since = null, $limit = null, $params = array ()) {
+        /**
+         * fetches information on multiple closed orders made by the user
+         * @param {str|null} $symbol unified $market $symbol of the $market orders were made in
+         * @param {int|null} $since the earliest time in ms to fetch orders for
+         * @param {int|null} $limit the maximum number of  orde structures to retrieve
+         * @param {dict} $params extra parameters specific to the okx api endpoint
+         * @return {[dict]} a list of [order structures]{@link https://docs.ccxt.com/en/latest/manual.html#order-structure
+         */
         $this->load_markets();
         $request = array(
             // 'instType' => strtoupper($type), // SPOT, MARGIN, SWAP, FUTURES, OPTION
@@ -2963,6 +2991,14 @@ class okx extends Exchange {
     }
 
     public function fetch_ledger($code = null, $since = null, $limit = null, $params = array ()) {
+        /**
+         * fetch the history of changes, actions done by the user or operations that altered balance of the user
+         * @param {str|null} $code unified $currency $code, default is null
+         * @param {int|null} $since timestamp in ms of the earliest ledger entry, default is null
+         * @param {int|null} $limit max number of ledger entrys to return, default is null
+         * @param {dict} $params extra parameters specific to the okx api endpoint
+         * @return {dict} a {@link https://docs.ccxt.com/en/latest/manual.html#ledger-structure ledger structure}
+         */
         $this->load_markets();
         $options = $this->safe_value($this->options, 'fetchLedger', array());
         $method = $this->safe_string($options, 'method');
@@ -3288,6 +3324,12 @@ class okx extends Exchange {
     }
 
     public function fetch_deposit_addresses_by_network($code, $params = array ()) {
+        /**
+         * fetch a dictionary of addresses for a $currency, indexed by network
+         * @param {str} $code unified $currency $code of the $currency for the deposit address
+         * @param {dict} $params extra parameters specific to the okx api endpoint
+         * @return {dict} a dictionary of {@link https://docs.ccxt.com/en/latest/manual.html#address-structure address structures} indexed by the network
+         */
         $this->load_markets();
         $currency = $this->currency($code);
         $request = array(

@@ -5,7 +5,6 @@
 
 from ccxt.async_support.base.exchange import Exchange
 import hashlib
-import math
 from ccxt.base.errors import ExchangeError
 from ccxt.base.errors import ArgumentsRequired
 from ccxt.base.errors import BadRequest
@@ -13,6 +12,7 @@ from ccxt.base.errors import InsufficientFunds
 from ccxt.base.errors import InvalidOrder
 from ccxt.base.errors import OrderNotFound
 from ccxt.base.errors import DDoSProtection
+from ccxt.base.decimal_to_precision import TICK_SIZE
 
 
 class btcmarkets(Exchange):
@@ -142,6 +142,7 @@ class btcmarkets(Exchange):
                 '1h': '1h',
                 '1d': '1d',
             },
+            'precisionMode': TICK_SIZE,
             'exceptions': {
                 '3': InvalidOrder,
                 '6': DDoSProtection,
@@ -359,13 +360,13 @@ class btcmarkets(Exchange):
             quote = self.safe_currency_code(quoteId)
             symbol = base + '/' + quote
             fees = self.safe_value(self.safe_value(self.options, 'fees', {}), quote, self.fees)
-            pricePrecision = self.safe_integer(market, 'priceDecimals')
-            amountPrecision = self.safe_integer(market, 'amountDecimals')
+            pricePrecision = self.parse_number(self.parse_precision(self.safe_string(market, 'priceDecimals')))
+            amountPrecision = self.parse_number(self.parse_precision(self.safe_string(market, 'amountDecimals')))
             minAmount = self.safe_number(market, 'minOrderAmount')
             maxAmount = self.safe_number(market, 'maxOrderAmount')
             minPrice = None
             if quote == 'AUD':
-                minPrice = math.pow(10, -pricePrecision)
+                minPrice = pricePrecision
             result.append({
                 'id': id,
                 'symbol': symbol,
@@ -624,7 +625,7 @@ class btcmarkets(Exchange):
         #
         return self.parse_ticker(response, market)
 
-    async def fetch_ticker2(self, symbol, params={}):
+    async def fetch_ticker_2(self, symbol, params={}):
         await self.load_markets()
         market = self.market(symbol)
         request = {
@@ -810,6 +811,13 @@ class btcmarkets(Exchange):
         return self.parse_order(response, market)
 
     async def cancel_orders(self, ids, symbol=None, params={}):
+        """
+        cancel multiple orders
+        :param [str] ids: order ids
+        :param str|None symbol: not used by btcmarkets cancelOrders()
+        :param dict params: extra parameters specific to the btcmarkets api endpoint
+        :returns dict: an list of `order structures <https://docs.ccxt.com/en/latest/manual.html#order-structure>`
+        """
         await self.load_markets()
         for i in range(0, len(ids)):
             ids[i] = int(ids[i])
@@ -941,6 +949,14 @@ class btcmarkets(Exchange):
         return self.parse_order(response)
 
     async def fetch_orders(self, symbol=None, since=None, limit=None, params={}):
+        """
+        fetches information on multiple orders made by the user
+        :param str|None symbol: unified market symbol of the market orders were made in
+        :param int|None since: the earliest time in ms to fetch orders for
+        :param int|None limit: the maximum number of  orde structures to retrieve
+        :param dict params: extra parameters specific to the btcmarkets api endpoint
+        :returns [dict]: a list of [order structures]{@link https://docs.ccxt.com/en/latest/manual.html#order-structure
+        """
         await self.load_markets()
         request = {
             'status': 'all',
@@ -969,6 +985,14 @@ class btcmarkets(Exchange):
         return await self.fetch_orders(symbol, since, limit, self.extend(request, params))
 
     async def fetch_closed_orders(self, symbol=None, since=None, limit=None, params={}):
+        """
+        fetches information on multiple closed orders made by the user
+        :param str|None symbol: unified market symbol of the market orders were made in
+        :param int|None since: the earliest time in ms to fetch orders for
+        :param int|None limit: the maximum number of  orde structures to retrieve
+        :param dict params: extra parameters specific to the btcmarkets api endpoint
+        :returns [dict]: a list of [order structures]{@link https://docs.ccxt.com/en/latest/manual.html#order-structure
+        """
         orders = await self.fetch_orders(symbol, since, limit, params)
         return self.filter_by(orders, 'status', 'closed')
 

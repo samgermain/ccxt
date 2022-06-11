@@ -1835,6 +1835,16 @@ module.exports = class mexc3 extends Exchange {
     }
 
     async fetchOrders (symbol = undefined, since = undefined, limit = undefined, params = {}) {
+        /**
+         * @method
+         * @name mexc3#fetchOrders
+         * @description fetches information on multiple orders made by the user
+         * @param {str|undefined} symbol unified market symbol of the market orders were made in
+         * @param {int|undefined} since the earliest time in ms to fetch orders for
+         * @param {int|undefined} limit the maximum number of  orde structures to retrieve
+         * @param {dict} params extra parameters specific to the mexc3 api endpoint
+         * @returns {[dict]} a list of [order structures]{@link https://docs.ccxt.com/en/latest/manual.html#order-structure
+         */
         await this.loadMarkets ();
         const request = {};
         let market = undefined;
@@ -2078,10 +2088,30 @@ module.exports = class mexc3 extends Exchange {
     }
 
     async fetchClosedOrders (symbol = undefined, since = undefined, limit = undefined, params = {}) {
+        /**
+         * @method
+         * @name mexc3#fetchClosedOrders
+         * @description fetches information on multiple closed orders made by the user
+         * @param {str|undefined} symbol unified market symbol of the market orders were made in
+         * @param {int|undefined} since the earliest time in ms to fetch orders for
+         * @param {int|undefined} limit the maximum number of  orde structures to retrieve
+         * @param {dict} params extra parameters specific to the mexc3 api endpoint
+         * @returns {[dict]} a list of [order structures]{@link https://docs.ccxt.com/en/latest/manual.html#order-structure
+         */
         return await this.fetchOrdersByState (3, symbol, since, limit, params);
     }
 
     async fetchCanceledOrders (symbol = undefined, since = undefined, limit = undefined, params = {}) {
+        /**
+         * @method
+         * @name mexc3#fetchCanceledOrders
+         * @description fetches information on multiple canceled orders made by the user
+         * @param {str|undefined} symbol unified market symbol of the market orders were made in
+         * @param {int|undefined} since timestamp in ms of the earliest order, default is undefined
+         * @param {int|undefined} limit max number of orders to return, default is undefined
+         * @param {dict} params extra parameters specific to the mexc3 api endpoint
+         * @returns {dict} a list of [order structures]{@link https://docs.ccxt.com/en/latest/manual.html#order-structure}
+         */
         return await this.fetchOrdersByState (4, symbol, since, limit, params);
     }
 
@@ -2175,6 +2205,15 @@ module.exports = class mexc3 extends Exchange {
     }
 
     async cancelOrders (ids, symbol = undefined, params = {}) {
+        /**
+         * @method
+         * @name mexc3#cancelOrders
+         * @description cancel multiple orders
+         * @param {[str]} ids order ids
+         * @param {str|undefined} symbol unified market symbol, default is undefined
+         * @param {dict} params extra parameters specific to the mexc3 api endpoint
+         * @returns {dict} an list of [order structures]{@link https://docs.ccxt.com/en/latest/manual.html#order-structure}
+         */
         await this.loadMarkets ();
         const market = symbol !== undefined ? this.market (symbol) : undefined;
         const [ marketType ] = this.handleMarketTypeAndParams ('cancelOrders', market, params);
@@ -2490,6 +2529,13 @@ module.exports = class mexc3 extends Exchange {
     }
 
     async fetchAccounts (params = {}) {
+        /**
+         * @method
+         * @name mexc3#fetchAccounts
+         * @description fetch all the accounts associated with a profile
+         * @param {dict} params extra parameters specific to the mexc3 api endpoint
+         * @returns {dict} a dictionary of [account structures]{@link https://docs.ccxt.com/en/latest/manual.html#account-structure} indexed by the account type
+         */
         // TODO: is the below endpoints suitable for fetchAccounts?
         const [ marketType, query ] = this.handleMarketTypeAndParams ('fetchAccounts', undefined, params);
         await this.loadMarkets ();
@@ -3210,6 +3256,14 @@ module.exports = class mexc3 extends Exchange {
     }
 
     async fetchDepositAddressesByNetwork (code, params = {}) {
+        /**
+         * @method
+         * @name mexc3#fetchDepositAddressesByNetwork
+         * @description fetch a dictionary of addresses for a currency, indexed by network
+         * @param {str} code unified currency code of the currency for the deposit address
+         * @param {dict} params extra parameters specific to the mexc3 api endpoint
+         * @returns {dict} a dictionary of [address structures]{@link https://docs.ccxt.com/en/latest/manual.html#address-structure} indexed by the network
+         */
         await this.loadMarkets ();
         const currency = this.currency (code);
         const request = {
@@ -3663,6 +3717,16 @@ module.exports = class mexc3 extends Exchange {
     }
 
     async fetchTransfers (code = undefined, since = undefined, limit = undefined, params = {}) {
+        /**
+         * @method
+         * @name mexc3#fetchTransfers
+         * @description fetch a history of internal transfers made on an account
+         * @param {str|undefined} code unified currency code of the currency transferred
+         * @param {int|undefined} since the earliest time in ms to fetch transfers for
+         * @param {int|undefined} limit the maximum number of  transfers structures to retrieve
+         * @param {dict} params extra parameters specific to the mexc3 api endpoint
+         * @returns {[dict]} a list of [transfer structures]{@link https://docs.ccxt.com/en/latest/manual.html#transfer-structure}
+         */
         const [ marketType, query ] = this.handleMarketTypeAndParams ('fetchTransfers', undefined, params);
         await this.loadMarkets ();
         const request = {};

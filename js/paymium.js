@@ -288,6 +288,14 @@ module.exports = class paymium extends Exchange {
     }
 
     async createDepositAddress (code, params = {}) {
+        /**
+         * @method
+         * @name paymium#createDepositAddress
+         * @description create a currency deposit address
+         * @param {str} code unified currency code of the currency for the deposit address
+         * @param {dict} params extra parameters specific to the paymium api endpoint
+         * @returns {dict} an [address structure]{@link https://docs.ccxt.com/en/latest/manual.html#address-structure}
+         */
         await this.loadMarkets ();
         const response = await this.privatePostUserAddresses (params);
         //
@@ -327,6 +335,14 @@ module.exports = class paymium extends Exchange {
     }
 
     async fetchDepositAddresses (codes = undefined, params = {}) {
+        /**
+         * @method
+         * @name paymium#fetchDepositAddresses
+         * @description fetch deposit addresses for multiple currencies and chain types
+         * @param {[str]|undefined} codes list of unified currency codes, default is undefined
+         * @param {dict} params extra parameters specific to the paymium api endpoint
+         * @returns {dict} a list of [address structures]{@link https://docs.ccxt.com/en/latest/manual.html#address-structure}
+         */
         await this.loadMarkets ();
         const response = await this.privateGetUserAddresses (params);
         //

@@ -943,6 +943,14 @@ class probit(Exchange):
         return self.parse_orders(data, market, since, limit)
 
     async def fetch_closed_orders(self, symbol=None, since=None, limit=None, params={}):
+        """
+        fetches information on multiple closed orders made by the user
+        :param str|None symbol: unified market symbol of the market orders were made in
+        :param int|None since: the earliest time in ms to fetch orders for
+        :param int|None limit: the maximum number of  orde structures to retrieve
+        :param dict params: extra parameters specific to the probit api endpoint
+        :returns [dict]: a list of [order structures]{@link https://docs.ccxt.com/en/latest/manual.html#order-structure
+        """
         await self.load_markets()
         request = {
             'start_time': self.iso8601(0),
@@ -1203,6 +1211,12 @@ class probit(Exchange):
         return self.parse_deposit_address(firstAddress, currency)
 
     async def fetch_deposit_addresses(self, codes=None, params={}):
+        """
+        fetch deposit addresses for multiple currencies and chain types
+        :param [str]|None codes: list of unified currency codes, default is None
+        :param dict params: extra parameters specific to the probit api endpoint
+        :returns dict: a list of `address structures <https://docs.ccxt.com/en/latest/manual.html#address-structure>`
+        """
         await self.load_markets()
         request = {}
         if codes:

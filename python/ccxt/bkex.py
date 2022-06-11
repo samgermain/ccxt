@@ -10,6 +10,7 @@ from ccxt.base.errors import ArgumentsRequired
 from ccxt.base.errors import BadRequest
 from ccxt.base.errors import InsufficientFunds
 from ccxt.base.errors import InvalidOrder
+from ccxt.base.decimal_to_precision import TICK_SIZE
 
 
 class bkex(Exchange):
@@ -215,6 +216,7 @@ class bkex(Exchange):
             },
             'commonCurrencies': {
             },
+            'precisionMode': TICK_SIZE,
             'exceptions': {
                 'exact': {
                     '1005': InsufficientFunds,
@@ -284,8 +286,8 @@ class bkex(Exchange):
                 'strike': None,
                 'optionType': None,
                 'precision': {
-                    'amount': self.safe_integer(market, 'volumePrecision'),
-                    'price': self.safe_integer(market, 'pricePrecision'),
+                    'amount': self.parse_number(self.parse_precision(self.safe_string(market, 'volumePrecision'))),
+                    'price': self.parse_number(self.parse_precision(self.safe_string(market, 'pricePrecision'))),
                 },
                 'limits': {
                     'leverage': {
@@ -992,6 +994,13 @@ class bkex(Exchange):
         return self.parse_order(response, market)
 
     def cancel_orders(self, ids, symbol=None, params={}):
+        """
+        cancel multiple orders
+        :param [str] ids: order ids
+        :param str|None symbol: unified market symbol, default is None
+        :param dict params: extra parameters specific to the bkex api endpoint
+        :returns dict: an list of `order structures <https://docs.ccxt.com/en/latest/manual.html#order-structure>`
+        """
         if not isinstance(ids, list):
             raise ArgumentsRequired(self.id + ' cancelOrders() ids argument should be an array')
         self.load_markets()
@@ -1106,6 +1115,14 @@ class bkex(Exchange):
         return self.parse_order(data, market)
 
     def fetch_closed_orders(self, symbol=None, since=None, limit=None, params={}):
+        """
+        fetches information on multiple closed orders made by the user
+        :param str symbol: unified market symbol of the market orders were made in
+        :param int|None since: the earliest time in ms to fetch orders for
+        :param int|None limit: the maximum number of  orde structures to retrieve
+        :param dict params: extra parameters specific to the bkex api endpoint
+        :returns [dict]: a list of [order structures]{@link https://docs.ccxt.com/en/latest/manual.html#order-structure
+        """
         if symbol is None:
             raise ArgumentsRequired(self.id + ' fetchClosedOrders() requires a symbol argument')
         self.load_markets()

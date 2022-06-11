@@ -912,6 +912,11 @@ class cdax extends Exchange {
     }
 
     public function fetch_accounts($params = array ()) {
+        /**
+         * fetch all the accounts associated with a profile
+         * @param {dict} $params extra parameters specific to the cdax api endpoint
+         * @return {dict} a dictionary of {@link https://docs.ccxt.com/en/latest/manual.html#account-structure account structures} indexed by the account type
+         */
         yield $this->load_markets();
         $response = yield $this->privateGetAccountAccounts ($params);
         return $response['data'];
@@ -1103,6 +1108,14 @@ class cdax extends Exchange {
     }
 
     public function fetch_orders($symbol = null, $since = null, $limit = null, $params = array ()) {
+        /**
+         * fetches information on multiple orders made by the user
+         * @param {str|null} $symbol unified market $symbol of the market orders were made in
+         * @param {int|null} $since the earliest time in ms to fetch orders for
+         * @param {int|null} $limit the maximum number of  orde structures to retrieve
+         * @param {dict} $params extra parameters specific to the cdax api endpoint
+         * @return {[dict]} a list of [order structures]{@link https://docs.ccxt.com/en/latest/manual.html#order-structure
+         */
         return yield $this->fetch_orders_by_states('pre-submitted,submitted,partial-filled,filled,partial-canceled,canceled', $symbol, $since, $limit, $params);
     }
 
@@ -1127,6 +1140,14 @@ class cdax extends Exchange {
     }
 
     public function fetch_closed_orders($symbol = null, $since = null, $limit = null, $params = array ()) {
+        /**
+         * fetches information on multiple closed orders made by the user
+         * @param {str|null} $symbol unified market $symbol of the market orders were made in
+         * @param {int|null} $since the earliest time in ms to fetch orders for
+         * @param {int|null} $limit the maximum number of  orde structures to retrieve
+         * @param {dict} $params extra parameters specific to the cdax api endpoint
+         * @return {[dict]} a list of [order structures]{@link https://docs.ccxt.com/en/latest/manual.html#order-structure
+         */
         return yield $this->fetch_orders_by_states('filled,partial-canceled,canceled', $symbol, $since, $limit, $params);
     }
 
@@ -1379,6 +1400,13 @@ class cdax extends Exchange {
     }
 
     public function cancel_orders($ids, $symbol = null, $params = array ()) {
+        /**
+         * cancel multiple orders
+         * @param {[str]} $ids order $ids
+         * @param {str|null} $symbol not used by cdax cancelOrders ()
+         * @param {dict} $params extra parameters specific to the cdax api endpoint
+         * @return {dict} an list of {@link https://docs.ccxt.com/en/latest/manual.html#order-structure order structures}
+         */
         yield $this->load_markets();
         $clientOrderIds = $this->safe_value_2($params, 'clientOrderIds', 'client-order-ids');
         $params = $this->omit($params, array( 'clientOrderIds', 'client-order-ids' ));

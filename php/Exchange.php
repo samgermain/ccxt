@@ -36,7 +36,7 @@ use Elliptic\EdDSA;
 use BN\BN;
 use Exception;
 
-$version = '1.86.16';
+$version = '1.86.65';
 
 // rounding mode
 const TRUNCATE = 0;
@@ -55,7 +55,7 @@ const PAD_WITH_ZERO = 1;
 
 class Exchange {
 
-    const VERSION = '1.86.16';
+    const VERSION = '1.86.65';
 
     private static $base58_alphabet = '123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz';
     private static $base58_encoder = null;
@@ -195,7 +195,7 @@ class Exchange {
         'groupBy' => 'group_by',
         'filterBy' => 'filter_by',
         'sortBy' => 'sort_by',
-        'sortBy2' => 'sort_by2',
+        'sortBy2' => 'sort_by_2',
         'deepExtend' => 'deep_extend',
         'unCamelCase' => 'un_camel_case',
         'isNumber' => 'is_number',
@@ -216,14 +216,14 @@ class Exchange {
         'safeString' => 'safe_string',
         'safeStringLower' => 'safe_string_lower',
         'safeStringUpper' => 'safe_string_upper',
-        'safeFloat2' => 'safe_float2',
-        'safeInteger2' => 'safe_integer2',
-        'safeIntegerProduct2' => 'safe_integer_product2',
-        'safeTimestamp2' => 'safe_timestamp2',
-        'safeValue2' => 'safe_value2',
-        'safeString2' => 'safe_string2',
-        'safeStringLower2' => 'safe_string_lower2',
-        'safeStringUpper2' => 'safe_string_upper2',
+        'safeFloat2' => 'safe_float_2',
+        'safeInteger2' => 'safe_integer_2',
+        'safeIntegerProduct2' => 'safe_integer_product_2',
+        'safeTimestamp2' => 'safe_timestamp_2',
+        'safeValue2' => 'safe_value_2',
+        'safeString2' => 'safe_string_2',
+        'safeStringLower2' => 'safe_string_lower_2',
+        'safeStringUpper2' => 'safe_string_upper_2',
         'safeFloatN' => 'safe_float_n',
         'safeIntegerN' => 'safe_integer_n',
         'safeIntegerProductN' => 'safe_integer_product_n',
@@ -288,17 +288,14 @@ class Exchange {
         'marketSymbols' => 'market_symbols',
         'parseBidsAsks' => 'parse_bids_asks',
         'fetchL2OrderBook' => 'fetch_l2_order_book',
-        'parseOrderBook' => 'parse_order_book',
         'safeBalance' => 'safe_balance',
         'filterBySinceLimit' => 'filter_by_since_limit',
         'filterByValueSinceLimit' => 'filter_by_value_since_limit',
         'safeTicker' => 'safe_ticker',
-        'parseLedger' => 'parse_ledger',
         'safeLedgerEntry' => 'safe_ledger_entry',
         'parseOrders' => 'parse_orders',
         'filterBySymbol' => 'filter_by_symbol',
         'parseOHLCV' => 'parse_ohlcv',
-        'parseOHLCVs' => 'parse_ohlc_vs',
         'calculateFee' => 'calculate_fee',
         'checkRequiredDependencies' => 'check_required_dependencies',
         'remove0xPrefix' => 'remove0x_prefix',
@@ -311,16 +308,19 @@ class Exchange {
         'safeTrade' => 'safe_trade',
         'safeOrder' => 'safe_order',
         'parseNumber' => 'parse_number',
-        'parseLeverageTiers' => 'parse_leverage_tiers',
         'checkOrderArguments' => 'check_order_arguments',
-        'safeNumber2' => 'safe_number2',
+        'safeNumber2' => 'safe_number_2',
         'handleHttpStatusCode' => 'handle_http_status_code',
+        'parseOrderBook' => 'parse_order_book',
+        'parseOHLCVs' => 'parse_ohlcvs',
+        'parseLeverageTiers' => 'parse_leverage_tiers',
         'loadTradingLimits' => 'load_trading_limits',
         'parsePositions' => 'parse_positions',
         'parseAccounts' => 'parse_accounts',
         'parseTrades' => 'parse_trades',
         'parseTransactions' => 'parse_transactions',
         'parseTransfers' => 'parse_transfers',
+        'parseLedger' => 'parse_ledger',
         'setHeaders' => 'set_headers',
         'marketId' => 'market_id',
         'resolvePath' => 'resolve_path',
@@ -1931,17 +1931,6 @@ class Exchange {
         return ('array' === gettype($ohlcv) && !static::is_associative($ohlcv)) ? array_slice($ohlcv, 0, 6) : $ohlcv;
     }
 
-    public function parse_ohlcvs($ohlcvs, $market = null, $timeframe = 60, $since = null, $limit = null) {
-        $ohlcvs = is_array($ohlcvs) ? array_values($ohlcvs) : array();
-        $parsed = array();
-        foreach ($ohlcvs as $ohlcv) {
-            $parsed[] = $this->parse_ohlcv($ohlcv, $market);
-        }
-        $sorted = $this->sort_by($parsed, 0);
-        $tail = $since === null;
-        return $this->filter_by_since_limit($sorted, $since, $limit, 0, $tail);
-    }
-
     public function number($n) {
         return call_user_func($this->number, $n);
     }
@@ -1961,23 +1950,6 @@ class Exchange {
             'bids' => $this->sort_by($this->aggregate($orderbook['bids']), 0, true),
             'asks' => $this->sort_by($this->aggregate($orderbook['asks']), 0),
         ));
-    }
-
-    public function parse_order_book($orderbook, $symbol, $timestamp = null, $bids_key = 'bids', $asks_key = 'asks', $price_key = 0, $amount_key = 1) {
-        return array(
-            'symbol' => $symbol,
-            'bids' => $this->sort_by(
-                is_array($orderbook) && array_key_exists($bids_key, $orderbook) ?
-                    $this->parse_bids_asks($orderbook[$bids_key], $price_key, $amount_key) : array(),
-                0, true),
-            'asks' => $this->sort_by(
-                is_array($orderbook) && array_key_exists($asks_key, $orderbook) ?
-                    $this->parse_bids_asks($orderbook[$asks_key], $price_key, $amount_key) : array(),
-                0),
-            'timestamp' => $timestamp,
-            'datetime' => isset($timestamp) ? $this->iso8601($timestamp) : null,
-            'nonce' => null,
-        );
     }
 
     public function safe_balance($balance) {
@@ -2101,25 +2073,6 @@ class Exchange {
             'quoteVolume' => $this->parse_number($quoteVolume),
             'previousClose' => $this->safe_number($ticker, 'previousClose'),
         ));
-    }
-
-    public function parse_ledger($items, $currency = null, $since = null, $limit = null, $params = array()) {
-        $array = is_array($items) ? array_values($items) : array();
-        $result = array();
-        foreach ($array as $item) {
-            $entry = $this->parse_ledger_entry($item, $currency);
-            if (gettype($entry) === 'array' && count(array_filter(array_keys($entry), 'is_string')) == 0) {
-                foreach ($entry as $i) {
-                    $result[] = array_replace_recursive($i, $params);
-                }
-            } else {
-                $result[] = array_replace_recursive($entry, $params);
-            }
-        }
-        $result = $this->sort_by($result, 'timestamp');
-        $code = isset($currency) ? $currency['code'] : null;
-        $tail = $since === null;
-        return $this->filter_by_currency_since_limit($result, $code, $since, $limit, $tail);
     }
 
     public function safe_ledger_entry($entry, $currency = null) {
@@ -3178,25 +3131,6 @@ class Exchange {
         return $string_number;
     }
 
-    public function parse_leverage_tiers($response, $symbols, $market_id_key){
-        $tiers = array();
-        for ($i = 0; $i < count($response); $i++){
-            $item = $response[$i];
-            $id = $this->safe_string($item, $market_id_key);
-            $market = $this->safe_market($id);
-            $symbol = $market['symbol'];
-            $symbols_length = 0;
-            if ($symbols !== null){
-                $symbols_length = count($symbols);
-            }
-            $contract = $this->safe_value($market, 'contract', false);
-            if ($contract && ($symbols_length === 0 || in_array($symbol, $symbols))){
-                $tiers[$symbol] = $this->parse_market_leverage_tiers($item, $market);
-            }
-        }
-        return $tiers;
-    }
-
     public function sleep($milliseconds) {
         sleep($milliseconds / 1000);
     }
@@ -3230,6 +3164,46 @@ class Exchange {
 
     // METHODS BELOW THIS LINE ARE TRANSPILED FROM JAVASCRIPT TO PYTHON AND PHP
 
+    public function parse_order_book($orderbook, $symbol, $timestamp = null, $bidsKey = 'bids', $asksKey = 'asks', $priceKey = 0, $amountKey = 1) {
+        $bids = (is_array($orderbook) && array_key_exists($bidsKey, $orderbook)) ? $this->parse_bids_asks($orderbook[$bidsKey], $priceKey, $amountKey) : array();
+        $asks = (is_array($orderbook) && array_key_exists($asksKey, $orderbook)) ? $this->parse_bids_asks($orderbook[$asksKey], $priceKey, $amountKey) : array();
+        return array(
+            'symbol' => $symbol,
+            'bids' => $this->sort_by($bids, 0, true),
+            'asks' => $this->sort_by($asks, 0),
+            'timestamp' => $timestamp,
+            'datetime' => $this->iso8601 ($timestamp),
+            'nonce' => null,
+        );
+    }
+
+    public function parse_ohlcvs($ohlcvs, $market = null, $timeframe = '1m', $since = null, $limit = null) {
+        $results = array();
+        for ($i = 0; $i < count($ohlcvs); $i++) {
+            $results[] = $this->parse_ohlcv($ohlcvs[$i], $market);
+        }
+        $sorted = $this->sort_by($results, 0);
+        $tail = ($since === null);
+        return $this->filter_by_since_limit($sorted, $since, $limit, 0, $tail);
+    }
+
+    public function parse_leverage_tiers($response, $symbols = null, $marketIdKey = null) {
+        // $marketIdKey should only be null when $response is a dictionary
+        $symbols = $this->market_symbols($symbols);
+        $tiers = array();
+        for ($i = 0; $i < count($response); $i++) {
+            $item = $response[$i];
+            $id = $this->safe_string($item, $marketIdKey);
+            $market = $this->safe_market($id);
+            $symbol = $market['symbol'];
+            $contract = $this->safe_value($market, 'contract', false);
+            if ($contract && (($symbols === null) || $this->in_array($symbol, $symbols))) {
+                $tiers[$symbol] = $this->parse_market_leverage_tiers($item, $market);
+            }
+        }
+        return $tiers;
+    }
+
     public function load_trading_limits($symbols = null, $reload = false, $params = array ()) {
         if ($this->has['fetchTradingLimits']) {
             if ($reload || !(is_array($this->options) && array_key_exists('limitsLoaded', $this->options))) {
@@ -3259,7 +3233,7 @@ class Exchange {
         $accounts = $this->to_array($accounts);
         $result = array();
         for ($i = 0; $i < count($accounts); $i++) {
-            $account = array_merge($this->parse_account($accounts[$i], null), $params);
+            $account = array_merge($this->parse_account($accounts[$i]), $params);
             $result[] = $account;
         }
         return $result;
@@ -3295,12 +3269,31 @@ class Exchange {
         $transfers = $this->to_array($transfers);
         $result = array();
         for ($i = 0; $i < count($transfers); $i++) {
-            $transfer = array_merge($this->parseTransfer ($transfers[$i], $currency), $params);
+            $transfer = array_merge($this->parse_transfer($transfers[$i], $currency), $params);
             $result[] = $transfer;
         }
         $result = $this->sort_by($result, 'timestamp');
         $code = ($currency !== null) ? $currency['code'] : null;
         $tail = $since === null;
+        return $this->filter_by_currency_since_limit($result, $code, $since, $limit, $tail);
+    }
+
+    public function parse_ledger($data, $currency = null, $since = null, $limit = null, $params = array ()) {
+        $result = $array();
+        $array = $this->to_array($data);
+        for ($i = 0; $i < count($array); $i++) {
+            $itemOrItems = $this->parse_ledger_entry($array[$i], $currency);
+            if (gettype($itemOrItems) === 'array' && count(array_filter(array_keys($itemOrItems), 'is_string')) == 0) {
+                for ($j = 0; $j < count($itemOrItems); $j++) {
+                    $result[] = array_merge($itemOrItems[$j], $params);
+                }
+            } else {
+                $result[] = array_merge($itemOrItems, $params);
+            }
+        }
+        $result = $this->sort_by($result, 'timestamp');
+        $code = ($currency !== null) ? $currency['code'] : null;
+        $tail = ($since === null);
         return $this->filter_by_currency_since_limit($result, $code, $since, $limit, $tail);
     }
 

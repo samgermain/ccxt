@@ -512,6 +512,13 @@ class upbit extends Exchange {
     }
 
     public function fetch_order_books($symbols = null, $limit = null, $params = array ()) {
+        /**
+         * fetches information on open orders with bid (buy) and ask (sell) prices, volumes and other data for multiple markets
+         * @param {[str]|null} $symbols list of unified market $symbols, all $symbols fetched if null, default is null
+         * @param {int|null} $limit not used by upbit fetchOrderBooks ()
+         * @param {dict} $params extra parameters specific to the upbit api endpoint
+         * @return {dict} a dictionary of {@link https://docs.ccxt.com/en/latest/manual.html#order-book-structure order book structures} indexed by market $symbol
+         */
         yield $this->load_markets();
         $ids = null;
         if ($symbols === null) {
@@ -1460,10 +1467,26 @@ class upbit extends Exchange {
     }
 
     public function fetch_closed_orders($symbol = null, $since = null, $limit = null, $params = array ()) {
+        /**
+         * fetches information on multiple closed orders made by the user
+         * @param {str|null} $symbol unified market $symbol of the market orders were made in
+         * @param {int|null} $since the earliest time in ms to fetch orders for
+         * @param {int|null} $limit the maximum number of  orde structures to retrieve
+         * @param {dict} $params extra parameters specific to the upbit api endpoint
+         * @return {[dict]} a list of [order structures]{@link https://docs.ccxt.com/en/latest/manual.html#order-structure
+         */
         return yield $this->fetch_orders_by_state('done', $symbol, $since, $limit, $params);
     }
 
     public function fetch_canceled_orders($symbol = null, $since = null, $limit = null, $params = array ()) {
+        /**
+         * fetches information on multiple canceled orders made by the user
+         * @param {str|null} $symbol unified market $symbol of the market orders were made in
+         * @param {int|null} $since timestamp in ms of the earliest order, default is null
+         * @param {int|null} $limit max number of orders to return, default is null
+         * @param {dict} $params extra parameters specific to the upbit api endpoint
+         * @return {dict} a list of {@link https://docs.ccxt.com/en/latest/manual.html#order-structure order structures}
+         */
         return yield $this->fetch_orders_by_state('cancel', $symbol, $since, $limit, $params);
     }
 
@@ -1526,6 +1549,12 @@ class upbit extends Exchange {
     }
 
     public function fetch_deposit_addresses($codes = null, $params = array ()) {
+        /**
+         * fetch deposit addresses for multiple currencies and chain types
+         * @param {[str]|null} $codes list of unified currency $codes, default is null
+         * @param {dict} $params extra parameters specific to the upbit api endpoint
+         * @return {dict} a list of {@link https://docs.ccxt.com/en/latest/manual.html#address-structure address structures}
+         */
         yield $this->load_markets();
         $response = yield $this->privateGetDepositsCoinAddresses ($params);
         //
@@ -1595,6 +1624,12 @@ class upbit extends Exchange {
     }
 
     public function create_deposit_address($code, $params = array ()) {
+        /**
+         * create a $currency deposit address
+         * @param {str} $code unified $currency $code of the $currency for the deposit address
+         * @param {dict} $params extra parameters specific to the upbit api endpoint
+         * @return {dict} an {@link https://docs.ccxt.com/en/latest/manual.html#address-structure address structure}
+         */
         yield $this->load_markets();
         $currency = $this->currency($code);
         $request = array(

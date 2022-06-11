@@ -183,6 +183,7 @@ class bitpanda extends Exchange {
                 'apiKey' => true,
                 'secret' => false,
             ),
+            'precisionMode' => TICK_SIZE,
             'exceptions' => array(
                 'exact' => array(
                     'INVALID_CLIENT_UUID' => '\\ccxt\\InvalidOrder',
@@ -322,7 +323,7 @@ class bitpanda extends Exchange {
                 'info' => $currency, // the original payload
                 'active' => null,
                 'fee' => null,
-                'precision' => $this->safe_integer($currency, 'precision'),
+                'precision' => $this->parse_number($this->parse_precision($this->safe_string($currency, 'precision'))),
                 'limits' => array(
                     'amount' => array( 'min' => null, 'max' => null ),
                     'withdraw' => array( 'min' => null, 'max' => null ),
@@ -387,8 +388,8 @@ class bitpanda extends Exchange {
                 'strike' => null,
                 'optionType' => null,
                 'precision' => array(
-                    'amount' => $this->safe_integer($market, 'amount_precision'),
-                    'price' => $this->safe_integer($market, 'market_precision'),
+                    'amount' => $this->parse_number($this->parse_precision($this->safe_string($market, 'amount_precision'))),
+                    'price' => $this->parse_number($this->parse_precision($this->safe_string($market, 'market_precision'))),
                 ),
                 'limits' => array(
                     'leverage' => array(
@@ -1013,6 +1014,12 @@ class bitpanda extends Exchange {
     }
 
     public function create_deposit_address($code, $params = array ()) {
+        /**
+         * create a $currency deposit address
+         * @param {str} $code unified $currency $code of the $currency for the deposit address
+         * @param {dict} $params extra parameters specific to the bitpanda api endpoint
+         * @return {dict} an {@link https://docs.ccxt.com/en/latest/manual.html#address-structure address structure}
+         */
         $this->load_markets();
         $currency = $this->currency($code);
         $request = array(
@@ -1566,6 +1573,13 @@ class bitpanda extends Exchange {
     }
 
     public function cancel_orders($ids, $symbol = null, $params = array ()) {
+        /**
+         * cancel multiple orders
+         * @param {[str]} $ids order $ids
+         * @param {str|null} $symbol unified market $symbol, default is null
+         * @param {dict} $params extra parameters specific to the bitpanda api endpoint
+         * @return {dict} an list of {@link https://docs.ccxt.com/en/latest/manual.html#order-structure order structures}
+         */
         $this->load_markets();
         $request = array(
             'ids' => implode(',', $ids),
@@ -1755,6 +1769,14 @@ class bitpanda extends Exchange {
     }
 
     public function fetch_closed_orders($symbol = null, $since = null, $limit = null, $params = array ()) {
+        /**
+         * fetches information on multiple closed orders made by the user
+         * @param {str|null} $symbol unified market $symbol of the market orders were made in
+         * @param {int|null} $since the earliest time in ms to fetch orders for
+         * @param {int|null} $limit the maximum number of  orde structures to retrieve
+         * @param {dict} $params extra parameters specific to the bitpanda api endpoint
+         * @return {[dict]} a list of [order structures]{@link https://docs.ccxt.com/en/latest/manual.html#order-structure
+         */
         $request = array(
             'with_cancelled_and_rejected' => true, // default is false, orders which have been cancelled by the user before being filled or rejected by the system as invalid, additionally, all inactive filled orders which would return with "with_just_filled_inactive"
         );

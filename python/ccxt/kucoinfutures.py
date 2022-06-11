@@ -315,6 +315,11 @@ class kucoinfutures(kucoin):
         })
 
     def fetch_accounts(self, params={}):
+        """
+        fetch all the accounts associated with a profile
+        :param dict params: extra parameters specific to the kucoinfutures api endpoint
+        :returns dict: a dictionary of `account structures <https://docs.ccxt.com/en/latest/manual.html#account-structure>` indexed by the account type
+        """
         raise BadRequest(self.id + ' fetchAccounts() is not supported yet')
 
     def fetch_status(self, params={}):
@@ -578,6 +583,12 @@ class kucoinfutures(kucoin):
         ]
 
     def create_deposit_address(self, code, params={}):
+        """
+        create a currency deposit address
+        :param str code: unified currency code of the currency for the deposit address
+        :param dict params: extra parameters specific to the kucoinfutures api endpoint
+        :returns dict: an `address structure <https://docs.ccxt.com/en/latest/manual.html#address-structure>`
+        """
         raise BadRequest(self.id + ' createDepositAddress() is not supported yet')
 
     def fetch_deposit_address(self, code, params={}):
@@ -1285,15 +1296,15 @@ class kucoinfutures(kucoin):
 
     def fetch_closed_orders(self, symbol=None, since=None, limit=None, params={}):
         """
-        fetch a list of orders
-        :param str symbol: unified market symbol
-        :param int since: timestamp in ms of the earliest order
-        :param int limit: max number of orders to return
-        :param dict params: exchange specific params
-        :param int params['till']: end time in ms
-        :param str params['side']: buy or sell
-        :param str params['type']: limit, or market
-        :returns: An `array of order structures <https://docs.ccxt.com/en/latest/manual.html#order-structure>`
+        fetches information on multiple closed orders made by the user
+        :param str|None symbol: unified market symbol of the market orders were made in
+        :param int|None since: the earliest time in ms to fetch orders for
+        :param int|None limit: the maximum number of  orde structures to retrieve
+        :param dict params: extra parameters specific to the kucoinfutures api endpoint
+        :param int|None params['till']: end time in ms
+        :param str|None params['side']: buy or sell
+        :param str|None params['type']: limit, or market
+        :returns [dict]: a list of [order structures]{@link https://docs.ccxt.com/en/latest/manual.html#order-structure
         """
         return self.fetch_orders_by_status('done', symbol, since, limit, params)
 

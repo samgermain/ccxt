@@ -4,7 +4,6 @@
 # https://github.com/ccxt/ccxt/blob/master/CONTRIBUTING.md#how-to-contribute-code
 
 from ccxt.base.exchange import Exchange
-import math
 from ccxt.base.errors import ExchangeError
 from ccxt.base.errors import AuthenticationError
 from ccxt.base.errors import ArgumentsRequired
@@ -332,7 +331,6 @@ class delta(Exchange):
             depositsEnabled = (depositStatus == 'enabled')
             withdrawalsEnabled = (withdrawalStatus == 'enabled')
             active = depositsEnabled and withdrawalsEnabled
-            precision = self.safe_integer(currency, 'precision')
             result[code] = {
                 'id': id,
                 'numericId': numericId,
@@ -343,7 +341,7 @@ class delta(Exchange):
                 'deposit': depositsEnabled,
                 'withdraw': withdrawalsEnabled,
                 'fee': self.safe_number(currency, 'base_withdrawal_fee'),
-                'precision': 1 / math.pow(10, precision),
+                'precision': self.parse_number(self.parse_precision(self.safe_string(currency, 'precision'))),
                 'limits': {
                     'amount': {'min': None, 'max': None},
                     'withdraw': {
@@ -1292,6 +1290,14 @@ class delta(Exchange):
         return self.fetch_orders_with_method('privateGetOrders', symbol, since, limit, params)
 
     def fetch_closed_orders(self, symbol=None, since=None, limit=None, params={}):
+        """
+        fetches information on multiple closed orders made by the user
+        :param str|None symbol: unified market symbol of the market orders were made in
+        :param int|None since: the earliest time in ms to fetch orders for
+        :param int|None limit: the maximum number of  orde structures to retrieve
+        :param dict params: extra parameters specific to the delta api endpoint
+        :returns [dict]: a list of [order structures]{@link https://docs.ccxt.com/en/latest/manual.html#order-structure
+        """
         return self.fetch_orders_with_method('privateGetOrdersHistory', symbol, since, limit, params)
 
     def fetch_orders_with_method(self, method, symbol=None, since=None, limit=None, params={}):
@@ -1418,6 +1424,14 @@ class delta(Exchange):
         return self.parse_trades(result, market, since, limit)
 
     def fetch_ledger(self, code=None, since=None, limit=None, params={}):
+        """
+        fetch the history of changes, actions done by the user or operations that altered balance of the user
+        :param str|None code: unified currency code, default is None
+        :param int|None since: timestamp in ms of the earliest ledger entry, default is None
+        :param int|None limit: max number of ledger entrys to return, default is None
+        :param dict params: extra parameters specific to the delta api endpoint
+        :returns dict: a `ledger structure <https://docs.ccxt.com/en/latest/manual.html#ledger-structure>`
+        """
         self.load_markets()
         request = {
             # 'asset_id': currency['numericId'],

@@ -444,7 +444,7 @@ class crex24 extends Exchange {
             $id = $this->safe_string($currency, 'symbol');
             $code = $this->safe_currency_code($id);
             $withdrawalPrecision = $this->safe_integer($currency, 'withdrawalPrecision');
-            $precision = pow(10, -$withdrawalPrecision);
+            $precision = $this->parse_number($this->parse_precision($this->safe_string($currency, 'withdrawalPrecision')));
             $address = $this->safe_value($currency, 'BaseAddress');
             $deposit = $this->safe_value($currency, 'depositsAllowed');
             $withdraw = $this->safe_value($currency, 'withdrawalsAllowed');
@@ -466,8 +466,8 @@ class crex24 extends Exchange {
                 'precision' => $precision,
                 'limits' => array(
                     'amount' => array(
-                        'min' => pow(10, -$precision),
-                        'max' => pow(10, $precision),
+                        'min' => $precision,
+                        'max' => pow(10, $withdrawalPrecision),
                     ),
                     'deposit' => array(
                         'min' => $this->safe_number($currency, 'minDeposit'),
@@ -1167,6 +1167,14 @@ class crex24 extends Exchange {
     }
 
     public function fetch_orders($symbol = null, $since = null, $limit = null, $params = array ()) {
+        /**
+         * fetches information on multiple orders made by the user
+         * @param {str|null} $symbol unified $market $symbol of the $market orders were made in
+         * @param {int|null} $since the earliest time in ms to fetch orders for
+         * @param {int|null} $limit the maximum number of  orde structures to retrieve
+         * @param {dict} $params extra parameters specific to the crex24 api endpoint
+         * @return {[dict]} a list of [order structures]{@link https://docs.ccxt.com/en/latest/manual.html#order-structure
+         */
         yield $this->load_markets();
         $request = array();
         if ($since !== null) {
@@ -1295,6 +1303,14 @@ class crex24 extends Exchange {
     }
 
     public function fetch_closed_orders($symbol = null, $since = null, $limit = null, $params = array ()) {
+        /**
+         * fetches information on multiple closed orders made by the user
+         * @param {str|null} $symbol unified $market $symbol of the $market orders were made in
+         * @param {int|null} $since the earliest time in ms to fetch orders for
+         * @param {int|null} $limit the maximum number of  orde structures to retrieve
+         * @param {dict} $params extra parameters specific to the crex24 api endpoint
+         * @return {[dict]} a list of [order structures]{@link https://docs.ccxt.com/en/latest/manual.html#order-structure
+         */
         yield $this->load_markets();
         $market = null;
         $request = array();
@@ -1364,6 +1380,13 @@ class crex24 extends Exchange {
     }
 
     public function cancel_orders($ids, $symbol = null, $params = array ()) {
+        /**
+         * cancel multiple orders
+         * @param {[str]} $ids order $ids
+         * @param {str|null} $symbol not used by crex24 cancelOrders ()
+         * @param {dict} $params extra parameters specific to the crex24 api endpoint
+         * @return {dict} an list of {@link https://docs.ccxt.com/en/latest/manual.html#order-structure order structures}
+         */
         if (gettype($ids) === 'array' && count(array_filter(array_keys($ids), 'is_string')) != 0) {
             throw new ArgumentsRequired($this->id . ' cancelOrders() $ids argument should be an array');
         }

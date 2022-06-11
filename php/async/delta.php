@@ -327,7 +327,6 @@ class delta extends Exchange {
             $depositsEnabled = ($depositStatus === 'enabled');
             $withdrawalsEnabled = ($withdrawalStatus === 'enabled');
             $active = $depositsEnabled && $withdrawalsEnabled;
-            $precision = $this->safe_integer($currency, 'precision');
             $result[$code] = array(
                 'id' => $id,
                 'numericId' => $numericId,
@@ -338,7 +337,7 @@ class delta extends Exchange {
                 'deposit' => $depositsEnabled,
                 'withdraw' => $withdrawalsEnabled,
                 'fee' => $this->safe_number($currency, 'base_withdrawal_fee'),
-                'precision' => 1 / pow(10, $precision),
+                'precision' => $this->parse_number($this->parse_precision($this->safe_string($currency, 'precision'))),
                 'limits' => array(
                     'amount' => array( 'min' => null, 'max' => null ),
                     'withdraw' => array(
@@ -1333,6 +1332,14 @@ class delta extends Exchange {
     }
 
     public function fetch_closed_orders($symbol = null, $since = null, $limit = null, $params = array ()) {
+        /**
+         * fetches information on multiple closed orders made by the user
+         * @param {str|null} $symbol unified market $symbol of the market orders were made in
+         * @param {int|null} $since the earliest time in ms to fetch orders for
+         * @param {int|null} $limit the maximum number of  orde structures to retrieve
+         * @param {dict} $params extra parameters specific to the delta api endpoint
+         * @return {[dict]} a list of [order structures]{@link https://docs.ccxt.com/en/latest/manual.html#order-structure
+         */
         return yield $this->fetch_orders_with_method('privateGetOrdersHistory', $symbol, $since, $limit, $params);
     }
 
@@ -1468,6 +1475,14 @@ class delta extends Exchange {
     }
 
     public function fetch_ledger($code = null, $since = null, $limit = null, $params = array ()) {
+        /**
+         * fetch the history of changes, actions done by the user or operations that altered balance of the user
+         * @param {str|null} $code unified $currency $code, default is null
+         * @param {int|null} $since timestamp in ms of the earliest ledger entry, default is null
+         * @param {int|null} $limit max number of ledger entrys to return, default is null
+         * @param {dict} $params extra parameters specific to the delta api endpoint
+         * @return {dict} a {@link https://docs.ccxt.com/en/latest/manual.html#ledger-structure ledger structure}
+         */
         yield $this->load_markets();
         $request = array(
             // 'asset_id' => $currency['numericId'],

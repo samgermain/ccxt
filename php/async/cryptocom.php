@@ -227,6 +227,7 @@ class cryptocom extends Exchange {
             'commonCurrencies' => array(
                 'USD_STABLE_COIN' => 'USDC',
             ),
+            'precisionMode' => TICK_SIZE,
             'exceptions' => array(
                 'exact' => array(
                     '10001' => '\\ccxt\\ExchangeError',
@@ -347,8 +348,8 @@ class cryptocom extends Exchange {
                 'strike' => null,
                 'optionType' => null,
                 'precision' => array(
-                    'amount' => $this->safe_integer($market, 'quantity_decimals'),
-                    'price' => intval($priceDecimals),
+                    'amount' => $this->parse_number($this->parse_precision($this->safe_string($market, 'quantity_decimals'))),
+                    'price' => $this->parse_number($this->parse_precision($priceDecimals)),
                 ),
                 'limits' => array(
                     'leverage' => array(
@@ -449,8 +450,8 @@ class cryptocom extends Exchange {
                 'strike' => null,
                 'optionType' => null,
                 'precision' => array(
-                    'price' => $this->safe_integer($market, 'quote_decimals'),
-                    'amount' => $this->safe_integer($market, 'quantity_decimals'),
+                    'price' => $this->parse_number($this->parse_precision($this->safe_string($market, 'quote_decimals'))),
+                    'amount' => $this->parse_number($this->parse_precision($this->safe_string($market, 'quantity_decimals'))),
                 ),
                 'limits' => array(
                     'leverage' => array(
@@ -542,6 +543,14 @@ class cryptocom extends Exchange {
     }
 
     public function fetch_orders($symbol = null, $since = null, $limit = null, $params = array ()) {
+        /**
+         * fetches information on multiple orders made by the user
+         * @param {str} $symbol unified $market $symbol of the $market orders were made in
+         * @param {int|null} $since the earliest time in ms to fetch orders for
+         * @param {int|null} $limit the maximum number of  orde structures to retrieve
+         * @param {dict} $params extra parameters specific to the cryptocom api endpoint
+         * @return {[dict]} a list of [order structures]{@link https://docs.ccxt.com/en/latest/manual.html#order-structure
+         */
         if ($symbol === null) {
             throw new ArgumentsRequired($this->id . ' fetchOrders() requires a $symbol argument');
         }
@@ -1240,6 +1249,12 @@ class cryptocom extends Exchange {
     }
 
     public function fetch_deposit_addresses_by_network($code, $params = array ()) {
+        /**
+         * fetch a dictionary of $addresses for a $currency, indexed by $network
+         * @param {str} $code unified $currency $code of the $currency for the deposit $address
+         * @param {dict} $params extra parameters specific to the cryptocom api endpoint
+         * @return {dict} a dictionary of {@link https://docs.ccxt.com/en/latest/manual.html#$address-structure $address structures} indexed by the $network
+         */
         yield $this->load_markets();
         $currency = $this->currency($code);
         $request = array(
@@ -1456,6 +1471,14 @@ class cryptocom extends Exchange {
     }
 
     public function fetch_transfers($code = null, $since = null, $limit = null, $params = array ()) {
+        /**
+         * fetch a history of internal transfers made on an account
+         * @param {str|null} $code unified $currency $code of the $currency transferred
+         * @param {int|null} $since the earliest time in ms to fetch transfers for
+         * @param {int|null} $limit the maximum number of  transfers structures to retrieve
+         * @param {dict} $params extra parameters specific to the cryptocom api endpoint
+         * @return {[dict]} a list of {@link https://docs.ccxt.com/en/latest/manual.html#transfer-structure transfer structures}
+         */
         if (!(is_array($params) && array_key_exists('direction', $params))) {
             throw new ArgumentsRequired($this->id . ' fetchTransfers() requires a direction param to be either "IN" or "OUT"');
         }

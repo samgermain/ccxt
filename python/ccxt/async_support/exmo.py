@@ -800,6 +800,13 @@ class exmo(Exchange):
         return self.parse_order_book(result, symbol, None, 'bid', 'ask')
 
     async def fetch_order_books(self, symbols=None, limit=None, params={}):
+        """
+        fetches information on open orders with bid(buy) and ask(sell) prices, volumes and other data for multiple markets
+        :param [str]|None symbols: list of unified market symbols, all symbols fetched if None, default is None
+        :param int|None limit: max number of entries per orderbook to return, default is None
+        :param dict params: extra parameters specific to the exmo api endpoint
+        :returns dict: a dictionary of `order book structures <https://docs.ccxt.com/en/latest/manual.html#order-book-structure>` indexed by market symbol
+        """
         await self.load_markets()
         ids = None
         if symbols is None:
@@ -1408,6 +1415,14 @@ class exmo(Exchange):
         }
 
     async def fetch_canceled_orders(self, symbol=None, since=None, limit=None, params={}):
+        """
+        fetches information on multiple canceled orders made by the user
+        :param str|None symbol: unified market symbol of the market orders were made in
+        :param int|None since: timestamp in ms of the earliest order, default is None
+        :param int|None limit: max number of orders to return, default is None
+        :param dict params: extra parameters specific to the exmo api endpoint
+        :returns dict: a list of `order structures <https://docs.ccxt.com/en/latest/manual.html#order-structure>`
+        """
         await self.load_markets()
         request = {}
         if since is not None:
@@ -1770,6 +1785,13 @@ class exmo(Exchange):
         return self.parse_transaction(first, currency)
 
     async def fetch_deposit(self, id=None, code=None, params={}):
+        """
+        fetch information on a deposit
+        :param str id: deposit id
+        :param str|None code: unified currency code, default is None
+        :param dict params: extra parameters specific to the exmo api endpoint
+        :returns dict: a `transaction structure <https://docs.ccxt.com/en/latest/manual.html#transaction-structure>`
+        """
         await self.load_markets()
         currency = None
         request = {

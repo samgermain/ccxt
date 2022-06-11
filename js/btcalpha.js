@@ -4,6 +4,7 @@
 
 const Exchange = require ('./base/Exchange');
 const { ExchangeError, AuthenticationError, DDoSProtection, InvalidOrder, InsufficientFunds } = require ('./base/errors');
+const { TICK_SIZE } = require ('./base/functions/number');
 const Precise = require ('./base/Precise');
 
 //  ---------------------------------------------------------------------------
@@ -123,6 +124,7 @@ module.exports = class btcalpha extends Exchange {
             'commonCurrencies': {
                 'CBC': 'Cashbery',
             },
+            'precisionMode': TICK_SIZE,
             'exceptions': {
                 'exact': {},
                 'broad': {
@@ -192,8 +194,8 @@ module.exports = class btcalpha extends Exchange {
                 'strike': undefined,
                 'optionType': undefined,
                 'precision': {
-                    'amount': parseInt ('8'),
-                    'price': parseInt (pricePrecision),
+                    'amount': this.parseNumber (this.parsePrecision (this.safeString (market, 'amount_precision'))),
+                    'price': this.parseNumber (this.parsePrecision ((pricePrecision))),
                 },
                 'limits': {
                     'leverage': {
@@ -673,6 +675,16 @@ module.exports = class btcalpha extends Exchange {
     }
 
     async fetchOrders (symbol = undefined, since = undefined, limit = undefined, params = {}) {
+        /**
+         * @method
+         * @name btcalpha#fetchOrders
+         * @description fetches information on multiple orders made by the user
+         * @param {str|undefined} symbol unified market symbol of the market orders were made in
+         * @param {int|undefined} since the earliest time in ms to fetch orders for
+         * @param {int|undefined} limit the maximum number of  orde structures to retrieve
+         * @param {dict} params extra parameters specific to the btcalpha api endpoint
+         * @returns {[dict]} a list of [order structures]{@link https://docs.ccxt.com/en/latest/manual.html#order-structure
+         */
         await this.loadMarkets ();
         const request = {};
         let market = undefined;
@@ -705,6 +717,16 @@ module.exports = class btcalpha extends Exchange {
     }
 
     async fetchClosedOrders (symbol = undefined, since = undefined, limit = undefined, params = {}) {
+        /**
+         * @method
+         * @name btcalpha#fetchClosedOrders
+         * @description fetches information on multiple closed orders made by the user
+         * @param {str|undefined} symbol unified market symbol of the market orders were made in
+         * @param {int|undefined} since the earliest time in ms to fetch orders for
+         * @param {int|undefined} limit the maximum number of  orde structures to retrieve
+         * @param {dict} params extra parameters specific to the btcalpha api endpoint
+         * @returns {[dict]} a list of [order structures]{@link https://docs.ccxt.com/en/latest/manual.html#order-structure
+         */
         const request = {
             'status': '3',
         };

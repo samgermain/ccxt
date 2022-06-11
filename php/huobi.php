@@ -2577,6 +2577,11 @@ class huobi extends Exchange {
     }
 
     public function fetch_accounts($params = array ()) {
+        /**
+         * fetch all the accounts associated with a profile
+         * @param {dict} $params extra parameters specific to the huobi api endpoint
+         * @return {dict} a dictionary of {@link https://docs.ccxt.com/en/latest/manual.html#account-structure account structures} indexed by the account type
+         */
         $this->load_markets();
         $response = $this->spotPrivateGetV1AccountAccounts ($params);
         //
@@ -3365,6 +3370,14 @@ class huobi extends Exchange {
     }
 
     public function fetch_orders($symbol = null, $since = null, $limit = null, $params = array ()) {
+        /**
+         * fetches information on multiple orders made by the user
+         * @param {str|null} $symbol unified market $symbol of the market orders were made in
+         * @param {int|null} $since the earliest time in ms to fetch orders for
+         * @param {int|null} $limit the maximum number of  orde structures to retrieve
+         * @param {dict} $params extra parameters specific to the huobi api endpoint
+         * @return {[dict]} a list of [order structures]{@link https://docs.ccxt.com/en/latest/manual.html#order-structure
+         */
         $this->load_markets();
         $marketType = null;
         list($marketType, $params) = $this->handle_market_type_and_params('fetchOrders', null, $params);
@@ -3384,6 +3397,14 @@ class huobi extends Exchange {
     }
 
     public function fetch_closed_orders($symbol = null, $since = null, $limit = null, $params = array ()) {
+        /**
+         * fetches information on multiple closed orders made by the user
+         * @param {str|null} $symbol unified market $symbol of the market orders were made in
+         * @param {int|null} $since the earliest time in ms to fetch orders for
+         * @param {int|null} $limit the maximum number of  orde structures to retrieve
+         * @param {dict} $params extra parameters specific to the huobi api endpoint
+         * @return {[dict]} a list of [order structures]{@link https://docs.ccxt.com/en/latest/manual.html#order-structure
+         */
         $this->load_markets();
         $marketType = null;
         list($marketType, $params) = $this->handle_market_type_and_params('fetchClosedOrders', null, $params);
@@ -4176,6 +4197,13 @@ class huobi extends Exchange {
     }
 
     public function cancel_orders($ids, $symbol = null, $params = array ()) {
+        /**
+         * cancel multiple orders
+         * @param {[str]} $ids order $ids
+         * @param {str|null} $symbol unified $market $symbol, default is null
+         * @param {dict} $params extra parameters specific to the huobi api endpoint
+         * @return {dict} an list of {@link https://docs.ccxt.com/en/latest/manual.html#order-structure order structures}
+         */
         $this->load_markets();
         $marketType = null;
         list($marketType, $params) = $this->handle_market_type_and_params('cancelOrders', null, $params);
@@ -4413,6 +4441,12 @@ class huobi extends Exchange {
     }
 
     public function fetch_deposit_addresses_by_network($code, $params = array ()) {
+        /**
+         * fetch a dictionary of addresses for a $currency, indexed by network
+         * @param {str} $code unified $currency $code of the $currency for the deposit address
+         * @param {dict} $params extra parameters specific to the huobi api endpoint
+         * @return {dict} a dictionary of {@link https://docs.ccxt.com/en/latest/manual.html#address-structure address structures} indexed by the network
+         */
         $this->load_markets();
         $currency = $this->currency($code);
         $request = array(
@@ -4818,35 +4852,42 @@ class huobi extends Exchange {
     }
 
     public function fetch_borrow_rates_per_symbol($params = array ()) {
+        /**
+         * fetch borrow $rates for $currencies within individual markets
+         * @param {dict} $params extra parameters specific to the huobi api endpoint
+         * @return {dict} a dictionary of {@link https://docs.ccxt.com/en/latest/manual.html#borrow-$rate-structure borrow $rate structures} indexed by $market $symbol
+         */
         $this->load_markets();
         $response = $this->spotPrivateGetV1MarginLoanInfo ($params);
-        // {
-        //     "status" => "ok",
-        //     "data" => array(
-        //         {
-        //             "symbol" => "1inchusdt",
-        //             "currencies" => array(
-        //                 array(
-        //                     "currency" => "1inch",
-        //                     "interest-$rate" => "0.00098",
-        //                     "min-loan-amt" => "90.000000000000000000",
-        //                     "max-loan-amt" => "1000.000000000000000000",
-        //                     "loanable-amt" => "0.0",
-        //                     "actual-$rate" => "0.00098"
-        //                 ),
-        //                 array(
-        //                     "currency" => "usdt",
-        //                     "interest-$rate" => "0.00098",
-        //                     "min-loan-amt" => "100.000000000000000000",
-        //                     "max-loan-amt" => "1000.000000000000000000",
-        //                     "loanable-amt" => "0.0",
-        //                     "actual-$rate" => "0.00098"
-        //                 }
-        //             )
-        //         ),
-        //         ...
-        //     )
-        // }
+        //
+        //    {
+        //        "status" => "ok",
+        //        "data" => array(
+        //            {
+        //                "symbol" => "1inchusdt",
+        //                "currencies" => array(
+        //                    array(
+        //                        "currency" => "1inch",
+        //                        "interest-$rate" => "0.00098",
+        //                        "min-loan-amt" => "90.000000000000000000",
+        //                        "max-loan-amt" => "1000.000000000000000000",
+        //                        "loanable-amt" => "0.0",
+        //                        "actual-$rate" => "0.00098"
+        //                    ),
+        //                    array(
+        //                        "currency" => "usdt",
+        //                        "interest-$rate" => "0.00098",
+        //                        "min-loan-amt" => "100.000000000000000000",
+        //                        "max-loan-amt" => "1000.000000000000000000",
+        //                        "loanable-amt" => "0.0",
+        //                        "actual-$rate" => "0.00098"
+        //                    }
+        //                )
+        //            ),
+        //            ...
+        //        )
+        //    }
+        //
         $timestamp = $this->milliseconds();
         $data = $this->safe_value($response, 'data', array());
         $rates = array(
@@ -6091,6 +6132,14 @@ class huobi extends Exchange {
     }
 
     public function fetch_ledger($code = null, $since = null, $limit = null, $params = array ()) {
+        /**
+         * fetch the history of changes, actions done by the user or operations that altered balance of the user
+         * @param {str|null} $code unified $currency $code, default is null
+         * @param {int|null} $since timestamp in ms of the earliest ledger entry, default is null
+         * @param {int|null} $limit max number of ledger entrys to return, default is null
+         * @param {dict} $params extra parameters specific to the huobi api endpoint
+         * @return {dict} a {@link https://docs.ccxt.com/en/latest/manual.html#ledger-structure ledger structure}
+         */
         $this->load_markets();
         $accountId = $this->fetch_account_id_by_type('spot', $params);
         $request = array(
@@ -6244,7 +6293,7 @@ class huobi extends Exchange {
         return $this->safe_value($tiers, $symbol);
     }
 
-    public function parse_leverage_tiers($response, $symbols, $marketIdKey) {
+    public function parse_leverage_tiers($response, $symbols = null, $marketIdKey = null) {
         $result = array();
         for ($i = 0; $i < count($response); $i++) {
             $item = $response[$i];

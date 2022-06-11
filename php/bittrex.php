@@ -197,6 +197,7 @@ class bittrex extends Exchange {
                     'percentage' => false,
                 ),
             ),
+            'precisionMode' => TICK_SIZE,
             'exceptions' => array(
                 'exact' => array(
                     'BAD_REQUEST' => '\\ccxt\\BadRequest', // array("code":"BAD_REQUEST","detail":"Refer to the data field for specific field validation failures.","data":array("invalidRequestParameter":"day"))
@@ -277,12 +278,8 @@ class bittrex extends Exchange {
         ));
     }
 
-    public function cost_to_precision($symbol, $cost) {
-        return $this->decimal_to_precision($cost, TRUNCATE, $this->markets[$symbol]['precision']['price'], DECIMAL_PLACES);
-    }
-
     public function fee_to_precision($symbol, $fee) {
-        return $this->decimal_to_precision($fee, TRUNCATE, $this->markets[$symbol]['precision']['price'], DECIMAL_PLACES);
+        return $this->decimal_to_precision($fee, TRUNCATE, $this->markets[$symbol]['precision']['price'], $this->precisionMode);
     }
 
     public function fetch_markets($params = array ()) {
@@ -348,8 +345,8 @@ class bittrex extends Exchange {
                 'strike' => null,
                 'optionType' => null,
                 'precision' => array(
-                    'amount' => intval('8'),
-                    'price' => $this->safe_integer($market, 'precision', 8),
+                    'amount' => $this->parse_number($this->parse_precision('8')),
+                    'price' => $this->parse_number($this->parse_precision($this->safe_string($market, 'precision', '8'))),
                 ),
                 'limits' => array(
                     'leverage' => array(
@@ -470,7 +467,7 @@ class bittrex extends Exchange {
             $currency = $response[$i];
             $id = $this->safe_string($currency, 'symbol');
             $code = $this->safe_currency_code($id);
-            $precision = 8; // default $precision, todo => fix "magic constants"
+            $precision = $this->parse_number($this->parse_precision('8')); // default $precision, todo => fix "magic constants"
             $fee = $this->safe_number($currency, 'txFee'); // todo => redesign
             $isActive = $this->safe_string($currency, 'status');
             $result[$code] = array(
@@ -487,7 +484,7 @@ class bittrex extends Exchange {
                 'precision' => $precision,
                 'limits' => array(
                     'amount' => array(
-                        'min' => 1 / pow(10, $precision),
+                        'min' => $precision,
                         'max' => null,
                     ),
                     'withdraw' => array(
@@ -1684,6 +1681,14 @@ class bittrex extends Exchange {
     }
 
     public function fetch_closed_orders($symbol = null, $since = null, $limit = null, $params = array ()) {
+        /**
+         * fetches information on multiple closed orders made by the user
+         * @param {str|null} $symbol unified $market $symbol of the $market orders were made in
+         * @param {int|null} $since the earliest time in ms to fetch orders for
+         * @param {int|null} $limit the maximum number of  orde structures to retrieve
+         * @param {dict} $params extra parameters specific to the bittrex api endpoint
+         * @return {[dict]} a list of [order structures]{@link https://docs.ccxt.com/en/latest/manual.html#order-structure
+         */
         $this->load_markets();
         $stop = $this->safe_value($params, 'stop');
         $request = array();
@@ -1758,6 +1763,12 @@ class bittrex extends Exchange {
     }
 
     public function create_deposit_address($code, $params = array ()) {
+        /**
+         * create a $currency deposit $address
+         * @param {str} $code unified $currency $code of the $currency for the deposit $address
+         * @param {dict} $params extra parameters specific to the bittrex api endpoint
+         * @return {dict} an {@link https://docs.ccxt.com/en/latest/manual.html#$address-structure $address structure}
+         */
         $this->load_markets();
         $currency = $this->currency($code);
         $request = array(

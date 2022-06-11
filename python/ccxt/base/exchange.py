@@ -4,7 +4,7 @@
 
 # -----------------------------------------------------------------------------
 
-__version__ = '1.86.16'
+__version__ = '1.86.65'
 
 # -----------------------------------------------------------------------------
 
@@ -1566,12 +1566,6 @@ class Exchange(object):
         else:
             return ohlcv
 
-    def parse_ohlcvs(self, ohlcvs, market=None, timeframe='1m', since=None, limit=None):
-        parsed = [self.parse_ohlcv(ohlcv, market) for ohlcv in ohlcvs]
-        sorted = self.sort_by(parsed, 0)
-        tail = since is None
-        return self.filter_by_since_limit(sorted, since, limit, 0, tail)
-
     def parse_bids_asks(self, bidasks, price_key=0, amount_key=1):
         result = []
         if len(bidasks):
@@ -1593,16 +1587,6 @@ class Exchange(object):
             'bids': self.sort_by(self.aggregate(orderbook['bids']), 0, True),
             'asks': self.sort_by(self.aggregate(orderbook['asks']), 0),
         })
-
-    def parse_order_book(self, orderbook, symbol, timestamp=None, bids_key='bids', asks_key='asks', price_key=0, amount_key=1):
-        return {
-            'symbol': symbol,
-            'bids': self.sort_by(self.parse_bids_asks(orderbook[bids_key], price_key, amount_key) if (bids_key in orderbook) and isinstance(orderbook[bids_key], list) else [], 0, True),
-            'asks': self.sort_by(self.parse_bids_asks(orderbook[asks_key], price_key, amount_key) if (asks_key in orderbook) and isinstance(orderbook[asks_key], list) else [], 0),
-            'timestamp': timestamp,
-            'datetime': self.iso8601(timestamp) if timestamp is not None else None,
-            'nonce': None,
-        }
 
     def safe_balance(self, balance):
         currencies = self.omit(balance, ['info', 'timestamp', 'datetime', 'free', 'used', 'total']).keys()
@@ -1775,20 +1759,6 @@ class Exchange(object):
             'quoteVolume': self.parse_number(quoteVolume),
             'previousClose': self.safe_number(ticker, 'previousClose'),
         })
-
-    def parse_ledger(self, data, currency=None, since=None, limit=None, params={}):
-        array = self.to_array(data)
-        result = []
-        for item in array:
-            entry = self.parse_ledger_entry(item, currency)
-            if isinstance(entry, list):
-                result += [self.extend(i, params) for i in entry]
-            else:
-                result.append(self.extend(entry, params))
-        result = self.sort_by(result, 'timestamp')
-        code = currency['code'] if currency else None
-        tail = since is None
-        return self.filter_by_currency_since_limit(result, code, since, limit, tail)
 
     def safe_ledger_entry(self, entry, currency=None):
         currency = self.safe_currency(None, currency)
@@ -2391,20 +2361,6 @@ class Exchange(object):
             return None
         return string_number
 
-    def parse_leverage_tiers(self, response, symbols, market_id_key):
-        tiers = {}
-        for item in response:
-            id = self.safe_string(item, market_id_key)
-            market = self.safe_market(id)
-            symbol = market['symbol']
-            symbols_length = 0
-            if (symbols is not None):
-                symbols_length = len(symbols)
-            contract = self.safe_value(market, 'contract', False)
-            if (contract and (symbols_length == 0 or symbol in symbols)):
-                tiers[symbol] = self.parse_market_leverage_tiers(item, market)
-        return tiers
-
     def check_order_arguments(self, market, type, side, amount, price, params):
         if price is None:
             if type == 'limit':
@@ -2423,6 +2379,40 @@ class Exchange(object):
             raise ErrorClass(self.id + ' ' + method + ' ' + url + ' ' + codeAsString + ' ' + reason + ' ' + body)
 
     # METHODS BELOW THIS LINE ARE TRANSPILED FROM JAVASCRIPT TO PYTHON AND PHP
+
+    def parse_order_book(self, orderbook, symbol, timestamp=None, bidsKey='bids', asksKey='asks', priceKey=0, amountKey=1):
+        bids = self.parse_bids_asks(orderbook[bidsKey], priceKey, amountKey) if (bidsKey in orderbook) else []
+        asks = self.parse_bids_asks(orderbook[asksKey], priceKey, amountKey) if (asksKey in orderbook) else []
+        return {
+            'symbol': symbol,
+            'bids': self.sort_by(bids, 0, True),
+            'asks': self.sort_by(asks, 0),
+            'timestamp': timestamp,
+            'datetime': self.iso8601(timestamp),
+            'nonce': None,
+        }
+
+    def parse_ohlcvs(self, ohlcvs, market=None, timeframe='1m', since=None, limit=None):
+        results = []
+        for i in range(0, len(ohlcvs)):
+            results.append(self.parse_ohlcv(ohlcvs[i], market))
+        sorted = self.sort_by(results, 0)
+        tail = (since is None)
+        return self.filter_by_since_limit(sorted, since, limit, 0, tail)
+
+    def parse_leverage_tiers(self, response, symbols=None, marketIdKey=None):
+        # marketIdKey should only be None when response is a dictionary
+        symbols = self.market_symbols(symbols)
+        tiers = {}
+        for i in range(0, len(response)):
+            item = response[i]
+            id = self.safe_string(item, marketIdKey)
+            market = self.safe_market(id)
+            symbol = market['symbol']
+            contract = self.safe_value(market, 'contract', False)
+            if contract and ((symbols is None) or self.in_array(symbol, symbols)):
+                tiers[symbol] = self.parse_market_leverage_tiers(item, market)
+        return tiers
 
     def load_trading_limits(self, symbols=None, reload=False, params={}):
         if self.has['fetchTradingLimits']:
@@ -2447,7 +2437,7 @@ class Exchange(object):
         accounts = self.to_array(accounts)
         result = []
         for i in range(0, len(accounts)):
-            account = self.extend(self.parse_account(accounts[i], None), params)
+            account = self.extend(self.parse_account(accounts[i]), params)
             result.append(account)
         return result
 
@@ -2477,11 +2467,26 @@ class Exchange(object):
         transfers = self.to_array(transfers)
         result = []
         for i in range(0, len(transfers)):
-            transfer = self.extend(self.parseTransfer(transfers[i], currency), params)
+            transfer = self.extend(self.parse_transfer(transfers[i], currency), params)
             result.append(transfer)
         result = self.sort_by(result, 'timestamp')
         code = currency['code'] if (currency is not None) else None
         tail = since is None
+        return self.filter_by_currency_since_limit(result, code, since, limit, tail)
+
+    def parse_ledger(self, data, currency=None, since=None, limit=None, params={}):
+        result = []
+        array = self.to_array(data)
+        for i in range(0, len(array)):
+            itemOrItems = self.parse_ledger_entry(array[i], currency)
+            if isinstance(itemOrItems, list):
+                for j in range(0, len(itemOrItems)):
+                    result.append(self.extend(itemOrItems[j], params))
+            else:
+                result.append(self.extend(itemOrItems, params))
+        result = self.sort_by(result, 'timestamp')
+        code = currency['code'] if (currency is not None) else None
+        tail = (since is None)
         return self.filter_by_currency_since_limit(result, code, since, limit, tail)
 
     def nonce(self):

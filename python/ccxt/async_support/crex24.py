@@ -442,7 +442,7 @@ class crex24(Exchange):
             id = self.safe_string(currency, 'symbol')
             code = self.safe_currency_code(id)
             withdrawalPrecision = self.safe_integer(currency, 'withdrawalPrecision')
-            precision = math.pow(10, -withdrawalPrecision)
+            precision = self.parse_number(self.parse_precision(self.safe_string(currency, 'withdrawalPrecision')))
             address = self.safe_value(currency, 'BaseAddress')
             deposit = self.safe_value(currency, 'depositsAllowed')
             withdraw = self.safe_value(currency, 'withdrawalsAllowed')
@@ -464,8 +464,8 @@ class crex24(Exchange):
                 'precision': precision,
                 'limits': {
                     'amount': {
-                        'min': math.pow(10, -precision),
-                        'max': math.pow(10, precision),
+                        'min': precision,
+                        'max': math.pow(10, withdrawalPrecision),
                     },
                     'deposit': {
                         'min': self.safe_number(currency, 'minDeposit'),
@@ -1127,6 +1127,14 @@ class crex24(Exchange):
         return self.parse_order(response[0])
 
     async def fetch_orders(self, symbol=None, since=None, limit=None, params={}):
+        """
+        fetches information on multiple orders made by the user
+        :param str|None symbol: unified market symbol of the market orders were made in
+        :param int|None since: the earliest time in ms to fetch orders for
+        :param int|None limit: the maximum number of  orde structures to retrieve
+        :param dict params: extra parameters specific to the crex24 api endpoint
+        :returns [dict]: a list of [order structures]{@link https://docs.ccxt.com/en/latest/manual.html#order-structure
+        """
         await self.load_markets()
         request = {}
         if since is not None:
@@ -1248,6 +1256,14 @@ class crex24(Exchange):
         return self.parse_orders(response, market, since, limit)
 
     async def fetch_closed_orders(self, symbol=None, since=None, limit=None, params={}):
+        """
+        fetches information on multiple closed orders made by the user
+        :param str|None symbol: unified market symbol of the market orders were made in
+        :param int|None since: the earliest time in ms to fetch orders for
+        :param int|None limit: the maximum number of  orde structures to retrieve
+        :param dict params: extra parameters specific to the crex24 api endpoint
+        :returns [dict]: a list of [order structures]{@link https://docs.ccxt.com/en/latest/manual.html#order-structure
+        """
         await self.load_markets()
         market = None
         request = {}
@@ -1312,6 +1328,13 @@ class crex24(Exchange):
         return self.safe_value(response, 0)
 
     async def cancel_orders(self, ids, symbol=None, params={}):
+        """
+        cancel multiple orders
+        :param [str] ids: order ids
+        :param str|None symbol: not used by crex24 cancelOrders()
+        :param dict params: extra parameters specific to the crex24 api endpoint
+        :returns dict: an list of `order structures <https://docs.ccxt.com/en/latest/manual.html#order-structure>`
+        """
         if not isinstance(ids, list):
             raise ArgumentsRequired(self.id + ' cancelOrders() ids argument should be an array')
         await self.load_markets()

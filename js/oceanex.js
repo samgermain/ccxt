@@ -394,6 +394,15 @@ module.exports = class oceanex extends Exchange {
     }
 
     async fetchOrderBooks (symbols = undefined, limit = undefined, params = {}) {
+        /**
+         * @method
+         * @name oceanex#fetchOrderBooks
+         * @description fetches information on open orders with bid (buy) and ask (sell) prices, volumes and other data for multiple markets
+         * @param {[str]|undefined} symbols list of unified market symbols, all symbols fetched if undefined, default is undefined
+         * @param {int|undefined} limit max number of entries per orderbook to return, default is undefined
+         * @param {dict} params extra parameters specific to the oceanex api endpoint
+         * @returns {dict} a dictionary of [order book structures]{@link https://docs.ccxt.com/en/latest/manual.html#order-book-structure} indexed by market symbol
+         */
         await this.loadMarkets ();
         if (symbols === undefined) {
             symbols = this.symbols;
@@ -687,6 +696,16 @@ module.exports = class oceanex extends Exchange {
     }
 
     async fetchClosedOrders (symbol = undefined, since = undefined, limit = undefined, params = {}) {
+        /**
+         * @method
+         * @name oceanex#fetchClosedOrders
+         * @description fetches information on multiple closed orders made by the user
+         * @param {str} symbol unified market symbol of the market orders were made in
+         * @param {int|undefined} since the earliest time in ms to fetch orders for
+         * @param {int|undefined} limit the maximum number of  orde structures to retrieve
+         * @param {dict} params extra parameters specific to the oceanex api endpoint
+         * @returns {[dict]} a list of [order structures]{@link https://docs.ccxt.com/en/latest/manual.html#order-structure
+         */
         const request = {
             'states': [ 'done', 'cancel' ],
         };
@@ -694,6 +713,16 @@ module.exports = class oceanex extends Exchange {
     }
 
     async fetchOrders (symbol = undefined, since = undefined, limit = undefined, params = {}) {
+        /**
+         * @method
+         * @name oceanex#fetchOrders
+         * @description fetches information on multiple orders made by the user
+         * @param {str} symbol unified market symbol of the market orders were made in
+         * @param {int|undefined} since the earliest time in ms to fetch orders for
+         * @param {int|undefined} limit the maximum number of  orde structures to retrieve
+         * @param {dict} params extra parameters specific to the oceanex api endpoint
+         * @returns {[dict]} a list of [order structures]{@link https://docs.ccxt.com/en/latest/manual.html#order-structure
+         */
         if (symbol === undefined) {
             throw new ArgumentsRequired (this.id + ' fetchOrders() requires a `symbol` argument');
         }
@@ -863,6 +892,15 @@ module.exports = class oceanex extends Exchange {
     }
 
     async cancelOrders (ids, symbol = undefined, params = {}) {
+        /**
+         * @method
+         * @name oceanex#cancelOrders
+         * @description cancel multiple orders
+         * @param {[str]} ids order ids
+         * @param {str|undefined} symbol not used by oceanex cancelOrders ()
+         * @param {dict} params extra parameters specific to the oceanex api endpoint
+         * @returns {dict} an list of [order structures]{@link https://docs.ccxt.com/en/latest/manual.html#order-structure}
+         */
         await this.loadMarkets ();
         const response = await this.privatePostOrderDeleteMulti (this.extend ({ 'ids': ids }, params));
         const data = this.safeValue (response, 'data');

@@ -797,6 +797,13 @@ module.exports = class okx extends Exchange {
     }
 
     async fetchAccounts (params = {}) {
+        /**
+         * @method
+         * @name okx#fetchAccounts
+         * @description fetch all the accounts associated with a profile
+         * @param {dict} params extra parameters specific to the okx api endpoint
+         * @returns {dict} a dictionary of [account structures]{@link https://docs.ccxt.com/en/latest/manual.html#account-structure} indexed by the account type
+         */
         const response = await this.privateGetAccountConfig (params);
         //
         //     {
@@ -2136,6 +2143,15 @@ module.exports = class okx extends Exchange {
     }
 
     async cancelOrders (ids, symbol = undefined, params = {}) {
+        /**
+         * @method
+         * @name okx#cancelOrders
+         * @description cancel multiple orders
+         * @param {[str]} ids order ids
+         * @param {str} symbol unified market symbol
+         * @param {dict} params extra parameters specific to the okx api endpoint
+         * @returns {dict} an list of [order structures]{@link https://docs.ccxt.com/en/latest/manual.html#order-structure}
+         */
         // TODO : the original endpoint signature differs, according to that you can skip individual symbol and assign ids in batch. At this moment, `params` is not being used too.
         if (symbol === undefined) {
             throw new ArgumentsRequired (this.id + ' cancelOrders() requires a symbol argument');
@@ -2705,6 +2721,16 @@ module.exports = class okx extends Exchange {
     }
 
     async fetchCanceledOrders (symbol = undefined, since = undefined, limit = undefined, params = {}) {
+        /**
+         * @method
+         * @name okx#fetchCanceledOrders
+         * @description fetches information on multiple canceled orders made by the user
+         * @param {str|undefined} symbol unified market symbol of the market orders were made in
+         * @param {int|undefined} since timestamp in ms of the earliest order, default is undefined
+         * @param {int|undefined} limit max number of orders to return, default is undefined
+         * @param {dict} params extra parameters specific to the okx api endpoint
+         * @returns {dict} a list of [order structures]{@link https://docs.ccxt.com/en/latest/manual.html#order-structure}
+         */
         await this.loadMarkets ();
         const request = {
             // 'instType': type.toUpperCase (), // SPOT, MARGIN, SWAP, FUTURES, OPTION
@@ -2843,6 +2869,16 @@ module.exports = class okx extends Exchange {
     }
 
     async fetchClosedOrders (symbol = undefined, since = undefined, limit = undefined, params = {}) {
+        /**
+         * @method
+         * @name okx#fetchClosedOrders
+         * @description fetches information on multiple closed orders made by the user
+         * @param {str|undefined} symbol unified market symbol of the market orders were made in
+         * @param {int|undefined} since the earliest time in ms to fetch orders for
+         * @param {int|undefined} limit the maximum number of  orde structures to retrieve
+         * @param {dict} params extra parameters specific to the okx api endpoint
+         * @returns {[dict]} a list of [order structures]{@link https://docs.ccxt.com/en/latest/manual.html#order-structure
+         */
         await this.loadMarkets ();
         const request = {
             // 'instType': type.toUpperCase (), // SPOT, MARGIN, SWAP, FUTURES, OPTION
@@ -2997,6 +3033,16 @@ module.exports = class okx extends Exchange {
     }
 
     async fetchLedger (code = undefined, since = undefined, limit = undefined, params = {}) {
+        /**
+         * @method
+         * @name okx#fetchLedger
+         * @description fetch the history of changes, actions done by the user or operations that altered balance of the user
+         * @param {str|undefined} code unified currency code, default is undefined
+         * @param {int|undefined} since timestamp in ms of the earliest ledger entry, default is undefined
+         * @param {int|undefined} limit max number of ledger entrys to return, default is undefined
+         * @param {dict} params extra parameters specific to the okx api endpoint
+         * @returns {dict} a [ledger structure]{@link https://docs.ccxt.com/en/latest/manual.html#ledger-structure}
+         */
         await this.loadMarkets ();
         const options = this.safeValue (this.options, 'fetchLedger', {});
         let method = this.safeString (options, 'method');
@@ -3322,6 +3368,14 @@ module.exports = class okx extends Exchange {
     }
 
     async fetchDepositAddressesByNetwork (code, params = {}) {
+        /**
+         * @method
+         * @name okx#fetchDepositAddressesByNetwork
+         * @description fetch a dictionary of addresses for a currency, indexed by network
+         * @param {str} code unified currency code of the currency for the deposit address
+         * @param {dict} params extra parameters specific to the okx api endpoint
+         * @returns {dict} a dictionary of [address structures]{@link https://docs.ccxt.com/en/latest/manual.html#address-structure} indexed by the network
+         */
         await this.loadMarkets ();
         const currency = this.currency (code);
         const request = {

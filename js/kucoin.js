@@ -694,6 +694,13 @@ module.exports = class kucoin extends Exchange {
     }
 
     async fetchAccounts (params = {}) {
+        /**
+         * @method
+         * @name kucoin#fetchAccounts
+         * @description fetch all the accounts associated with a profile
+         * @param {dict} params extra parameters specific to the kucoin api endpoint
+         * @returns {dict} a dictionary of [account structures]{@link https://docs.ccxt.com/en/latest/manual.html#account-structure} indexed by the account type
+         */
         const response = await this.privateGetAccounts (params);
         //
         //     {
@@ -1041,6 +1048,14 @@ module.exports = class kucoin extends Exchange {
     }
 
     async createDepositAddress (code, params = {}) {
+        /**
+         * @method
+         * @name kucoin#createDepositAddress
+         * @description create a currency deposit address
+         * @param {str} code unified currency code of the currency for the deposit address
+         * @param {dict} params extra parameters specific to the kucoin api endpoint
+         * @returns {dict} an [address structure]{@link https://docs.ccxt.com/en/latest/manual.html#address-structure}
+         */
         await this.loadMarkets ();
         const currency = this.currency (code);
         const request = { 'currency': currency['id'] };
@@ -1461,16 +1476,16 @@ module.exports = class kucoin extends Exchange {
         /**
          * @method
          * @name kucoin#fetchClosedOrders
-         * @description fetch a list of orders
-         * @param {str} symbol unified market symbol
-         * @param {int} since timestamp in ms of the earliest order
-         * @param {int} limit max number of orders to return
-         * @param {dict} params exchange specific params
-         * @param {int} params.till end time in ms
-         * @param {str} params.side buy or sell
-         * @param {str} params.type limit, market, limit_stop or market_stop
-         * @param {str} params.tradeType TRADE for spot trading, MARGIN_TRADE for Margin Trading
-         * @returns An [array of order structures]{@link https://docs.ccxt.com/en/latest/manual.html#order-structure}
+         * @description fetches information on multiple closed orders made by the user
+         * @param {str|undefined} symbol unified market symbol of the market orders were made in
+         * @param {int|undefined} since the earliest time in ms to fetch orders for
+         * @param {int|undefined} limit the maximum number of  orde structures to retrieve
+         * @param {dict} params extra parameters specific to the kucoin api endpoint
+         * @param {int|undefined} params.till end time in ms
+         * @param {str|undefined} params.side buy or sell
+         * @param {str|undefined} params.type limit, market, limit_stop or market_stop
+         * @param {str|undefined} params.tradeType TRADE for spot trading, MARGIN_TRADE for Margin Trading
+         * @returns {[dict]} a list of [order structures]{@link https://docs.ccxt.com/en/latest/manual.html#order-structure
          */
         return await this.fetchOrdersByStatus ('done', symbol, since, limit, params);
     }
@@ -2586,6 +2601,16 @@ module.exports = class kucoin extends Exchange {
     }
 
     async fetchLedger (code = undefined, since = undefined, limit = undefined, params = {}) {
+        /**
+         * @method
+         * @name kucoin#fetchLedger
+         * @description fetch the history of changes, actions done by the user or operations that altered balance of the user
+         * @param {str|undefined} code unified currency code, default is undefined
+         * @param {int|undefined} since timestamp in ms of the earliest ledger entry, default is undefined
+         * @param {int|undefined} limit max number of ledger entrys to return, default is undefined
+         * @param {dict} params extra parameters specific to the kucoin api endpoint
+         * @returns {dict} a [ledger structure]{@link https://docs.ccxt.com/en/latest/manual.html#ledger-structure}
+         */
         await this.loadMarkets ();
         await this.loadAccounts ();
         const request = {

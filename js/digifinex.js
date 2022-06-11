@@ -4,6 +4,7 @@
 
 const Exchange = require ('./base/Exchange');
 const { AccountSuspended, BadRequest, BadResponse, NetworkError, DDoSProtection, AuthenticationError, PermissionDenied, ExchangeError, InsufficientFunds, InvalidOrder, InvalidNonce, OrderNotFound, InvalidAddress, RateLimitExceeded, BadSymbol } = require ('./base/errors');
+const { TICK_SIZE } = require ('./base/functions/number');
 const Precise = require ('./base/Precise');
 
 //  ---------------------------------------------------------------------------
@@ -143,6 +144,7 @@ module.exports = class digifinex extends Exchange {
                     'taker': this.parseNumber ('0.002'),
                 },
             },
+            'precisionMode': TICK_SIZE,
             'exceptions': {
                 'exact': {
                     '10001': [ BadRequest, "Wrong request method, please check it's a GET ot POST request" ],
@@ -290,7 +292,7 @@ module.exports = class digifinex extends Exchange {
                     'deposit': deposit,
                     'withdraw': withdraw,
                     'fee': fee,
-                    'precision': 8, // todo fix hardcoded value
+                    'precision': this.parseNumber (this.parsePrecision ('8')), // todo fix hardcoded value
                     'limits': {
                         'amount': {
                             'min': undefined,
@@ -415,8 +417,8 @@ module.exports = class digifinex extends Exchange {
                 'strike': undefined,
                 'optionType': undefined,
                 'precision': {
-                    'amount': this.safeInteger (market, 'amount_precision'),
-                    'price': this.safeInteger (market, 'price_precision'),
+                    'amount': this.parseNumber (this.parsePrecision (this.safeString (market, 'amount_precision'))),
+                    'price': this.parseNumber (this.parsePrecision (this.safeString (market, 'price_precision'))),
                 },
                 'limits': {
                     'leverage': {
@@ -492,8 +494,8 @@ module.exports = class digifinex extends Exchange {
                 'strike': undefined,
                 'optionType': undefined,
                 'precision': {
-                    'price': this.safeInteger (market, 'price_precision'),
-                    'amount': this.safeInteger (market, 'volume_precision'),
+                    'price': this.parseNumber (this.parsePrecision (this.safeString (market, 'price_precision'))),
+                    'amount': this.parseNumber (this.parsePrecision (this.safeString (market, 'volume_precision'))),
                 },
                 'limits': {
                     'leverage': {
@@ -1040,6 +1042,15 @@ module.exports = class digifinex extends Exchange {
     }
 
     async cancelOrders (ids, symbol = undefined, params = {}) {
+        /**
+         * @method
+         * @name digifinex#cancelOrders
+         * @description cancel multiple orders
+         * @param {[str]} ids order ids
+         * @param {str|undefined} symbol not used by digifinex cancelOrders ()
+         * @param {dict} params extra parameters specific to the digifinex api endpoint
+         * @returns {dict} an list of [order structures]{@link https://docs.ccxt.com/en/latest/manual.html#order-structure}
+         */
         await this.loadMarkets ();
         const defaultType = this.safeString (this.options, 'defaultType', 'spot');
         const orderType = this.safeString (params, 'type', defaultType);
@@ -1203,6 +1214,16 @@ module.exports = class digifinex extends Exchange {
     }
 
     async fetchOrders (symbol = undefined, since = undefined, limit = undefined, params = {}) {
+        /**
+         * @method
+         * @name digifinex#fetchOrders
+         * @description fetches information on multiple orders made by the user
+         * @param {str|undefined} symbol unified market symbol of the market orders were made in
+         * @param {int|undefined} since the earliest time in ms to fetch orders for
+         * @param {int|undefined} limit the maximum number of  orde structures to retrieve
+         * @param {dict} params extra parameters specific to the digifinex api endpoint
+         * @returns {[dict]} a list of [order structures]{@link https://docs.ccxt.com/en/latest/manual.html#order-structure
+         */
         const defaultType = this.safeString (this.options, 'defaultType', 'spot');
         const orderType = this.safeString (params, 'type', defaultType);
         params = this.omit (params, 'type');
@@ -1394,6 +1415,16 @@ module.exports = class digifinex extends Exchange {
     }
 
     async fetchLedger (code = undefined, since = undefined, limit = undefined, params = {}) {
+        /**
+         * @method
+         * @name digifinex#fetchLedger
+         * @description fetch the history of changes, actions done by the user or operations that altered balance of the user
+         * @param {str|undefined} code unified currency code, default is undefined
+         * @param {int|undefined} since timestamp in ms of the earliest ledger entry, default is undefined
+         * @param {int|undefined} limit max number of ledger entrys to return, default is undefined
+         * @param {dict} params extra parameters specific to the digifinex api endpoint
+         * @returns {dict} a [ledger structure]{@link https://docs.ccxt.com/en/latest/manual.html#ledger-structure}
+         */
         const defaultType = this.safeString (this.options, 'defaultType', 'spot');
         const orderType = this.safeString (params, 'type', defaultType);
         params = this.omit (params, 'type');

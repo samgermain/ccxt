@@ -280,6 +280,7 @@ class coinex extends Exchange {
             'commonCurrencies' => array(
                 'ACM' => 'Actinium',
             ),
+            'precisionMode' => TICK_SIZE,
         ));
     }
 
@@ -323,7 +324,7 @@ class coinex extends Exchange {
                     'deposit' => $this->safe_value($currency, 'can_deposit'),
                     'withdraw' => $this->safe_value($currency, 'can_withdraw'),
                     'fee' => $this->safe_number($currency, 'withdraw_tx_fee'),
-                    'precision' => $this->safe_number($currency, 'withdrawal_precision'),
+                    'precision' => $this->parse_number($this->parse_precision($this->safe_string($currency, 'withdrawal_precision'))),
                     'limits' => array(
                         'amount' => array(
                             'min' => null,
@@ -364,7 +365,7 @@ class coinex extends Exchange {
                 'deposit' => $this->safe_value($currency, 'can_deposit'),
                 'withdraw' => $this->safe_value($currency, 'can_withdraw'),
                 'fee' => $this->safe_number($currency, 'withdraw_tx_fee'),
-                'precision' => $this->safe_number($currency, 'withdrawal_precision'),
+                'precision' => $this->parse_number($this->parse_precision($this->safe_string($currency, 'withdrawal_precision'))),
             );
             $networks[$networkId] = $network;
             $result[$code]['networks'] = $networks;
@@ -452,8 +453,8 @@ class coinex extends Exchange {
                 'strike' => null,
                 'optionType' => null,
                 'precision' => array(
-                    'amount' => $this->safe_integer($market, 'trading_decimal'),
-                    'price' => $this->safe_integer($market, 'pricing_decimal'),
+                    'amount' => $this->parse_number($this->parse_precision($this->safe_string($market, 'trading_decimal'))),
+                    'price' => $this->parse_number($this->parse_precision($this->safe_string($market, 'pricing_decimal'))),
                 ),
                 'limits' => array(
                     'leverage' => array(
@@ -548,8 +549,8 @@ class coinex extends Exchange {
                 'strike' => null,
                 'optionType' => null,
                 'precision' => array(
-                    'amount' => $this->safe_integer($entry, 'stock_prec'),
-                    'price' => $this->safe_integer($entry, 'money_prec'),
+                    'amount' => $this->parse_number($this->parse_precision($this->safe_string($entry, 'stock_prec'))),
+                    'price' => $this->parse_number($this->parse_precision($this->safe_string($entry, 'money_prec'))),
                 ),
                 'limits' => array(
                     'leverage' => array(
@@ -2441,10 +2442,24 @@ class coinex extends Exchange {
     }
 
     public function fetch_closed_orders($symbol = null, $since = null, $limit = null, $params = array ()) {
+        /**
+         * fetches information on multiple closed orders made by the user
+         * @param {str|null} $symbol unified market $symbol of the market orders were made in
+         * @param {int|null} $since the earliest time in ms to fetch orders for
+         * @param {int|null} $limit the maximum number of  orde structures to retrieve
+         * @param {dict} $params extra parameters specific to the coinex api endpoint
+         * @return {[dict]} a list of [order structures]{@link https://docs.ccxt.com/en/latest/manual.html#order-structure
+         */
         return yield $this->fetch_orders_by_status('finished', $symbol, $since, $limit, $params);
     }
 
     public function create_deposit_address($code, $params = array ()) {
+        /**
+         * create a $currency deposit address
+         * @param {str} $code unified $currency $code of the $currency for the deposit address
+         * @param {dict} $params extra parameters specific to the coinex api endpoint
+         * @return {dict} an {@link https://docs.ccxt.com/en/latest/manual.html#address-structure address structure}
+         */
         yield $this->load_markets();
         $currency = $this->currency($code);
         $request = array(
@@ -3726,6 +3741,14 @@ class coinex extends Exchange {
     }
 
     public function fetch_transfers($code = null, $since = null, $limit = null, $params = array ()) {
+        /**
+         * fetch a history of internal $transfers made on an account
+         * @param {str|null} $code unified $currency $code of the $currency transferred
+         * @param {int|null} $since the earliest time in ms to fetch $transfers for
+         * @param {int|null} $limit the maximum number of  $transfers structures to retrieve
+         * @param {dict} $params extra parameters specific to the coinex api endpoint
+         * @return {[dict]} a list of {@link https://docs.ccxt.com/en/latest/manual.html#transfer-structure transfer structures}
+         */
         yield $this->load_markets();
         $currency = null;
         $request = array(

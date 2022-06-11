@@ -1610,6 +1610,13 @@ class bitfinex2(Exchange):
         return order
 
     async def fetch_closed_order(self, id, symbol=None, params={}):
+        """
+        fetch an open order by it's id
+        :param str id: order id
+        :param str|None symbol: unified market symbol, default is None
+        :param dict params: extra parameters specific to the bitfinex2 api endpoint
+        :returns dict: an `order structure <https://docs.ccxt.com/en/latest/manual.html#order-structure>`
+        """
         request = {
             'id': [int(id)],
         }
@@ -1679,6 +1686,14 @@ class bitfinex2(Exchange):
         return self.parse_orders(response, market, since, limit)
 
     async def fetch_closed_orders(self, symbol=None, since=None, limit=None, params={}):
+        """
+        fetches information on multiple closed orders made by the user
+        :param str|None symbol: unified market symbol of the market orders were made in
+        :param int|None since: the earliest time in ms to fetch orders for
+        :param int|None limit: the maximum number of  orde structures to retrieve
+        :param dict params: extra parameters specific to the bitfinex2 api endpoint
+        :returns [dict]: a list of [order structures]{@link https://docs.ccxt.com/en/latest/manual.html#order-structure
+        """
         # returns the most recent closed or canceled orders up to circa two weeks ago
         await self.load_markets()
         request = {}
@@ -1784,6 +1799,12 @@ class bitfinex2(Exchange):
         return self.parse_trades(response, market, since, limit)
 
     async def create_deposit_address(self, code, params={}):
+        """
+        create a currency deposit address
+        :param str code: unified currency code of the currency for the deposit address
+        :param dict params: extra parameters specific to the bitfinex2 api endpoint
+        :returns dict: an `address structure <https://docs.ccxt.com/en/latest/manual.html#address-structure>`
+        """
         await self.load_markets()
         request = {
             'op_renew': 1,
@@ -2377,6 +2398,14 @@ class bitfinex2(Exchange):
         }
 
     async def fetch_ledger(self, code=None, since=None, limit=None, params={}):
+        """
+        fetch the history of changes, actions done by the user or operations that altered balance of the user
+        :param str|None code: unified currency code, default is None
+        :param int|None since: timestamp in ms of the earliest ledger entry, default is None
+        :param int|None limit: max number of ledger entrys to return, default is None
+        :param dict params: extra parameters specific to the bitfinex2 api endpoint
+        :returns dict: a `ledger structure <https://docs.ccxt.com/en/latest/manual.html#ledger-structure>`
+        """
         await self.load_markets()
         await self.load_markets()
         currency = None

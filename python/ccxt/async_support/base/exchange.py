@@ -2,7 +2,7 @@
 
 # -----------------------------------------------------------------------------
 
-__version__ = '1.86.16'
+__version__ = '1.86.65'
 
 # -----------------------------------------------------------------------------
 
@@ -29,6 +29,7 @@ from ccxt.base.errors import NotSupported
 from ccxt.base.errors import BadSymbol
 from ccxt.base.errors import NullResponse
 from ccxt.base.errors import InvalidOrder
+from ccxt.base.decimal_to_precision import TRUNCATE, ROUND
 
 # -----------------------------------------------------------------------------
 
@@ -261,6 +262,40 @@ class Exchange(BaseExchange):
 
     # METHODS BELOW THIS LINE ARE TRANSPILED FROM JAVASCRIPT TO PYTHON AND PHP
 
+    def parse_order_book(self, orderbook, symbol, timestamp=None, bidsKey='bids', asksKey='asks', priceKey=0, amountKey=1):
+        bids = self.parse_bids_asks(orderbook[bidsKey], priceKey, amountKey) if (bidsKey in orderbook) else []
+        asks = self.parse_bids_asks(orderbook[asksKey], priceKey, amountKey) if (asksKey in orderbook) else []
+        return {
+            'symbol': symbol,
+            'bids': self.sort_by(bids, 0, True),
+            'asks': self.sort_by(asks, 0),
+            'timestamp': timestamp,
+            'datetime': self.iso8601(timestamp),
+            'nonce': None,
+        }
+
+    def parse_ohlcvs(self, ohlcvs, market=None, timeframe='1m', since=None, limit=None):
+        results = []
+        for i in range(0, len(ohlcvs)):
+            results.append(self.parse_ohlcv(ohlcvs[i], market))
+        sorted = self.sort_by(results, 0)
+        tail = (since is None)
+        return self.filter_by_since_limit(sorted, since, limit, 0, tail)
+
+    def parse_leverage_tiers(self, response, symbols=None, marketIdKey=None):
+        # marketIdKey should only be None when response is a dictionary
+        symbols = self.market_symbols(symbols)
+        tiers = {}
+        for i in range(0, len(response)):
+            item = response[i]
+            id = self.safe_string(item, marketIdKey)
+            market = self.safe_market(id)
+            symbol = market['symbol']
+            contract = self.safe_value(market, 'contract', False)
+            if contract and ((symbols is None) or self.in_array(symbol, symbols)):
+                tiers[symbol] = self.parse_market_leverage_tiers(item, market)
+        return tiers
+
     async def load_trading_limits(self, symbols=None, reload=False, params={}):
         if self.has['fetchTradingLimits']:
             if reload or not ('limitsLoaded' in self.options):
@@ -284,7 +319,7 @@ class Exchange(BaseExchange):
         accounts = self.to_array(accounts)
         result = []
         for i in range(0, len(accounts)):
-            account = self.extend(self.parse_account(accounts[i], None), params)
+            account = self.extend(self.parse_account(accounts[i]), params)
             result.append(account)
         return result
 
@@ -314,11 +349,26 @@ class Exchange(BaseExchange):
         transfers = self.to_array(transfers)
         result = []
         for i in range(0, len(transfers)):
-            transfer = self.extend(self.parseTransfer(transfers[i], currency), params)
+            transfer = self.extend(self.parse_transfer(transfers[i], currency), params)
             result.append(transfer)
         result = self.sort_by(result, 'timestamp')
         code = currency['code'] if (currency is not None) else None
         tail = since is None
+        return self.filter_by_currency_since_limit(result, code, since, limit, tail)
+
+    def parse_ledger(self, data, currency=None, since=None, limit=None, params={}):
+        result = []
+        array = self.to_array(data)
+        for i in range(0, len(array)):
+            itemOrItems = self.parse_ledger_entry(array[i], currency)
+            if isinstance(itemOrItems, list):
+                for j in range(0, len(itemOrItems)):
+                    result.append(self.extend(itemOrItems[j], params))
+            else:
+                result.append(self.extend(itemOrItems, params))
+        result = self.sort_by(result, 'timestamp')
+        code = currency['code'] if (currency is not None) else None
+        tail = (since is None)
         return self.filter_by_currency_since_limit(result, code, since, limit, tail)
 
     def nonce(self):

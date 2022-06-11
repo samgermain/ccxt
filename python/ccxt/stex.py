@@ -1209,6 +1209,13 @@ class stex(Exchange):
         return self.parse_order(data, market)
 
     def fetch_closed_order(self, id, symbol=None, params={}):
+        """
+        fetch an open order by it's id
+        :param str id: order id
+        :param str|None symbol: unified market symbol, default is None
+        :param dict params: extra parameters specific to the stex api endpoint
+        :returns dict: an `order structure <https://docs.ccxt.com/en/latest/manual.html#order-structure>`
+        """
         self.load_markets()
         request = {
             'orderId': id,
@@ -1456,6 +1463,12 @@ class stex(Exchange):
         return self.parse_trades(trades, market, since, limit)
 
     def create_deposit_address(self, code, params={}):
+        """
+        create a currency deposit address
+        :param str code: unified currency code of the currency for the deposit address
+        :param dict params: extra parameters specific to the stex api endpoint
+        :returns dict: an `address structure <https://docs.ccxt.com/en/latest/manual.html#address-structure>`
+        """
         self.load_markets()
         currency = self.currency(code)
         request = {
@@ -1755,6 +1768,13 @@ class stex(Exchange):
         }
 
     def fetch_deposit(self, id, code=None, params={}):
+        """
+        fetch information on a deposit
+        :param str id: deposit id
+        :param str|None code: not used by stex fetchDeposit()
+        :param dict params: extra parameters specific to the stex api endpoint
+        :returns dict: a `transaction structure <https://docs.ccxt.com/en/latest/manual.html#transaction-structure>`
+        """
         self.load_markets()
         request = {
             'id': id,

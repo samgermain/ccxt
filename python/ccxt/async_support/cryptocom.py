@@ -15,6 +15,7 @@ from ccxt.base.errors import InsufficientFunds
 from ccxt.base.errors import NotSupported
 from ccxt.base.errors import DDoSProtection
 from ccxt.base.errors import InvalidNonce
+from ccxt.base.decimal_to_precision import TICK_SIZE
 from ccxt.base.precise import Precise
 
 
@@ -234,6 +235,7 @@ class cryptocom(Exchange):
             'commonCurrencies': {
                 'USD_STABLE_COIN': 'USDC',
             },
+            'precisionMode': TICK_SIZE,
             'exceptions': {
                 'exact': {
                     '10001': ExchangeError,
@@ -351,8 +353,8 @@ class cryptocom(Exchange):
                 'strike': None,
                 'optionType': None,
                 'precision': {
-                    'amount': self.safe_integer(market, 'quantity_decimals'),
-                    'price': int(priceDecimals),
+                    'amount': self.parse_number(self.parse_precision(self.safe_string(market, 'quantity_decimals'))),
+                    'price': self.parse_number(self.parse_precision(priceDecimals)),
                 },
                 'limits': {
                     'leverage': {
@@ -450,8 +452,8 @@ class cryptocom(Exchange):
                 'strike': None,
                 'optionType': None,
                 'precision': {
-                    'price': self.safe_integer(market, 'quote_decimals'),
-                    'amount': self.safe_integer(market, 'quantity_decimals'),
+                    'price': self.parse_number(self.parse_precision(self.safe_string(market, 'quote_decimals'))),
+                    'amount': self.parse_number(self.parse_precision(self.safe_string(market, 'quantity_decimals'))),
                 },
                 'limits': {
                     'leverage': {
@@ -538,6 +540,14 @@ class cryptocom(Exchange):
         return self.parse_ticker(data, market)
 
     async def fetch_orders(self, symbol=None, since=None, limit=None, params={}):
+        """
+        fetches information on multiple orders made by the user
+        :param str symbol: unified market symbol of the market orders were made in
+        :param int|None since: the earliest time in ms to fetch orders for
+        :param int|None limit: the maximum number of  orde structures to retrieve
+        :param dict params: extra parameters specific to the cryptocom api endpoint
+        :returns [dict]: a list of [order structures]{@link https://docs.ccxt.com/en/latest/manual.html#order-structure
+        """
         if symbol is None:
             raise ArgumentsRequired(self.id + ' fetchOrders() requires a symbol argument')
         await self.load_markets()
@@ -1196,6 +1206,12 @@ class cryptocom(Exchange):
         return self.parse_transaction(result, currency)
 
     async def fetch_deposit_addresses_by_network(self, code, params={}):
+        """
+        fetch a dictionary of addresses for a currency, indexed by network
+        :param str code: unified currency code of the currency for the deposit address
+        :param dict params: extra parameters specific to the cryptocom api endpoint
+        :returns dict: a dictionary of `address structures <https://docs.ccxt.com/en/latest/manual.html#address-structure>` indexed by the network
+        """
         await self.load_markets()
         currency = self.currency(code)
         request = {
@@ -1397,6 +1413,14 @@ class cryptocom(Exchange):
         return self.parse_transfer(repsonse, currency)
 
     async def fetch_transfers(self, code=None, since=None, limit=None, params={}):
+        """
+        fetch a history of internal transfers made on an account
+        :param str|None code: unified currency code of the currency transferred
+        :param int|None since: the earliest time in ms to fetch transfers for
+        :param int|None limit: the maximum number of  transfers structures to retrieve
+        :param dict params: extra parameters specific to the cryptocom api endpoint
+        :returns [dict]: a list of `transfer structures <https://docs.ccxt.com/en/latest/manual.html#transfer-structure>`
+        """
         if not ('direction' in params):
             raise ArgumentsRequired(self.id + ' fetchTransfers() requires a direction param to be either "IN" or "OUT"')
         await self.load_markets()

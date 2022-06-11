@@ -513,6 +513,15 @@ module.exports = class upbit extends Exchange {
     }
 
     async fetchOrderBooks (symbols = undefined, limit = undefined, params = {}) {
+        /**
+         * @method
+         * @name upbit#fetchOrderBooks
+         * @description fetches information on open orders with bid (buy) and ask (sell) prices, volumes and other data for multiple markets
+         * @param {[str]|undefined} symbols list of unified market symbols, all symbols fetched if undefined, default is undefined
+         * @param {int|undefined} limit not used by upbit fetchOrderBooks ()
+         * @param {dict} params extra parameters specific to the upbit api endpoint
+         * @returns {dict} a dictionary of [order book structures]{@link https://docs.ccxt.com/en/latest/manual.html#order-book-structure} indexed by market symbol
+         */
         await this.loadMarkets ();
         let ids = undefined;
         if (symbols === undefined) {
@@ -1483,10 +1492,30 @@ module.exports = class upbit extends Exchange {
     }
 
     async fetchClosedOrders (symbol = undefined, since = undefined, limit = undefined, params = {}) {
+        /**
+         * @method
+         * @name upbit#fetchClosedOrders
+         * @description fetches information on multiple closed orders made by the user
+         * @param {str|undefined} symbol unified market symbol of the market orders were made in
+         * @param {int|undefined} since the earliest time in ms to fetch orders for
+         * @param {int|undefined} limit the maximum number of  orde structures to retrieve
+         * @param {dict} params extra parameters specific to the upbit api endpoint
+         * @returns {[dict]} a list of [order structures]{@link https://docs.ccxt.com/en/latest/manual.html#order-structure
+         */
         return await this.fetchOrdersByState ('done', symbol, since, limit, params);
     }
 
     async fetchCanceledOrders (symbol = undefined, since = undefined, limit = undefined, params = {}) {
+        /**
+         * @method
+         * @name upbit#fetchCanceledOrders
+         * @description fetches information on multiple canceled orders made by the user
+         * @param {str|undefined} symbol unified market symbol of the market orders were made in
+         * @param {int|undefined} since timestamp in ms of the earliest order, default is undefined
+         * @param {int|undefined} limit max number of orders to return, default is undefined
+         * @param {dict} params extra parameters specific to the upbit api endpoint
+         * @returns {dict} a list of [order structures]{@link https://docs.ccxt.com/en/latest/manual.html#order-structure}
+         */
         return await this.fetchOrdersByState ('cancel', symbol, since, limit, params);
     }
 
@@ -1551,6 +1580,14 @@ module.exports = class upbit extends Exchange {
     }
 
     async fetchDepositAddresses (codes = undefined, params = {}) {
+        /**
+         * @method
+         * @name upbit#fetchDepositAddresses
+         * @description fetch deposit addresses for multiple currencies and chain types
+         * @param {[str]|undefined} codes list of unified currency codes, default is undefined
+         * @param {dict} params extra parameters specific to the upbit api endpoint
+         * @returns {dict} a list of [address structures]{@link https://docs.ccxt.com/en/latest/manual.html#address-structure}
+         */
         await this.loadMarkets ();
         const response = await this.privateGetDepositsCoinAddresses (params);
         //
@@ -1622,6 +1659,14 @@ module.exports = class upbit extends Exchange {
     }
 
     async createDepositAddress (code, params = {}) {
+        /**
+         * @method
+         * @name upbit#createDepositAddress
+         * @description create a currency deposit address
+         * @param {str} code unified currency code of the currency for the deposit address
+         * @param {dict} params extra parameters specific to the upbit api endpoint
+         * @returns {dict} an [address structure]{@link https://docs.ccxt.com/en/latest/manual.html#address-structure}
+         */
         await this.loadMarkets ();
         const currency = this.currency (code);
         const request = {

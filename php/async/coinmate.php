@@ -194,6 +194,7 @@ class coinmate extends Exchange {
                     'Access denied.' => '\\ccxt\\AuthenticationError', // array("error":true,"errorMessage":"Access denied.","data":null)
                 ),
             ),
+            'precisionMode' => TICK_SIZE,
         ));
     }
 
@@ -258,8 +259,8 @@ class coinmate extends Exchange {
                 'strike' => null,
                 'optionType' => null,
                 'precision' => array(
-                    'amount' => $this->safe_integer($market, 'lotDecimals'),
-                    'price' => $this->safe_integer($market, 'priceDecimals'),
+                    'amount' => $this->parse_number($this->parse_precision($this->safe_string($market, 'lotDecimals'))),
+                    'price' => $this->parse_number($this->parse_precision($this->safe_string($market, 'priceDecimals'))),
                 ),
                 'limits' => array(
                     'leverage' => array(
@@ -719,6 +720,14 @@ class coinmate extends Exchange {
     }
 
     public function fetch_orders($symbol = null, $since = null, $limit = null, $params = array ()) {
+        /**
+         * fetches information on multiple orders made by the user
+         * @param {str} $symbol unified $market $symbol of the $market orders were made in
+         * @param {int|null} $since the earliest time in ms to fetch orders for
+         * @param {int|null} $limit the maximum number of  orde structures to retrieve
+         * @param {dict} $params extra parameters specific to the coinmate api endpoint
+         * @return {[dict]} a list of [order structures]{@link https://docs.ccxt.com/en/latest/manual.html#order-structure
+         */
         if ($symbol === null) {
             throw new ArgumentsRequired($this->id . ' fetchOrders() requires a $symbol argument');
         }

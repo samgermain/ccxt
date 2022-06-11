@@ -416,7 +416,6 @@ class ascendex extends Exchange {
             $code = $this->safe_currency_code($id);
             $scale = $this->safe_string_2($currency, 'precisionScale', 'nativeScale');
             $precision = $this->parse_number($this->parse_precision($scale));
-            // why would the exchange API have different names for the same field
             $fee = $this->safe_number_2($currency, 'withdrawFee', 'withdrawalFee');
             $status = $this->safe_string_2($currency, 'status', 'statusCode');
             $active = ($status === 'Normal');
@@ -636,6 +635,11 @@ class ascendex extends Exchange {
     }
 
     public function fetch_accounts($params = array ()) {
+        /**
+         * fetch all the accounts associated with a profile
+         * @param {dict} $params extra parameters specific to the ascendex api endpoint
+         * @return {dict} a dictionary of {@link https://docs.ccxt.com/en/latest/manual.html#account-structure account structures} indexed by the account type
+         */
         $accountGroup = $this->safe_string($this->options, 'account-group');
         $response = null;
         if ($accountGroup === null) {
@@ -1709,6 +1713,14 @@ class ascendex extends Exchange {
     }
 
     public function fetch_closed_orders($symbol = null, $since = null, $limit = null, $params = array ()) {
+        /**
+         * fetches information on multiple closed orders made by the user
+         * @param {str|null} $symbol unified $market $symbol of the $market orders were made in
+         * @param {int|null} $since the earliest time in ms to fetch orders for
+         * @param {int|null} $limit the maximum number of  orde structures to retrieve
+         * @param {dict} $params extra parameters specific to the ascendex api endpoint
+         * @return {[dict]} a list of [order structures]{@link https://docs.ccxt.com/en/latest/manual.html#order-structure
+         */
         $this->load_markets();
         $this->load_accounts();
         $account = $this->safe_value($this->accounts, 0, array());

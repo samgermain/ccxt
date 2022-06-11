@@ -389,6 +389,13 @@ class oceanex extends Exchange {
     }
 
     public function fetch_order_books($symbols = null, $limit = null, $params = array ()) {
+        /**
+         * fetches information on open orders with bid (buy) and ask (sell) prices, volumes and other $data for multiple markets
+         * @param {[str]|null} $symbols list of unified market $symbols, all $symbols fetched if null, default is null
+         * @param {int|null} $limit max number of entries per $orderbook to return, default is null
+         * @param {dict} $params extra parameters specific to the oceanex api endpoint
+         * @return {dict} a dictionary of {@link https://docs.ccxt.com/en/latest/manual.html#order-book-structure order book structures} indexed by market $symbol
+         */
         $this->load_markets();
         if ($symbols === null) {
             $symbols = $this->symbols;
@@ -668,6 +675,14 @@ class oceanex extends Exchange {
     }
 
     public function fetch_closed_orders($symbol = null, $since = null, $limit = null, $params = array ()) {
+        /**
+         * fetches information on multiple closed orders made by the user
+         * @param {str} $symbol unified market $symbol of the market orders were made in
+         * @param {int|null} $since the earliest time in ms to fetch orders for
+         * @param {int|null} $limit the maximum number of  orde structures to retrieve
+         * @param {dict} $params extra parameters specific to the oceanex api endpoint
+         * @return {[dict]} a list of [order structures]{@link https://docs.ccxt.com/en/latest/manual.html#order-structure
+         */
         $request = array(
             'states' => array( 'done', 'cancel' ),
         );
@@ -675,6 +690,14 @@ class oceanex extends Exchange {
     }
 
     public function fetch_orders($symbol = null, $since = null, $limit = null, $params = array ()) {
+        /**
+         * fetches information on multiple $orders made by the user
+         * @param {str} $symbol unified $market $symbol of the $market $orders were made in
+         * @param {int|null} $since the earliest time in ms to fetch $orders for
+         * @param {int|null} $limit the maximum number of  orde structures to retrieve
+         * @param {dict} $params extra parameters specific to the oceanex api endpoint
+         * @return {[dict]} a list of [order structures]{@link https://docs.ccxt.com/en/latest/manual.html#order-structure
+         */
         if ($symbol === null) {
             throw new ArgumentsRequired($this->id . ' fetchOrders() requires a `$symbol` argument');
         }
@@ -840,6 +863,13 @@ class oceanex extends Exchange {
     }
 
     public function cancel_orders($ids, $symbol = null, $params = array ()) {
+        /**
+         * cancel multiple orders
+         * @param {[str]} $ids order $ids
+         * @param {str|null} $symbol not used by oceanex cancelOrders ()
+         * @param {dict} $params extra parameters specific to the oceanex api endpoint
+         * @return {dict} an list of {@link https://docs.ccxt.com/en/latest/manual.html#order-structure order structures}
+         */
         $this->load_markets();
         $response = $this->privatePostOrderDeleteMulti (array_merge(array( 'ids' => $ids ), $params));
         $data = $this->safe_value($response, 'data');

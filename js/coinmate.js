@@ -4,6 +4,7 @@
 
 const Exchange = require ('./base/Exchange');
 const { ExchangeError, ArgumentsRequired, InvalidOrder, OrderNotFound, RateLimitExceeded, InsufficientFunds, AuthenticationError } = require ('./base/errors');
+const { TICK_SIZE } = require ('./base/functions/number');
 const Precise = require ('./base/Precise');
 
 //  ---------------------------------------------------------------------------
@@ -191,6 +192,7 @@ module.exports = class coinmate extends Exchange {
                     'Access denied.': AuthenticationError, // {"error":true,"errorMessage":"Access denied.","data":null}
                 },
             },
+            'precisionMode': TICK_SIZE,
         });
     }
 
@@ -257,8 +259,8 @@ module.exports = class coinmate extends Exchange {
                 'strike': undefined,
                 'optionType': undefined,
                 'precision': {
-                    'amount': this.safeInteger (market, 'lotDecimals'),
-                    'price': this.safeInteger (market, 'priceDecimals'),
+                    'amount': this.parseNumber (this.parsePrecision (this.safeString (market, 'lotDecimals'))),
+                    'price': this.parseNumber (this.parsePrecision (this.safeString (market, 'priceDecimals'))),
                 },
                 'limits': {
                     'leverage': {
@@ -736,6 +738,16 @@ module.exports = class coinmate extends Exchange {
     }
 
     async fetchOrders (symbol = undefined, since = undefined, limit = undefined, params = {}) {
+        /**
+         * @method
+         * @name coinmate#fetchOrders
+         * @description fetches information on multiple orders made by the user
+         * @param {str} symbol unified market symbol of the market orders were made in
+         * @param {int|undefined} since the earliest time in ms to fetch orders for
+         * @param {int|undefined} limit the maximum number of  orde structures to retrieve
+         * @param {dict} params extra parameters specific to the coinmate api endpoint
+         * @returns {[dict]} a list of [order structures]{@link https://docs.ccxt.com/en/latest/manual.html#order-structure
+         */
         if (symbol === undefined) {
             throw new ArgumentsRequired (this.id + ' fetchOrders() requires a symbol argument');
         }

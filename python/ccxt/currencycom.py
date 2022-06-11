@@ -353,7 +353,6 @@ class currencycom(Exchange):
             id = self.safe_string(currency, 'displaySymbol')
             code = self.safe_currency_code(id)
             fee = self.safe_number(currency, 'commissionFixed')
-            precision = self.safe_integer(currency, 'precision')
             result[code] = {
                 'id': id,
                 'code': code,
@@ -364,7 +363,7 @@ class currencycom(Exchange):
                 'deposit': None,
                 'withdraw': None,
                 'fee': fee,
-                'precision': precision,
+                'precision': self.parse_number(self.parse_precision(self.safe_string(currency, 'precision'))),
                 'limits': {
                     'amount': {
                         'min': None,
@@ -560,6 +559,11 @@ class currencycom(Exchange):
         return result
 
     def fetch_accounts(self, params={}):
+        """
+        fetch all the accounts associated with a profile
+        :param dict params: extra parameters specific to the currencycom api endpoint
+        :returns dict: a dictionary of `account structures <https://docs.ccxt.com/en/latest/manual.html#account-structure>` indexed by the account type
+        """
         response = self.privateGetV2Account(params)
         #
         #     {
@@ -1524,6 +1528,14 @@ class currencycom(Exchange):
         return self.safe_string(types, type, type)
 
     def fetch_ledger(self, code=None, since=None, limit=None, params={}):
+        """
+        fetch the history of changes, actions done by the user or operations that altered balance of the user
+        :param str|None code: unified currency code, default is None
+        :param int|None since: timestamp in ms of the earliest ledger entry, default is None
+        :param int|None limit: max number of ledger entrys to return, default is None
+        :param dict params: extra parameters specific to the currencycom api endpoint
+        :returns dict: a `ledger structure <https://docs.ccxt.com/en/latest/manual.html#ledger-structure>`
+        """
         self.load_markets()
         request = {}
         currency = None

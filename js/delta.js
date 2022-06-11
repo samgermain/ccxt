@@ -331,7 +331,6 @@ module.exports = class delta extends Exchange {
             const depositsEnabled = (depositStatus === 'enabled');
             const withdrawalsEnabled = (withdrawalStatus === 'enabled');
             const active = depositsEnabled && withdrawalsEnabled;
-            const precision = this.safeInteger (currency, 'precision');
             result[code] = {
                 'id': id,
                 'numericId': numericId,
@@ -342,7 +341,7 @@ module.exports = class delta extends Exchange {
                 'deposit': depositsEnabled,
                 'withdraw': withdrawalsEnabled,
                 'fee': this.safeNumber (currency, 'base_withdrawal_fee'),
-                'precision': 1 / Math.pow (10, precision),
+                'precision': this.parseNumber (this.parsePrecision (this.safeString (currency, 'precision'))),
                 'limits': {
                     'amount': { 'min': undefined, 'max': undefined },
                     'withdraw': {
@@ -1363,6 +1362,16 @@ module.exports = class delta extends Exchange {
     }
 
     async fetchClosedOrders (symbol = undefined, since = undefined, limit = undefined, params = {}) {
+        /**
+         * @method
+         * @name delta#fetchClosedOrders
+         * @description fetches information on multiple closed orders made by the user
+         * @param {str|undefined} symbol unified market symbol of the market orders were made in
+         * @param {int|undefined} since the earliest time in ms to fetch orders for
+         * @param {int|undefined} limit the maximum number of  orde structures to retrieve
+         * @param {dict} params extra parameters specific to the delta api endpoint
+         * @returns {[dict]} a list of [order structures]{@link https://docs.ccxt.com/en/latest/manual.html#order-structure
+         */
         return await this.fetchOrdersWithMethod ('privateGetOrdersHistory', symbol, since, limit, params);
     }
 
@@ -1500,6 +1509,16 @@ module.exports = class delta extends Exchange {
     }
 
     async fetchLedger (code = undefined, since = undefined, limit = undefined, params = {}) {
+        /**
+         * @method
+         * @name delta#fetchLedger
+         * @description fetch the history of changes, actions done by the user or operations that altered balance of the user
+         * @param {str|undefined} code unified currency code, default is undefined
+         * @param {int|undefined} since timestamp in ms of the earliest ledger entry, default is undefined
+         * @param {int|undefined} limit max number of ledger entrys to return, default is undefined
+         * @param {dict} params extra parameters specific to the delta api endpoint
+         * @returns {dict} a [ledger structure]{@link https://docs.ccxt.com/en/latest/manual.html#ledger-structure}
+         */
         await this.loadMarkets ();
         const request = {
             // 'asset_id': currency['numericId'],

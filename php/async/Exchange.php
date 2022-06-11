@@ -32,11 +32,11 @@ use Exception;
 
 include 'Throttle.php';
 
-$version = '1.86.16';
+$version = '1.86.65';
 
 class Exchange extends \ccxt\Exchange {
 
-    const VERSION = '1.86.16';
+    const VERSION = '1.86.65';
 
     public static $loop;
     public static $kernel;
@@ -252,6 +252,46 @@ class Exchange extends \ccxt\Exchange {
 
     // METHODS BELOW THIS LINE ARE TRANSPILED FROM JAVASCRIPT TO PYTHON AND PHP
 
+    public function parse_order_book($orderbook, $symbol, $timestamp = null, $bidsKey = 'bids', $asksKey = 'asks', $priceKey = 0, $amountKey = 1) {
+        $bids = (is_array($orderbook) && array_key_exists($bidsKey, $orderbook)) ? $this->parse_bids_asks($orderbook[$bidsKey], $priceKey, $amountKey) : array();
+        $asks = (is_array($orderbook) && array_key_exists($asksKey, $orderbook)) ? $this->parse_bids_asks($orderbook[$asksKey], $priceKey, $amountKey) : array();
+        return array(
+            'symbol' => $symbol,
+            'bids' => $this->sort_by($bids, 0, true),
+            'asks' => $this->sort_by($asks, 0),
+            'timestamp' => $timestamp,
+            'datetime' => $this->iso8601 ($timestamp),
+            'nonce' => null,
+        );
+    }
+
+    public function parse_ohlcvs($ohlcvs, $market = null, $timeframe = '1m', $since = null, $limit = null) {
+        $results = array();
+        for ($i = 0; $i < count($ohlcvs); $i++) {
+            $results[] = $this->parse_ohlcv($ohlcvs[$i], $market);
+        }
+        $sorted = $this->sort_by($results, 0);
+        $tail = ($since === null);
+        return $this->filter_by_since_limit($sorted, $since, $limit, 0, $tail);
+    }
+
+    public function parse_leverage_tiers($response, $symbols = null, $marketIdKey = null) {
+        // $marketIdKey should only be null when $response is a dictionary
+        $symbols = $this->market_symbols($symbols);
+        $tiers = array();
+        for ($i = 0; $i < count($response); $i++) {
+            $item = $response[$i];
+            $id = $this->safe_string($item, $marketIdKey);
+            $market = $this->safe_market($id);
+            $symbol = $market['symbol'];
+            $contract = $this->safe_value($market, 'contract', false);
+            if ($contract && (($symbols === null) || $this->in_array($symbol, $symbols))) {
+                $tiers[$symbol] = $this->parse_market_leverage_tiers($item, $market);
+            }
+        }
+        return $tiers;
+    }
+
     public function load_trading_limits($symbols = null, $reload = false, $params = array ()) {
         if ($this->has['fetchTradingLimits']) {
             if ($reload || !(is_array($this->options) && array_key_exists('limitsLoaded', $this->options))) {
@@ -281,7 +321,7 @@ class Exchange extends \ccxt\Exchange {
         $accounts = $this->to_array($accounts);
         $result = array();
         for ($i = 0; $i < count($accounts); $i++) {
-            $account = array_merge($this->parse_account($accounts[$i], null), $params);
+            $account = array_merge($this->parse_account($accounts[$i]), $params);
             $result[] = $account;
         }
         return $result;
@@ -317,12 +357,31 @@ class Exchange extends \ccxt\Exchange {
         $transfers = $this->to_array($transfers);
         $result = array();
         for ($i = 0; $i < count($transfers); $i++) {
-            $transfer = array_merge($this->parseTransfer ($transfers[$i], $currency), $params);
+            $transfer = array_merge($this->parse_transfer($transfers[$i], $currency), $params);
             $result[] = $transfer;
         }
         $result = $this->sort_by($result, 'timestamp');
         $code = ($currency !== null) ? $currency['code'] : null;
         $tail = $since === null;
+        return $this->filter_by_currency_since_limit($result, $code, $since, $limit, $tail);
+    }
+
+    public function parse_ledger($data, $currency = null, $since = null, $limit = null, $params = array ()) {
+        $result = $array();
+        $array = $this->to_array($data);
+        for ($i = 0; $i < count($array); $i++) {
+            $itemOrItems = $this->parse_ledger_entry($array[$i], $currency);
+            if (gettype($itemOrItems) === 'array' && count(array_filter(array_keys($itemOrItems), 'is_string')) == 0) {
+                for ($j = 0; $j < count($itemOrItems); $j++) {
+                    $result[] = array_merge($itemOrItems[$j], $params);
+                }
+            } else {
+                $result[] = array_merge($itemOrItems, $params);
+            }
+        }
+        $result = $this->sort_by($result, 'timestamp');
+        $code = ($currency !== null) ? $currency['code'] : null;
+        $tail = ($since === null);
         return $this->filter_by_currency_since_limit($result, $code, $since, $limit, $tail);
     }
 

@@ -4,6 +4,7 @@
 
 const Exchange = require ('./base/Exchange');
 const { AuthenticationError, ArgumentsRequired, ExchangeError, InsufficientFunds, DDoSProtection, InvalidNonce, PermissionDenied, BadRequest, BadSymbol, NotSupported, AccountNotEnabled } = require ('./base/errors');
+const { TICK_SIZE } = require ('./base/functions/number');
 const Precise = require ('./base/Precise');
 
 module.exports = class cryptocom extends Exchange {
@@ -221,6 +222,7 @@ module.exports = class cryptocom extends Exchange {
             'commonCurrencies': {
                 'USD_STABLE_COIN': 'USDC',
             },
+            'precisionMode': TICK_SIZE,
             'exceptions': {
                 'exact': {
                     '10001': ExchangeError,
@@ -343,8 +345,8 @@ module.exports = class cryptocom extends Exchange {
                 'strike': undefined,
                 'optionType': undefined,
                 'precision': {
-                    'amount': this.safeInteger (market, 'quantity_decimals'),
-                    'price': parseInt (priceDecimals),
+                    'amount': this.parseNumber (this.parsePrecision (this.safeString (market, 'quantity_decimals'))),
+                    'price': this.parseNumber (this.parsePrecision (priceDecimals)),
                 },
                 'limits': {
                     'leverage': {
@@ -445,8 +447,8 @@ module.exports = class cryptocom extends Exchange {
                 'strike': undefined,
                 'optionType': undefined,
                 'precision': {
-                    'price': this.safeInteger (market, 'quote_decimals'),
-                    'amount': this.safeInteger (market, 'quantity_decimals'),
+                    'price': this.parseNumber (this.parsePrecision (this.safeString (market, 'quote_decimals'))),
+                    'amount': this.parseNumber (this.parsePrecision (this.safeString (market, 'quantity_decimals'))),
                 },
                 'limits': {
                     'leverage': {
@@ -542,6 +544,16 @@ module.exports = class cryptocom extends Exchange {
     }
 
     async fetchOrders (symbol = undefined, since = undefined, limit = undefined, params = {}) {
+        /**
+         * @method
+         * @name cryptocom#fetchOrders
+         * @description fetches information on multiple orders made by the user
+         * @param {str} symbol unified market symbol of the market orders were made in
+         * @param {int|undefined} since the earliest time in ms to fetch orders for
+         * @param {int|undefined} limit the maximum number of  orde structures to retrieve
+         * @param {dict} params extra parameters specific to the cryptocom api endpoint
+         * @returns {[dict]} a list of [order structures]{@link https://docs.ccxt.com/en/latest/manual.html#order-structure
+         */
         if (symbol === undefined) {
             throw new ArgumentsRequired (this.id + ' fetchOrders() requires a symbol argument');
         }
@@ -1262,6 +1274,14 @@ module.exports = class cryptocom extends Exchange {
     }
 
     async fetchDepositAddressesByNetwork (code, params = {}) {
+        /**
+         * @method
+         * @name cryptocom#fetchDepositAddressesByNetwork
+         * @description fetch a dictionary of addresses for a currency, indexed by network
+         * @param {str} code unified currency code of the currency for the deposit address
+         * @param {dict} params extra parameters specific to the cryptocom api endpoint
+         * @returns {dict} a dictionary of [address structures]{@link https://docs.ccxt.com/en/latest/manual.html#address-structure} indexed by the network
+         */
         await this.loadMarkets ();
         const currency = this.currency (code);
         const request = {
@@ -1486,6 +1506,16 @@ module.exports = class cryptocom extends Exchange {
     }
 
     async fetchTransfers (code = undefined, since = undefined, limit = undefined, params = {}) {
+        /**
+         * @method
+         * @name cryptocom#fetchTransfers
+         * @description fetch a history of internal transfers made on an account
+         * @param {str|undefined} code unified currency code of the currency transferred
+         * @param {int|undefined} since the earliest time in ms to fetch transfers for
+         * @param {int|undefined} limit the maximum number of  transfers structures to retrieve
+         * @param {dict} params extra parameters specific to the cryptocom api endpoint
+         * @returns {[dict]} a list of [transfer structures]{@link https://docs.ccxt.com/en/latest/manual.html#transfer-structure}
+         */
         if (!('direction' in params)) {
             throw new ArgumentsRequired (this.id + ' fetchTransfers() requires a direction param to be either "IN" or "OUT"');
         }

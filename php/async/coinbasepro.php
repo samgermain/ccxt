@@ -412,6 +412,11 @@ class coinbasepro extends Exchange {
     }
 
     public function fetch_accounts($params = array ()) {
+        /**
+         * fetch all the accounts associated with a profile
+         * @param {dict} $params extra parameters specific to the coinbasepro api endpoint
+         * @return {dict} a dictionary of {@link https://docs.ccxt.com/en/latest/manual.html#account-structure account structures} indexed by the account type
+         */
         yield $this->load_markets();
         $response = yield $this->privateGetAccounts ($params);
         //
@@ -1044,6 +1049,14 @@ class coinbasepro extends Exchange {
     }
 
     public function fetch_orders($symbol = null, $since = null, $limit = null, $params = array ()) {
+        /**
+         * fetches information on multiple orders made by the user
+         * @param {str|null} $symbol unified market $symbol of the market orders were made in
+         * @param {int|null} $since the earliest time in ms to fetch orders for
+         * @param {int|null} $limit the maximum number of  orde structures to retrieve
+         * @param {dict} $params extra parameters specific to the coinbasepro api endpoint
+         * @return {[dict]} a list of [order structures]{@link https://docs.ccxt.com/en/latest/manual.html#order-structure
+         */
         $request = array(
             'status' => 'all',
         );
@@ -1074,6 +1087,14 @@ class coinbasepro extends Exchange {
     }
 
     public function fetch_closed_orders($symbol = null, $since = null, $limit = null, $params = array ()) {
+        /**
+         * fetches information on multiple closed orders made by the user
+         * @param {str|null} $symbol unified market $symbol of the market orders were made in
+         * @param {int|null} $since the earliest time in ms to fetch orders for
+         * @param {int|null} $limit the maximum number of  orde structures to retrieve
+         * @param {dict} $params extra parameters specific to the coinbasepro api endpoint
+         * @return {[dict]} a list of [order structures]{@link https://docs.ccxt.com/en/latest/manual.html#order-structure
+         */
         $request = array(
             'status' => 'done',
         );
@@ -1382,6 +1403,14 @@ class coinbasepro extends Exchange {
     }
 
     public function fetch_ledger($code = null, $since = null, $limit = null, $params = array ()) {
+        /**
+         * fetch the history of changes, actions done by the user or operations that altered balance of the user
+         * @param {str} $code unified $currency $code, default is null
+         * @param {int|null} $since timestamp in ms of the earliest ledger entry, default is null
+         * @param {int|null} $limit max number of ledger entrys to return, default is null
+         * @param {dict} $params extra parameters specific to the coinbasepro api endpoint
+         * @return {dict} a {@link https://docs.ccxt.com/en/latest/manual.html#ledger-structure ledger structure}
+         */
         // https://docs.cloud.coinbase.com/exchange/reference/exchangerestapi_getaccountledger
         if ($code === null) {
             throw new ArgumentsRequired($this->id . ' fetchLedger() requires a $code param');
@@ -1557,6 +1586,12 @@ class coinbasepro extends Exchange {
     }
 
     public function create_deposit_address($code, $params = array ()) {
+        /**
+         * create a $currency deposit $address
+         * @param {str} $code unified $currency $code of the $currency for the deposit $address
+         * @param {dict} $params extra parameters specific to the coinbasepro api endpoint
+         * @return {dict} an {@link https://docs.ccxt.com/en/latest/manual.html#$address-structure $address structure}
+         */
         yield $this->load_markets();
         $currency = $this->currency($code);
         $accounts = $this->safe_value($this->options, 'coinbaseAccounts');
