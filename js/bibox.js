@@ -535,7 +535,51 @@ module.exports = class bibox extends Exchange {
     }
 
     parseTrade (trade, market = undefined) {
-        const timestamp = this.safeInteger2 (trade, 'time', 'createdAt');
+        //
+        //        {
+        //            "i": 452361213188,
+        //            "o": 14284855094264759,
+        //            "s": "ADA_USDT",
+        //            "T": 1579458,
+        //            "t": 1653676917531,
+        //            "p": 0.45,
+        //            "q": 10,
+        //            "l": "maker",
+        //            "f": {
+        //                "a": "ADA",
+        //                "m": 0.010000000
+        //            }
+        //        }
+        //
+        //
+        //     {
+        //         "result":[
+        //             {
+        //                 "result":{
+        //                     "count":1,
+        //                     "page":1,
+        //                     "items":[
+        //                         {
+        //                             "id":"100055558128033",
+        //                             "createdAt": 1512756997000,
+        //                             "account_type":0,
+        //                             "coin_symbol":"LTC",
+        //                             "currency_symbol":"BTC",
+        //                             "order_side":2,
+        //                             "order_type":2,
+        //                             "price":"0.00886500",
+        //                             "amount":"1.00000000",
+        //                             "money":"0.00886500",
+        //                             "fee":0
+        //                         }
+        //                     ]
+        //                 },
+        //                 "cmd":"orderpending/orderHistoryList"
+        //             }
+        //         ]
+        //     }
+        //
+        const timestamp = this.safeInteger2 (trade, 'time', 't');
         let side = this.safeInteger2 (trade, 'side', 'order_side');
         side = (side === 1) ? 'buy' : 'sell';
         let marketId = this.safeString (trade, 'pair');
@@ -1495,40 +1539,27 @@ module.exports = class bibox extends Exchange {
                 'currency_symbol': market['quoteId'],
             }, params),
         };
-        const response = await this.v1PrivatePostOrderpending (request);
+        const response = await this.v4PrivateGetUserdataFills (request);
         //
-        //     {
-        //         "result":[
-        //             {
-        //                 "result":{
-        //                     "count":1,
-        //                     "page":1,
-        //                     "items":[
-        //                         {
-        //                             "id":"100055558128033",
-        //                             "createdAt": 1512756997000,
-        //                             "account_type":0,
-        //                             "coin_symbol":"LTC",
-        //                             "currency_symbol":"BTC",
-        //                             "order_side":2,
-        //                             "order_type":2,
-        //                             "price":"0.00886500",
-        //                             "amount":"1.00000000",
-        //                             "money":"0.00886500",
-        //                             "fee":0
-        //                         }
-        //                     ]
-        //                 },
-        //                 "cmd":"orderpending/orderHistoryList"
-        //             }
-        //         ]
-        //     }
+        //    [
+        //        {
+        //            "i": 452361213188,
+        //            "o": 14284855094264759,
+        //            "s": "ADA_USDT",
+        //            "T": 1579458,
+        //            "t": 1653676917531,
+        //            "p": 0.45,
+        //            "q": 10,
+        //            "l": "maker",
+        //            "f": {
+        //                "a": "ADA",
+        //                "m": 0.010000000
+        //            }
+        //        }
+        //        ...
+        //    ]
         //
-        const outerResults = this.safeValue (response, 'result');
-        const firstResult = this.safeValue (outerResults, 0, {});
-        const innerResult = this.safeValue (firstResult, 'result', {});
-        const trades = this.safeValue (innerResult, 'items', []);
-        return this.parseTrades (trades, market, since, limit);
+        return this.parseTrades (response, market, since, limit);
     }
 
     async fetchDepositAddress (code, params = {}) {
