@@ -250,6 +250,7 @@ module.exports = class bibox extends Exchange {
                             'marketdata/candles',
                             'marketdata/trades',
                             'marketdata/tickers',
+                            'marketdata/tickers/pairs',
                         ],
                     },
                     'private': {
@@ -501,6 +502,7 @@ module.exports = class bibox extends Exchange {
          * @method
          * @name bibox#fetchTicker
          * @description fetches a price ticker, a statistical calculation with the information calculated over the past 24 hours for a specific market
+         * @see https://biboxcom.github.io/v3/spotv4/en/#get-tickers
          * @param {string} symbol unified symbol of the market to fetch the ticker for
          * @param {object} params extra parameters specific to the bibox api endpoint
          * @returns {object} a [ticker structure]{@link https://docs.ccxt.com/en/latest/manual.html#ticker-structure}
@@ -508,28 +510,25 @@ module.exports = class bibox extends Exchange {
         await this.loadMarkets ();
         const market = this.market (symbol);
         const request = {
-            'cmd': 'ticker',
-            'pair': market['id'],
+            'symbol': market['id'],
         };
-        const response = await this.v1PublicGetMdata (this.extend (request, params));
-        return this.parseTicker (response['result'], market);
+        const response = await this.v4PublicGetMarketdataTickersPairs (this.extend (request, params));
+        return this.parseTicker (response, market);
     }
 
     async fetchTickers (symbols = undefined, params = {}) {
-        await this.loadMarkets ();
         /**
          * @method
          * @name bibox#fetchTickers
          * @description fetches price tickers for multiple markets, statistical calculations with the information calculated over the past 24 hours each market
+         * @see https://biboxcom.github.io/v3/spotv4/en/#get-tickers
          * @param {[string]|undefined} symbols unified symbols of the markets to fetch the ticker for, all market tickers are returned if not assigned
          * @param {object} params extra parameters specific to the bibox api endpoint
          * @returns {object} an array of [ticker structures]{@link https://docs.ccxt.com/en/latest/manual.html#ticker-structure}
          */
-        const request = {
-            'cmd': 'marketAll',
-        };
-        const response = await this.v1PublicGetMdata (this.extend (request, params));
-        const tickers = this.parseTickers (response['result'], symbols);
+        await this.loadMarkets ();
+        const response = await this.v4PublicGetMarketdataTickers (params);
+        const tickers = this.parseTickers (response, symbols);
         const result = this.indexBy (tickers, 'symbol');
         return this.filterByArray (result, 'symbol', symbols);
     }
