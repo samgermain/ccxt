@@ -956,7 +956,8 @@ class okx(Exchange):
             elif option:
                 strikePrice = self.safe_string(market, 'stk')
                 optionType = self.safe_string(market, 'optType')
-                symbol = symbol + '-' + strikePrice + '-' + optionType
+                ymd = self.yymmdd(expiry)
+                symbol = symbol + '-' + ymd + '-' + strikePrice + '-' + optionType
                 optionType = 'put' if (optionType == 'P') else 'call'
         tickSize = self.safe_string(market, 'tickSz')
         minAmountString = self.safe_string(market, 'minSz')
@@ -1938,14 +1939,28 @@ class okx(Exchange):
         slOrdPx = self.safe_value(params, 'slOrdPx', price)
         slTriggerPxType = self.safe_string(params, 'slTriggerPxType', 'last')
         clientOrderId = self.safe_string_2(params, 'clOrdId', 'clientOrderId')
+        defaultMarginMode = self.safe_string_2(self.options, 'defaultMarginMode', 'marginMode', 'cross')
+        marginMode = self.safe_string_2(params, 'marginMode', 'tdMode')  # cross or isolated, tdMode not ommited so as to be extended into the request
+        margin = False
+        if (marginMode is not None) and (marginMode != 'cash'):
+            margin = True
+        else:
+            marginMode = defaultMarginMode
+            margin = self.safe_value(params, 'margin', False)
+        if margin is True and market['spot'] and not market['margin']:
+            raise NotSupported(self.id + ' does not support margin trading for ' + symbol + ' market')
         if spot:
-            request['tdMode'] = 'cash'
+            if margin:
+                defaultCurrency = market['quote'] if (side == 'buy') else market['base']
+                currency = self.safe_string(params, 'ccy', defaultCurrency)
+                request['ccy'] = self.safe_currency_code(currency)
+            tradeMode = marginMode if margin else 'cash'
+            request['tdMode'] = tradeMode
         elif contract:
-            marginMode = self.safe_string_2(self.options, 'defaultMarginMode', 'marginMode', 'cross')
-            request['tdMode'] = self.safe_string_lower(params, 'tdMode', marginMode)  # not ommited so as to be extended into the request
+            request['tdMode'] = marginMode
         isMarketOrder = type == 'market'
         postOnly = self.is_post_only(isMarketOrder, type == 'post_only', params)
-        params = self.omit(params, ['timeInForce', 'stopPrice', 'triggerPrice', 'clientOrderId', 'stopLossPrice', 'takeProfitPrice', 'slOrdPx', 'tpOrdPx'])
+        params = self.omit(params, ['currency', 'ccy', 'marginMode', 'timeInForce', 'stopPrice', 'triggerPrice', 'clientOrderId', 'stopLossPrice', 'takeProfitPrice', 'slOrdPx', 'tpOrdPx', 'margin'])
         ioc = (timeInForce == 'IOC') or (type == 'ioc')
         fok = (timeInForce == 'FOK') or (type == 'fok')
         trigger = (triggerPrice is not None) or (type == 'trigger')
@@ -1954,7 +1969,7 @@ class okx(Exchange):
         defaultMethod = self.safe_string(self.options, 'createOrder', 'privatePostTradeBatchOrders')
         defaultTgtCcy = self.safe_string(self.options, 'tgtCcy', 'base_ccy')
         tgtCcy = self.safe_string(params, 'tgtCcy', defaultTgtCcy)
-        if not market['contract']:
+        if (not contract) and (not margin):
             request['tgtCcy'] = tgtCcy
         method = defaultMethod
         if isMarketOrder or marketIOC:
@@ -2779,7 +2794,7 @@ class okx(Exchange):
         :param int|None since: the earliest time in ms to fetch orders for
         :param int|None limit: the maximum number of  orde structures to retrieve
         :param dict params: extra parameters specific to the okx api endpoint
-        :returns [dict]: a list of [order structures]{@link https://docs.ccxt.com/en/latest/manual.html#order-structure
+        :returns [dict]: a list of `order structures <https://docs.ccxt.com/en/latest/manual.html#order-structure>`
         """
         await self.load_markets()
         request = {
@@ -3872,6 +3887,7 @@ class okx(Exchange):
             instrument = self.safe_string(entry, 'instType')
             if (instrument == 'FUTURES') or (instrument == 'SWAP'):
                 result.append(self.parse_position(positions[i]))
+        symbols = self.market_symbols(symbols)
         return self.filter_by_array(result, 'symbol', symbols, False)
 
     def parse_position(self, position, market=None):
@@ -4770,6 +4786,7 @@ class okx(Exchange):
     async def fetch_market_leverage_tiers(self, symbol, params={}):
         """
         retrieve information on the maximum leverage, and maintenance margin for trades of varying trade sizes for a single market
+        see https://www.okx.com/docs-v5/en/#rest-api-public-data-get-position-tiers
         :param str symbol: unified market symbol
         :param dict params: extra parameters specific to the okx api endpoint
         :returns dict: a `leverage tiers structure <https://docs.ccxt.com/en/latest/manual.html#leverage-tiers-structure>`
@@ -4779,10 +4796,14 @@ class okx(Exchange):
         type = 'MARGIN' if market['spot'] else self.convert_to_instrument_type(market['type'])
         uly = self.safe_string(market['info'], 'uly')
         if not uly:
-            raise BadRequest(self.id + ' fetchMarketLeverageTiers() cannot fetch leverage tiers for ' + symbol)
+            if type != 'MARGIN':
+                raise BadRequest(self.id + ' fetchMarketLeverageTiers() cannot fetch leverage tiers for ' + symbol)
+        defaultMarginMode = self.safe_string_2(self.options, 'defaultMarginMode', 'marginMode', 'cross')
+        marginMode = self.safe_string_2(params, 'marginMode', 'tdMode', defaultMarginMode)
+        params = self.omit(params, 'marginMode')
         request = {
             'instType': type,
-            'tdMode': self.safe_string(params, 'tdMode', 'isolated'),
+            'tdMode': marginMode,
             'uly': uly,
         }
         if type == 'MARGIN':
@@ -4924,11 +4945,12 @@ class okx(Exchange):
     async def borrow_margin(self, code, amount, symbol=None, params={}):
         """
         create a loan to borrow margin
+        see https://www.okx.com/docs-v5/en/#rest-api-account-vip-loans-borrow-and-repay
         :param str code: unified currency code of the currency to borrow
         :param float amount: the amount to borrow
         :param str|None symbol: not used by okx.borrowMargin()
         :param dict params: extra parameters specific to the okx api endpoint
-        :returns [dict]: a dictionary of a [margin loan structure]
+        :returns dict: a `margin loan structure <https://docs.ccxt.com/en/latest/manual.html#margin-loan-structure>`
         """
         await self.load_markets()
         currency = self.currency(code)
@@ -4965,11 +4987,12 @@ class okx(Exchange):
     async def repay_margin(self, code, amount, symbol=None, params={}):
         """
         repay borrowed margin and interest
+        see https://www.okx.com/docs-v5/en/#rest-api-account-vip-loans-borrow-and-repay
         :param str code: unified currency code of the currency to repay
         :param float amount: the amount to repay
         :param str|None symbol: not used by okx.repayMargin()
         :param dict params: extra parameters specific to the okx api endpoint
-        :returns [dict]: a dictionary of a [margin loan structure]
+        :returns dict: a `margin loan structure <https://docs.ccxt.com/en/latest/manual.html#margin-loan-structure>`
         """
         await self.load_markets()
         currency = self.currency(code)

@@ -49,8 +49,8 @@ module.exports = class Exchange {
             'pro': false, // if it is integrated with CCXT Pro for WebSocket support
             'alias': false, // whether this exchange is an alias to another exchange
             'has': {
-                'publicAPI': undefined,
-                'privateAPI': undefined,
+                'publicAPI': true,
+                'privateAPI': true,
                 'CORS': undefined,
                 'spot': undefined,
                 'margin': undefined,
@@ -59,12 +59,12 @@ module.exports = class Exchange {
                 'option': undefined,
                 'addMargin': undefined,
                 'cancelAllOrders': undefined,
-                'cancelOrder': undefined,
+                'cancelOrder': true,
                 'cancelOrders': undefined,
                 'createDepositAddress': undefined,
-                'createLimitOrder': undefined,
-                'createMarketOrder': undefined,
-                'createOrder': undefined,
+                'createLimitOrder': true,
+                'createMarketOrder': true,
+                'createOrder': true,
                 'createPostOnlyOrder': undefined,
                 'createReduceOnlyOrder': undefined,
                 'createStopOrder': undefined,
@@ -72,7 +72,7 @@ module.exports = class Exchange {
                 'createStopMarketOrder': undefined,
                 'editOrder': 'emulated',
                 'fetchAccounts': undefined,
-                'fetchBalance': undefined,
+                'fetchBalance': true,
                 'fetchBidsAsks': undefined,
                 'fetchBorrowInterest': undefined,
                 'fetchBorrowRate': undefined,
@@ -95,22 +95,19 @@ module.exports = class Exchange {
                 'fetchFundingRateHistory': undefined,
                 'fetchFundingRates': undefined,
                 'fetchIndexOHLCV': undefined,
-                'fetchL1OrderBooks': undefined,
-                'fetchL2OrderBook': undefined,
-                'fetchL3OrderBook': undefined,
-                'fetchLastPrices': undefined,
+                'fetchL2OrderBook': true,
                 'fetchLedger': undefined,
                 'fetchLedgerEntry': undefined,
                 'fetchLeverageTiers': undefined,
                 'fetchMarketLeverageTiers': undefined,
-                'fetchMarkets': undefined,
+                'fetchMarkets': true,
                 'fetchMarkOHLCV': undefined,
                 'fetchMyTrades': undefined,
                 'fetchOHLCV': 'emulated',
                 'fetchOpenOrder': undefined,
                 'fetchOpenOrders': undefined,
                 'fetchOrder': undefined,
-                'fetchOrderBook': undefined,
+                'fetchOrderBook': true,
                 'fetchOrderBooks': undefined,
                 'fetchOrders': undefined,
                 'fetchOrderTrades': undefined,
@@ -120,10 +117,10 @@ module.exports = class Exchange {
                 'fetchPositionsRisk': undefined,
                 'fetchPremiumIndexOHLCV': undefined,
                 'fetchStatus': 'emulated',
-                'fetchTicker': undefined,
+                'fetchTicker': true,
                 'fetchTickers': undefined,
                 'fetchTime': undefined,
-                'fetchTrades': undefined,
+                'fetchTrades': true,
                 'fetchTradingFee': undefined,
                 'fetchTradingFees': undefined,
                 'fetchTradingLimits': undefined,
@@ -131,7 +128,6 @@ module.exports = class Exchange {
                 'fetchTransfers': undefined,
                 'fetchWithdrawal': undefined,
                 'fetchWithdrawals': undefined,
-                'loadMarkets': undefined,
                 'reduceMargin': undefined,
                 'setLeverage': undefined,
                 'setMargin': undefined,
@@ -1047,7 +1043,7 @@ module.exports = class Exchange {
             }
         }
         if (shouldParseFees) {
-            const reducedFees = this.reduceFees ? this.reduceFeesByCurrency (fees, true) : fees;
+            const reducedFees = this.reduceFees ? this.reduceFeesByCurrency (fees) : fees;
             const reducedLength = reducedFees.length;
             for (let i = 0; i < reducedLength; i++) {
                 reducedFees[i]['cost'] = this.safeNumber (reducedFees[i], 'cost');
@@ -1062,9 +1058,7 @@ module.exports = class Exchange {
                 }
                 reducedFees.push (fee);
             }
-            if (parseFees) {
-                order['fees'] = reducedFees;
-            }
+            order['fees'] = reducedFees;
             if (parseFee && (reducedLength === 1)) {
                 order['fee'] = reducedFees[0];
             }
@@ -1275,7 +1269,7 @@ module.exports = class Exchange {
         }
         const fee = this.safeValue (trade, 'fee');
         if (shouldParseFees) {
-            const reducedFees = this.reduceFees ? this.reduceFeesByCurrency (fees, true) : fees;
+            const reducedFees = this.reduceFees ? this.reduceFeesByCurrency (fees) : fees;
             const reducedLength = reducedFees.length;
             for (let i = 0; i < reducedLength; i++) {
                 reducedFees[i]['cost'] = this.safeNumber (reducedFees[i], 'cost');
@@ -1311,7 +1305,7 @@ module.exports = class Exchange {
         return trade;
     }
 
-    reduceFeesByCurrency (fees, string = false) {
+    reduceFeesByCurrency (fees) {
         //
         // this function takes a list of fee structures having the following format
         //
@@ -1364,23 +1358,23 @@ module.exports = class Exchange {
             if (feeCurrencyCode !== undefined) {
                 const rate = this.safeString (fee, 'rate');
                 const cost = this.safeValue (fee, 'cost');
+                if (Precise.stringEq (cost, '0')) {
+                    // omit zero cost fees
+                    continue;
+                }
                 if (!(feeCurrencyCode in reduced)) {
                     reduced[feeCurrencyCode] = {};
                 }
                 const rateKey = (rate === undefined) ? '' : rate;
                 if (rateKey in reduced[feeCurrencyCode]) {
-                    if (string) {
-                        reduced[feeCurrencyCode][rateKey]['cost'] = Precise.stringAdd (reduced[feeCurrencyCode][rateKey]['cost'], cost);
-                    } else {
-                        reduced[feeCurrencyCode][rateKey]['cost'] = this.sum (reduced[feeCurrencyCode][rateKey]['cost'], cost);
-                    }
+                    reduced[feeCurrencyCode][rateKey]['cost'] = Precise.stringAdd (reduced[feeCurrencyCode][rateKey]['cost'], cost);
                 } else {
                     reduced[feeCurrencyCode][rateKey] = {
                         'currency': feeCurrencyCode,
-                        'cost': string ? cost : this.parseNumber (cost),
+                        'cost': cost,
                     };
                     if (rate !== undefined) {
-                        reduced[feeCurrencyCode][rateKey]['rate'] = string ? rate : this.parseNumber (rate);
+                        reduced[feeCurrencyCode][rateKey]['rate'] = rate;
                     }
                 }
             }
@@ -2508,7 +2502,7 @@ module.exports = class Exchange {
          * @method
          * @param {string} type Order type
          * @param {boolean} exchangeSpecificParam exchange specific postOnly
-         * @param {dict} params exchange specific params
+         * @param {object} params exchange specific params
          * @returns {boolean} true if a post only order, false otherwise
          */
         const timeInForce = this.safeStringUpper (params, 'timeInForce');
@@ -2560,7 +2554,8 @@ module.exports = class Exchange {
 
     async fetchFundingRate (symbol, params = {}) {
         if (this.has['fetchFundingRates']) {
-            const market = await this.market (symbol);
+            await this.loadMarkets ();
+            const market = this.market (symbol);
             if (!market['contract']) {
                 throw new BadSymbol (this.id + ' fetchFundingRate() supports contract markets only');
             }
@@ -2581,11 +2576,11 @@ module.exports = class Exchange {
          * @method
          * @name exchange#fetchMarkOHLCV
          * @description fetches historical mark price candlestick data containing the open, high, low, and close price of a market
-         * @param {str} symbol unified symbol of the market to fetch OHLCV data for
-         * @param {str} timeframe the length of time each candle represents
+         * @param {string} symbol unified symbol of the market to fetch OHLCV data for
+         * @param {string} timeframe the length of time each candle represents
          * @param {int|undefined} since timestamp in ms of the earliest candle to fetch
          * @param {int|undefined} limit the maximum amount of candles to fetch
-         * @param {dict} params extra parameters specific to the exchange api endpoint
+         * @param {object} params extra parameters specific to the exchange api endpoint
          * @returns {[[int|float]]} A list of candles ordered as timestamp, open, high, low, close, undefined
          */
         if (this.has['fetchMarkOHLCV']) {
@@ -2603,11 +2598,11 @@ module.exports = class Exchange {
          * @method
          * @name exchange#fetchIndexOHLCV
          * @description fetches historical index price candlestick data containing the open, high, low, and close price of a market
-         * @param {str} symbol unified symbol of the market to fetch OHLCV data for
-         * @param {str} timeframe the length of time each candle represents
+         * @param {string} symbol unified symbol of the market to fetch OHLCV data for
+         * @param {string} timeframe the length of time each candle represents
          * @param {int|undefined} since timestamp in ms of the earliest candle to fetch
          * @param {int|undefined} limit the maximum amount of candles to fetch
-         * @param {dict} params extra parameters specific to the exchange api endpoint
+         * @param {object} params extra parameters specific to the exchange api endpoint
          * @returns {[[int|float]]} A list of candles ordered as timestamp, open, high, low, close, undefined
          */
         if (this.has['fetchIndexOHLCV']) {
@@ -2625,11 +2620,11 @@ module.exports = class Exchange {
          * @method
          * @name exchange#fetchPremiumIndexOHLCV
          * @description fetches historical premium index price candlestick data containing the open, high, low, and close price of a market
-         * @param {str} symbol unified symbol of the market to fetch OHLCV data for
-         * @param {str} timeframe the length of time each candle represents
+         * @param {string} symbol unified symbol of the market to fetch OHLCV data for
+         * @param {string} timeframe the length of time each candle represents
          * @param {int|undefined} since timestamp in ms of the earliest candle to fetch
          * @param {int|undefined} limit the maximum amount of candles to fetch
-         * @param {dict} params extra parameters specific to the exchange api endpoint
+         * @param {object} params extra parameters specific to the exchange api endpoint
          * @returns {[[int|float]]} A list of candles ordered as timestamp, open, high, low, close, undefined
          */
         if (this.has['fetchPremiumIndexOHLCV']) {
@@ -2647,7 +2642,7 @@ module.exports = class Exchange {
          * @ignore
          * @method
          * * Must add timeInForce to this.options to use this method
-         * @return {str} returns the exchange specific value for timeInForce
+         * @return {string} returns the exchange specific value for timeInForce
          */
         const timeInForce = this.safeStringUpper (params, 'timeInForce'); // supported values GTC, IOC, PO
         if (timeInForce !== undefined) {

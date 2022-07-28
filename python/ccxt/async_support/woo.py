@@ -826,7 +826,7 @@ class woo(Exchange):
         :param int|None since: the earliest time in ms to fetch orders for
         :param int|None limit: the maximum number of  orde structures to retrieve
         :param dict params: extra parameters specific to the woo api endpoint
-        :returns [dict]: a list of [order structures]{@link https://docs.ccxt.com/en/latest/manual.html#order-structure
+        :returns [dict]: a list of `order structures <https://docs.ccxt.com/en/latest/manual.html#order-structure>`
         """
         await self.load_markets()
         request = {}
@@ -880,8 +880,8 @@ class woo(Exchange):
         # * fetchOrders
         # isFromFetchOrder = ('order_tag' in order); TO_DO
         timestamp = self.safe_timestamp_2(order, 'timestamp', 'created_time')
-        orderId = self.safe_integer(order, 'order_id')
-        clientOrderId = self.safe_timestamp(order, 'client_order_id')  # Somehow, self always returns 0 for limit order
+        orderId = self.safe_string(order, 'order_id')
+        clientOrderId = self.safe_string(order, 'client_order_id')  # Somehow, self always returns 0 for limit order
         marketId = self.safe_string(order, 'symbol')
         market = self.safe_market(marketId, market)
         symbol = market['symbol']
@@ -1315,7 +1315,7 @@ class woo(Exchange):
         currencyDefined = self.get_currency_from_chaincode(networkizedCode, currency)
         code = currencyDefined['code']
         amount = self.safe_number(item, 'amount')
-        side = self.safe_number(item, 'token_side')
+        side = self.safe_string(item, 'token_side')
         direction = 'in' if (side == 'DEPOSIT') else 'out'
         timestamp = self.safe_timestamp(item, 'created_time')
         fee = self.parse_token_and_fee_temp(item, 'fee_token', 'fee_amount')
@@ -1573,11 +1573,12 @@ class woo(Exchange):
     async def repay_margin(self, code, amount, symbol=None, params={}):
         """
         repay borrowed margin and interest
+        see https://docs.woo.org/#repay-interest
         :param str code: unified currency code of the currency to repay
         :param float amount: the amount to repay
         :param str|None symbol: not used by woo.repayMargin()
         :param dict params: extra parameters specific to the woo api endpoint
-        :returns [dict]: a dictionary of a [margin loan structure]
+        :returns dict: a `margin loan structure <https://docs.ccxt.com/en/latest/manual.html#margin-loan-structure>`
         """
         await self.load_markets()
         market = None
@@ -1754,24 +1755,25 @@ class woo(Exchange):
         #
         #
         symbol = self.safe_string(fundingRate, 'symbol')
+        market = self.market(symbol)
         nextFundingTimestamp = self.safe_integer(fundingRate, 'next_funding_time')
         estFundingRateTimestamp = self.safe_integer(fundingRate, 'est_funding_rate_timestamp')
         lastFundingRateTimestamp = self.safe_integer(fundingRate, 'last_funding_rate_timestamp')
         return {
             'info': fundingRate,
-            'symbol': symbol,
+            'symbol': market['symbol'],
             'markPrice': None,
             'indexPrice': None,
             'interestRate': self.parse_number('0'),
             'estimatedSettlePrice': None,
-            'timestamp': None,
-            'datetime': None,
+            'timestamp': estFundingRateTimestamp,
+            'datetime': self.iso8601(estFundingRateTimestamp),
             'fundingRate': self.safe_number(fundingRate, 'est_funding_rate'),
-            'fundingTimestamp': estFundingRateTimestamp,
-            'fundingDatetime': self.iso8601(estFundingRateTimestamp),
+            'fundingTimestamp': nextFundingTimestamp,
+            'fundingDatetime': self.iso8601(nextFundingTimestamp),
             'nextFundingRate': None,
-            'nextFundingTimestamp': nextFundingTimestamp,
-            'nextFundingDatetime': self.iso8601(nextFundingTimestamp),
+            'nextFundingTimestamp': None,
+            'nextFundingDatetime': None,
             'previousFundingRate': self.safe_number(fundingRate, 'last_funding_rate'),
             'previousFundingTimestamp': lastFundingRateTimestamp,
             'previousFundingDatetime': self.iso8601(lastFundingRateTimestamp),
@@ -1819,6 +1821,7 @@ class woo(Exchange):
         #
         rows = self.safe_value(response, 'rows', {})
         result = self.parse_funding_rates(rows)
+        symbols = self.market_symbols(symbols)
         return self.filter_by_array(result, 'symbol', symbols)
 
     async def fetch_funding_rate_history(self, symbol=None, since=None, limit=None, params={}):
