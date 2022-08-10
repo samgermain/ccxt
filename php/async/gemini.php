@@ -1089,13 +1089,13 @@ class gemini extends Exchange {
          * @return {array} an {@link https://docs.ccxt.com/en/latest/manual.html#order-structure order structure}
          */
         yield $this->load_markets();
-        if ($type === 'market') {
+        if ($type !== 'limit') {
             throw new ExchangeError($this->id . ' createOrder() allows limit orders only');
         }
         $clientOrderId = $this->safe_string_2($params, 'clientOrderId', 'client_order_id');
         $params = $this->omit($params, array( 'clientOrderId', 'client_order_id' ));
         if ($clientOrderId === null) {
-            $clientOrderId = $this->nonce();
+            $clientOrderId = $this->milliseconds();
         }
         $market = $this->market($symbol);
         $amountString = $this->amount_to_precision($symbol, $amount);
@@ -1288,7 +1288,7 @@ class gemini extends Exchange {
     }
 
     public function nonce() {
-        return $this->milliseconds();
+        return $this->seconds();
     }
 
     public function fetch_transactions($code = null, $since = null, $limit = null, $params = array ()) {
