@@ -387,17 +387,6 @@ module.exports = class Exchange {
         return result
     }
 
-    checkAddress (address) {
-        if (address === undefined) {
-            throw new InvalidAddress (this.id + ' address is undefined')
-        }
-        // check the address is not the same letter like 'aaaaa' nor too short nor has a space
-        if ((this.unique (address).length === 1) || address.length < this.minFundingAddressLength || address.includes (' ')) {
-            throw new InvalidAddress (this.id + ' address is invalid or has less than ' + this.minFundingAddressLength.toString () + ' characters: "' + this.json (address) + '"')
-        }
-        return address
-    }
-
     initRestRateLimiter () {
         if (this.rateLimit === undefined) {
             throw new Error (this.id + '.rateLimit property is not configured');
@@ -796,6 +785,26 @@ module.exports = class Exchange {
 
     // ------------------------------------------------------------------------
     // METHODS BELOW THIS LINE ARE TRANSPILED FROM JAVASCRIPT TO PYTHON AND PHP
+
+    checkAddress (address) {
+        /**
+         * @ignore
+         * @method
+         * @desc Checks a currency deposit address for validity
+         * @param {str} address currency deposit address
+         * @returns {bool} true if address is valid
+         */
+        if (address === undefined) {
+            throw new InvalidAddress (this.id + ' address is undefined');
+        }
+        // check the address is not the same letter like 'aaaaa' nor too short nor has a space
+        const addressLength = address.length;
+        const splitAddressLength = address.split (' ').length;
+        if ((this.unique (address).length === 1) || addressLength < this.minFundingAddressLength || splitAddressLength > 1) {
+            throw new InvalidAddress (this.id + ' address is invalid or has less than ' + this.minFundingAddressLength.toString () + ' characters: "' + this.json (address) + '"');
+        }
+        return address;
+    }
 
     safeLedgerEntry (entry, currency = undefined) {
         currency = this.safeCurrency (undefined, currency);
