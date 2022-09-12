@@ -1192,7 +1192,10 @@ module.exports = class coinbasepro extends Exchange {
             let cost = this.safeNumber2 (params, 'cost', 'funds');
             if (cost === undefined) {
                 if (price !== undefined) {
-                    cost = amount * price;
+                    const amountString = this.numberToString (amount);
+                    const priceString = this.numberToString (price);
+                    const quoteAmount = Precise.stringMul (amountString, priceString);
+                    cost = this.parseNumber (quoteAmount);
                 }
             } else {
                 params = this.omit (params, [ 'cost', 'funds' ]);
