@@ -1407,14 +1407,6 @@ class Exchange(object):
                 return error
         return result
 
-    def check_address(self, address):
-        """Checks an address is not the same character repeated or an empty sequence"""
-        if address is None:
-            raise InvalidAddress(self.id + ' address is None')
-        if all(letter == address[0] for letter in address) or len(address) < self.minFundingAddressLength or ' ' in address:
-            raise InvalidAddress(self.id + ' address is invalid or has less than ' + str(self.minFundingAddressLength) + ' characters: "' + str(address) + '"')
-        return address
-
     def precision_from_string(self, string):
         parts = re.sub(r'0+$', '', string).split('.')
         return len(parts[1]) if len(parts) > 1 else 0

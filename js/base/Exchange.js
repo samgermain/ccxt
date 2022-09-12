@@ -799,7 +799,8 @@ module.exports = class Exchange {
         }
         // check the address is not the same letter like 'aaaaa' nor too short nor has a space
         const addressLength = address.length;
-        const splitAddressLength = address.split (' ').length;
+        const splitAddress = address.split (' ');
+        const splitAddressLength = splitAddress.length;
         if ((this.unique (address).length === 1) || addressLength < this.minFundingAddressLength || splitAddressLength > 1) {
             throw new InvalidAddress (this.id + ' address is invalid or has less than ' + this.minFundingAddressLength.toString () + ' characters: "' + this.json (address) + '"');
         }
