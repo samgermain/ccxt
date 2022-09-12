@@ -5,6 +5,7 @@
 const Exchange = require ('./base/Exchange');
 const { ExchangeError, ArgumentsRequired, InsufficientFunds, InvalidOrder, OrderNotFound, AuthenticationError, BadSymbol } = require ('./base/errors');
 const { TICK_SIZE } = require ('./base/functions/number');
+const Precise = require ('./base/Precise');
 
 //  ---------------------------------------------------------------------------
 
@@ -690,7 +691,10 @@ module.exports = class indodax extends Exchange {
         };
         const currency = market['baseId'];
         if (side === 'buy') {
-            request[market['quoteId']] = amount * price;
+            const amountString = this.numberToString (amount);
+            const priceString = this.numberToString (price);
+            const quoteAmount = Precise.stringMul (amountString, priceString);
+            request[market['quoteId']] = this.parseNumber (quoteAmount);
         } else {
             request[market['baseId']] = amount;
         }
