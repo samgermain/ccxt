@@ -876,6 +876,25 @@ module.exports = class bitflyer extends Exchange {
         return this.parseTransactions (response, currency, since, limit);
     }
 
+    async fetchDepositAddresses (codes = undefined, params = {}) {
+        /**
+         * @method
+         * @name hollaex#fetchDepositAddresses
+         * @description fetch deposit addresses for multiple currencies and chain types
+         * @param {[string]|undefined} codes list of unified currency codes, default is undefined
+         * @param {object} params extra parameters specific to the hollaex api endpoint
+         * @returns {object} a list of [address structures]{@link https://docs.ccxt.com/en/latest/manual.html#address-structure}
+         */
+        await this.loadMarkets ();
+        const network = this.safeString (params, 'network');
+        params = this.omit (params, 'network');
+        const response = await this.privateGetGetaddresses (params);
+        return response;
+        // const wallet = this.safeValue (response, 'wallet', []);
+        // const addresses = (network === undefined) ? wallet : this.filterBy (wallet, 'network', network);
+        // return this.parseDepositAddresses (addresses, codes);
+    }
+
     parseDepositStatus (status) {
         const statuses = {
             'PENDING': 'pending',
