@@ -1231,6 +1231,7 @@ module.exports = class bybit extends Exchange {
     }
 
     parseTicker (ticker, market = undefined) {
+        //
         // spot
         //
         //    {
@@ -1247,6 +1248,7 @@ module.exports = class bybit extends Exchange {
         //    }
         //
         // linear usdt/ inverse swap and future
+        //
         //     {
         //         "symbol": "BTCUSDT",
         //         "bid_price": "39458",
@@ -1277,6 +1279,7 @@ module.exports = class bybit extends Exchange {
         //     }
         //
         // usdc option/ swap
+        //
         //     {
         //          "symbol": "BTC-30SEP22-400000-C",
         //          "bid": "0",
@@ -1406,7 +1409,9 @@ module.exports = class bybit extends Exchange {
         //         ],
         //         time_now: '1583948195.818255'
         //     }
+        //
         //  usdc ticker
+        //
         //     {
         //         "retCode": 0,
         //           "retMsg": "SUCCESS",
@@ -2788,27 +2793,29 @@ module.exports = class bybit extends Exchange {
             request['agentSource'] = brokerId;
         }
         const response = await this.privatePostSpotV1Order (this.extend (request, params));
+        //
         //    {
-        //        "ret_code":0,
-        //        "ret_msg":"",
-        //        "ext_code":null,
-        //        "ext_info":null,
-        //        "result":{
-        //           "accountId":"24478790",
-        //           "symbol":"ETHUSDT",
-        //           "symbolName":"ETHUSDT",
-        //           "orderLinkId":"1652266305358517",
-        //           "orderId":"1153687819821127168",
-        //           "transactTime":"1652266305365",
-        //           "price":"80",
-        //           "origQty":"0.05",
-        //           "executedQty":"0",
-        //           "status":"NEW",
-        //           "timeInForce":"GTC",
-        //           "type":"LIMIT",
-        //           "side":"BUY"
+        //        "ret_code": 0,
+        //        "ret_msg": "",
+        //        "ext_code": null,
+        //        "ext_info": null,
+        //        "result": {
+        //           "accountId": "24478790",
+        //           "symbol": "ETHUSDT",
+        //           "symbolName": "ETHUSDT",
+        //           "orderLinkId": "1652266305358517",
+        //           "orderId": "1153687819821127168",
+        //           "transactTime": "1652266305365",
+        //           "price": "80",
+        //           "origQty": "0.05",
+        //           "executedQty": "0",
+        //           "status": "NEW",
+        //           "timeInForce": "GTC",
+        //           "type": "LIMIT",
+        //           "side": "BUY"
         //        }
         //    }
+        //
         const order = this.safeValue (response, 'result', {});
         return this.parseOrder (order);
     }
