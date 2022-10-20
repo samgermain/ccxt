@@ -903,7 +903,7 @@ class bitfinex2(Exchange):
             'timestamp': timestamp,
             'datetime': self.iso8601(timestamp),
             'status': self.parse_transfer_status(status),
-            'amount': self.safe_number(transfer, 7),
+            'amount': self.safe_number(info, 7),
             'currency': self.safe_currency_code(currencyId, currency),
             'fromAccount': fromAccount,
             'toAccount': toAccount,
@@ -2355,9 +2355,9 @@ class bitfinex2(Exchange):
             errorCode = self.number_to_string(response[1])
             errorText = response[2]
             feedback = self.id + ' ' + errorText
+            self.throw_broadly_matched_exception(self.exceptions['broad'], errorText, feedback)
             self.throw_exactly_matched_exception(self.exceptions['exact'], errorCode, feedback)
             self.throw_exactly_matched_exception(self.exceptions['exact'], errorText, feedback)
-            self.throw_broadly_matched_exception(self.exceptions['broad'], errorText, feedback)
             raise ExchangeError(self.id + ' ' + errorText + '(#' + errorCode + ')')
         return response
 
