@@ -120,7 +120,7 @@ module.exports = class bybit extends Exchange {
                     'https://github.com/bybit-exchange',
                 ],
                 'fees': 'https://help.bybit.com/hc/en-us/articles/360039261154',
-                'referral': 'https://partner.bybit.com/b/ccxt',
+                'referral': 'https://www.bybit.com/register?affiliate_id=35953',
             },
             'api': {
                 'public': {
@@ -180,6 +180,7 @@ module.exports = class bybit extends Exchange {
                         'option/usdc/openapi/public/v1/delivery-price': 1,
                         'option/usdc/openapi/public/v1/query-trade-latest': 1,
                         'option/usdc/openapi/public/v1/query-historical-volatility': 1,
+                        'option/usdc/openapi/public/v1/all-tickers': 1,
                         // perpetual swap USDC
                         'perpetual/usdc/openapi/public/v1/order-book': 1,
                         'perpetual/usdc/openapi/public/v1/symbols': 1,
@@ -580,12 +581,16 @@ module.exports = class bybit extends Exchange {
                     'future': 'CONTRACT',
                     'swap': 'CONTRACT',
                     'option': 'OPTION',
+                    'investment': 'INVESTMENT',
+                    'unified': 'UNIFIED',
                 },
                 'accountsById': {
                     'SPOT': 'spot',
                     'MARGIN': 'spot',
                     'CONTRACT': 'contract',
                     'OPTION': 'option',
+                    'INVESTMENT': 'investment',
+                    'UNIFIED': 'unified',
                 },
             },
             'fees': {
@@ -2181,7 +2186,7 @@ module.exports = class bybit extends Exchange {
         const result = this.safeValue (response, 'result', []);
         let timestamp = this.safeTimestamp (response, 'time_now');
         if (timestamp === undefined) {
-            timestamp = this.safeInteger (response, 'time');
+            timestamp = this.safeInteger (result, 'time');
         }
         const bidsKey = market['spot'] ? 'bids' : 'Buy';
         const asksKey = market['spot'] ? 'asks' : 'Sell';
@@ -2309,6 +2314,7 @@ module.exports = class bybit extends Exchange {
          * @param {object} params extra parameters specific to the bybit api endpoint
          * @returns {object} a [balance structure]{@link https://docs.ccxt.com/en/latest/manual.html?#balance-structure}
          */
+        await this.loadMarkets ();
         const request = {};
         let type = undefined;
         [ type, params ] = this.handleMarketTypeAndParams ('fetchBalance', undefined, params);
@@ -2334,7 +2340,6 @@ module.exports = class bybit extends Exchange {
                 method = 'privatePostOptionUsdcOpenapiPrivateV1QueryWalletBalance';
             }
         }
-        await this.loadMarkets ();
         const response = await this[method] (this.extend (request, params));
         //
         //     {
@@ -2605,7 +2610,7 @@ module.exports = class bybit extends Exchange {
         const type = this.safeStringLowerN (order, [ 'order_type', 'type', 'orderType' ]);
         const price = this.safeString2 (order, 'price', 'orderPrice');
         const average = this.safeString2 (order, 'average_price', 'avgPrice');
-        const amount = this.safeStringN (order, [ 'qty', 'origQty', 'orderQty' ]);
+        let amount = this.safeStringN (order, [ 'qty', 'origQty', 'orderQty' ]);
         const cost = this.safeString2 (order, 'cum_exec_value', 'cumExecValue');
         const filled = this.safeStringN (order, [ 'cum_exec_qty', 'executedQty', 'cumExecQty' ]);
         const remaining = this.safeString2 (order, 'leaves_qty', 'leavesQty');
@@ -2640,6 +2645,9 @@ module.exports = class bybit extends Exchange {
         const timeInForce = this.parseTimeInForce (this.safeString2 (order, 'time_in_force', 'timeInForce'));
         const stopPrice = this.safeStringN (order, [ 'trigger_price', 'stop_px', 'stopPrice', 'triggerPrice' ]);
         const postOnly = (timeInForce === 'PO');
+        if ((market['spot'] && type === 'market') && (side === 'buy')) {
+            amount = filled;
+        }
         return this.safeOrder ({
             'info': order,
             'id': id,
@@ -2760,7 +2768,10 @@ module.exports = class bybit extends Exchange {
                 if (price === undefined && cost === undefined) {
                     throw new InvalidOrder (this.id + " createOrder() requires the price argument with market buy orders to calculate total order cost (amount to spend), where cost = amount * price. Supply a price argument to createOrder() call if you want the cost to be calculated for you from price and amount, or, alternatively, add .options['createMarketBuyOrderRequiresPrice'] = false to supply the cost in the amount argument (the exchange-specific behaviour)");
                 } else {
-                    amount = (cost !== undefined) ? cost : amount * price;
+                    const amountString = this.numberToString (amount);
+                    const priceString = this.numberToString (price);
+                    const quoteAmount = Precise.stringMul (amountString, priceString);
+                    amount = (cost !== undefined) ? cost : this.parseNumber (quoteAmount);
                 }
             }
         }
@@ -2993,8 +3004,6 @@ module.exports = class bybit extends Exchange {
         const isStopLossOrder = stopLossPrice !== undefined;
         const takeProfitPrice = this.safeValue (params, 'takeProfitPrice');
         const isTakeProfitOrder = takeProfitPrice !== undefined;
-        const isSlTpOrder = isStopLossOrder || isTakeProfitOrder;
-        const isStopOrder = isSlTpOrder || isTriggerOrder;
         if (isTriggerOrder) {
             request['trigger_by'] = 'LastPrice';
             const preciseStopPrice = this.priceToPrecision (symbol, triggerPrice);
@@ -3020,12 +3029,12 @@ module.exports = class bybit extends Exchange {
         params = this.omit (params, [ 'stop_px', 'stopPrice', 'base_price', 'basePrice', 'timeInForce', 'triggerPrice', 'stopLossPrice', 'takeProfitPrice', 'postOnly', 'reduceOnly', 'clientOrderId' ]);
         let method = undefined;
         if (market['future']) {
-            method = isStopOrder ? 'privatePostFuturesPrivateStopOrderCreate' : 'privatePostFuturesPrivateOrderCreate';
+            method = isTriggerOrder ? 'privatePostFuturesPrivateStopOrderCreate' : 'privatePostFuturesPrivateOrderCreate';
         } else if (market['linear']) {
-            method = isStopOrder ? 'privatePostPrivateLinearStopOrderCreate' : 'privatePostPrivateLinearOrderCreate';
+            method = isTriggerOrder ? 'privatePostPrivateLinearStopOrderCreate' : 'privatePostPrivateLinearOrderCreate';
         } else {
             // inverse swaps
-            method = isStopOrder ? 'privatePostV2PrivateStopOrderCreate' : 'privatePostV2PrivateOrderCreate';
+            method = isTriggerOrder ? 'privatePostV2PrivateStopOrderCreate' : 'privatePostV2PrivateOrderCreate';
         }
         const response = await this[method] (this.extend (request, params));
         //
@@ -4324,13 +4333,13 @@ module.exports = class bybit extends Exchange {
         //
         const currencyId = this.safeString (item, 'coin');
         const code = this.safeCurrencyCode (currencyId, currency);
-        const amount = this.safeNumber (item, 'amount');
-        const after = this.safeNumber (item, 'wallet_balance');
-        const direction = (amount < 0) ? 'out' : 'in';
+        const amount = this.safeString (item, 'amount');
+        const after = this.safeString (item, 'wallet_balance');
+        const direction = Precise.stringLt (amount, '0') ? 'out' : 'in';
         let before = undefined;
         if (after !== undefined && amount !== undefined) {
-            const difference = (direction === 'out') ? amount : -amount;
-            before = this.sum (after, difference);
+            const difference = (direction === 'out') ? amount : Precise.stringNeg (amount);
+            before = Precise.stringAdd (after, difference);
         }
         const timestamp = this.parse8601 (this.safeString (item, 'exec_time'));
         const type = this.parseLedgerEntryType (this.safeString (item, 'type'));
@@ -4343,9 +4352,9 @@ module.exports = class bybit extends Exchange {
             'referenceAccount': undefined,
             'referenceId': referenceId,
             'status': undefined,
-            'amount': amount,
-            'before': before,
-            'after': after,
+            'amount': this.parseNumber (amount),
+            'before': this.parseNumber (before),
+            'after': this.parseNumber (after),
             'fee': undefined,
             'direction': direction,
             'timestamp': timestamp,
@@ -4915,9 +4924,9 @@ module.exports = class bybit extends Exchange {
          * @name bybit#fetchBorrowRate
          * @description fetch the rate of interest to borrow a currency for margin trading
          * @see https://bybit-exchange.github.io/docs/spot/#t-queryinterestquota
-         * @param {str} code unified currency code
-         * @param {dict} params extra parameters specific to the bybit api endpoint
-         * @returns {dict} a [borrow rate structure]{@link https://docs.ccxt.com/en/latest/manual.html#borrow-rate-structure}
+         * @param {string} code unified currency code
+         * @param {object} params extra parameters specific to the bybit api endpoint
+         * @returns {object} a [borrow rate structure]{@link https://docs.ccxt.com/en/latest/manual.html#borrow-rate-structure}
          */
         await this.loadMarkets ();
         const currency = this.currency (code);

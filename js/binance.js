@@ -158,7 +158,7 @@ module.exports = class binance extends Exchange {
                 },
                 'www': 'https://www.binance.com',
                 'referral': {
-                    'url': 'https://www.binance.com/en/register?ref=D7YA7CLY',
+                    'url': 'https://accounts.binance.com/en/register?ref=D7YA7CLY',
                     'discount': 0.1,
                 },
                 'doc': [
@@ -335,6 +335,7 @@ module.exports = class binance extends Exchange {
                         'pay/transactions': 20.001, // Weight(UID): 3000 => cost = 0.006667 * 3000 = 20.001
                         'giftcard/verify': 0.1,
                         'giftcard/cryptography/rsa-public-key': 0.1,
+                        'giftcard/buyCode/token-limit': 0.1,
                         'algo/futures/openOrders': 0.1,
                         'algo/futures/historicalOrders': 0.1,
                         'algo/futures/subOrders': 0.1,
@@ -421,6 +422,7 @@ module.exports = class binance extends Exchange {
                         //
                         'giftcard/createCode': 0.1,
                         'giftcard/redeemCode': 0.1,
+                        'giftcard/buyCode': 0.1,
                         'algo/futures/newOrderVp': 20.001,
                         'algo/futures/newOrderTwap': 20.001,
                         // staking

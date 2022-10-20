@@ -134,7 +134,7 @@ class bybit(Exchange):
                     'https://github.com/bybit-exchange',
                 ],
                 'fees': 'https://help.bybit.com/hc/en-us/articles/360039261154',
-                'referral': 'https://partner.bybit.com/b/ccxt',
+                'referral': 'https://www.bybit.com/register?affiliate_id=35953',
             },
             'api': {
                 'public': {
@@ -194,6 +194,7 @@ class bybit(Exchange):
                         'option/usdc/openapi/public/v1/delivery-price': 1,
                         'option/usdc/openapi/public/v1/query-trade-latest': 1,
                         'option/usdc/openapi/public/v1/query-historical-volatility': 1,
+                        'option/usdc/openapi/public/v1/all-tickers': 1,
                         # perpetual swap USDC
                         'perpetual/usdc/openapi/public/v1/order-book': 1,
                         'perpetual/usdc/openapi/public/v1/symbols': 1,
@@ -594,12 +595,16 @@ class bybit(Exchange):
                     'future': 'CONTRACT',
                     'swap': 'CONTRACT',
                     'option': 'OPTION',
+                    'investment': 'INVESTMENT',
+                    'unified': 'UNIFIED',
                 },
                 'accountsById': {
                     'SPOT': 'spot',
                     'MARGIN': 'spot',
                     'CONTRACT': 'contract',
                     'OPTION': 'option',
+                    'INVESTMENT': 'investment',
+                    'UNIFIED': 'unified',
                 },
             },
             'fees': {
@@ -2103,7 +2108,7 @@ class bybit(Exchange):
         result = self.safe_value(response, 'result', [])
         timestamp = self.safe_timestamp(response, 'time_now')
         if timestamp is None:
-            timestamp = self.safe_integer(response, 'time')
+            timestamp = self.safe_integer(result, 'time')
         bidsKey = 'bids' if market['spot'] else 'Buy'
         asksKey = 'asks' if market['spot'] else 'Sell'
         priceKey = 0 if market['spot'] else 'price'
@@ -2222,6 +2227,7 @@ class bybit(Exchange):
         :param dict params: extra parameters specific to the bybit api endpoint
         :returns dict: a `balance structure <https://docs.ccxt.com/en/latest/manual.html?#balance-structure>`
         """
+        self.load_markets()
         request = {}
         type = None
         type, params = self.handle_market_type_and_params('fetchBalance', None, params)
@@ -2244,7 +2250,6 @@ class bybit(Exchange):
             else:
                 # usdc account
                 method = 'privatePostOptionUsdcOpenapiPrivateV1QueryWalletBalance'
-        self.load_markets()
         response = getattr(self, method)(self.extend(request, params))
         #
         #     {
@@ -2540,6 +2545,8 @@ class bybit(Exchange):
         timeInForce = self.parse_time_in_force(self.safe_string_2(order, 'time_in_force', 'timeInForce'))
         stopPrice = self.safe_string_n(order, ['trigger_price', 'stop_px', 'stopPrice', 'triggerPrice'])
         postOnly = (timeInForce == 'PO')
+        if (market['spot'] and type == 'market') and (side == 'buy'):
+            amount = filled
         return self.safe_order({
             'info': order,
             'id': id,
@@ -2644,7 +2651,10 @@ class bybit(Exchange):
                 if price is None and cost is None:
                     raise InvalidOrder(self.id + " createOrder() requires the price argument with market buy orders to calculate total order cost(amount to spend), where cost = amount * price. Supply a price argument to createOrder() call if you want the cost to be calculated for you from price and amount, or, alternatively, add .options['createMarketBuyOrderRequiresPrice'] = False to supply the cost in the amount argument(the exchange-specific behaviour)")
                 else:
-                    amount = cost if (cost is not None) else amount * price
+                    amountString = self.number_to_string(amount)
+                    priceString = self.number_to_string(price)
+                    quoteAmount = Precise.string_mul(amountString, priceString)
+                    amount = cost if (cost is not None) else self.parse_number(quoteAmount)
         upperCaseType = type.upper()
         request = {
             'symbol': market['id'],
@@ -2669,27 +2679,29 @@ class bybit(Exchange):
         if brokerId is not None:
             request['agentSource'] = brokerId
         response = self.privatePostSpotV1Order(self.extend(request, params))
+        #
         #    {
-        #        "ret_code":0,
-        #        "ret_msg":"",
-        #        "ext_code":null,
-        #        "ext_info":null,
-        #        "result":{
-        #           "accountId":"24478790",
-        #           "symbol":"ETHUSDT",
-        #           "symbolName":"ETHUSDT",
-        #           "orderLinkId":"1652266305358517",
-        #           "orderId":"1153687819821127168",
-        #           "transactTime":"1652266305365",
-        #           "price":"80",
-        #           "origQty":"0.05",
-        #           "executedQty":"0",
-        #           "status":"NEW",
-        #           "timeInForce":"GTC",
-        #           "type":"LIMIT",
-        #           "side":"BUY"
+        #        "ret_code": 0,
+        #        "ret_msg": "",
+        #        "ext_code": null,
+        #        "ext_info": null,
+        #        "result": {
+        #           "accountId": "24478790",
+        #           "symbol": "ETHUSDT",
+        #           "symbolName": "ETHUSDT",
+        #           "orderLinkId": "1652266305358517",
+        #           "orderId": "1153687819821127168",
+        #           "transactTime": "1652266305365",
+        #           "price": "80",
+        #           "origQty": "0.05",
+        #           "executedQty": "0",
+        #           "status": "NEW",
+        #           "timeInForce": "GTC",
+        #           "type": "LIMIT",
+        #           "side": "BUY"
         #        }
         #    }
+        #
         order = self.safe_value(response, 'result', {})
         return self.parse_order(order)
 
@@ -2852,8 +2864,6 @@ class bybit(Exchange):
         isStopLossOrder = stopLossPrice is not None
         takeProfitPrice = self.safe_value(params, 'takeProfitPrice')
         isTakeProfitOrder = takeProfitPrice is not None
-        isSlTpOrder = isStopLossOrder or isTakeProfitOrder
-        isStopOrder = isSlTpOrder or isTriggerOrder
         if isTriggerOrder:
             request['trigger_by'] = 'LastPrice'
             preciseStopPrice = self.price_to_precision(symbol, triggerPrice)
@@ -2874,12 +2884,12 @@ class bybit(Exchange):
         params = self.omit(params, ['stop_px', 'stopPrice', 'base_price', 'basePrice', 'timeInForce', 'triggerPrice', 'stopLossPrice', 'takeProfitPrice', 'postOnly', 'reduceOnly', 'clientOrderId'])
         method = None
         if market['future']:
-            method = 'privatePostFuturesPrivateStopOrderCreate' if isStopOrder else 'privatePostFuturesPrivateOrderCreate'
+            method = 'privatePostFuturesPrivateStopOrderCreate' if isTriggerOrder else 'privatePostFuturesPrivateOrderCreate'
         elif market['linear']:
-            method = 'privatePostPrivateLinearStopOrderCreate' if isStopOrder else 'privatePostPrivateLinearOrderCreate'
+            method = 'privatePostPrivateLinearStopOrderCreate' if isTriggerOrder else 'privatePostPrivateLinearOrderCreate'
         else:
             # inverse swaps
-            method = 'privatePostV2PrivateStopOrderCreate' if isStopOrder else 'privatePostV2PrivateOrderCreate'
+            method = 'privatePostV2PrivateStopOrderCreate' if isTriggerOrder else 'privatePostV2PrivateOrderCreate'
         response = getattr(self, method)(self.extend(request, params))
         #
         #    {
@@ -4075,13 +4085,13 @@ class bybit(Exchange):
         #
         currencyId = self.safe_string(item, 'coin')
         code = self.safe_currency_code(currencyId, currency)
-        amount = self.safe_number(item, 'amount')
-        after = self.safe_number(item, 'wallet_balance')
-        direction = 'out' if (amount < 0) else 'in'
+        amount = self.safe_string(item, 'amount')
+        after = self.safe_string(item, 'wallet_balance')
+        direction = 'out' if Precise.string_lt(amount, '0') else 'in'
         before = None
         if after is not None and amount is not None:
-            difference = amount if (direction == 'out') else -amount
-            before = self.sum(after, difference)
+            difference = amount if (direction == 'out') else Precise.string_neg(amount)
+            before = Precise.string_add(after, difference)
         timestamp = self.parse8601(self.safe_string(item, 'exec_time'))
         type = self.parse_ledger_entry_type(self.safe_string(item, 'type'))
         id = self.safe_string(item, 'id')
@@ -4093,9 +4103,9 @@ class bybit(Exchange):
             'referenceAccount': None,
             'referenceId': referenceId,
             'status': None,
-            'amount': amount,
-            'before': before,
-            'after': after,
+            'amount': self.parse_number(amount),
+            'before': self.parse_number(before),
+            'after': self.parse_number(after),
             'fee': None,
             'direction': direction,
             'timestamp': timestamp,
