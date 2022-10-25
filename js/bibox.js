@@ -771,9 +771,7 @@ module.exports = class bibox extends Exchange {
         if (limit !== undefined) {
             request['limit'] = limit;
         }
-        if (since !== undefined && until !== undefined) {
-            throw new BadRequest (this.id + ' fetchOHLCV cannot take both a since parameter and params["until"]');
-        } else if (since !== undefined) {
+        if (since !== undefined) {
             request['after'] = since;
         } else if (until !== undefined) {
             request['before'] = until;
