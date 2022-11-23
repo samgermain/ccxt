@@ -582,9 +582,7 @@ module.exports = class whitebit extends Exchange {
         //        ...
         //    }
         //
-        const depositWithdrawFees = {
-            'info': response,
-        };
+        const depositWithdrawFees = {};
         codes = this.marketCodes (codes);
         const currencyIds = Object.keys (response);
         for (let i = 0; i < currencyIds.length; i++) {
@@ -595,8 +593,10 @@ module.exports = class whitebit extends Exchange {
             if ((codes === undefined) || (this.inArray (code, codes))) {
                 const depositWithdrawFee = this.safeValue (depositWithdrawFees, code);
                 if (depositWithdrawFee === undefined) {
-                    depositWithdrawFees[code] = this.depositWithdrawFee ();
+                    depositWithdrawFees[code] = this.depositWithdrawFee ({});
+                    depositWithdrawFees[code]['info'][entry] = depositWithdrawFee;
                 }
+                depositWithdrawFees[code]['info'][entry] = depositWithdrawFee;
                 let network = this.safeString (splitEntry, 1);
                 const feeInfo = response[entry];
                 const withdraw = this.safeValue (feeInfo, 'withdraw');

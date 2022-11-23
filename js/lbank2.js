@@ -2113,7 +2113,7 @@ module.exports = class lbank2 extends Exchange {
         //    }
         //
         const canWithdraw = this.safeString (fee, 'canWithDraw');
-        const result = this.depositWithdrawFee ();
+        const result = this.depositWithdrawFee (fee);
         if (canWithdraw !== false) {
             const networkList = this.safeValue (fee, 'networkList', []);
             for (let j = 0; j < networkList.length; j++) {

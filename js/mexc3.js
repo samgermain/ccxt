@@ -4555,7 +4555,7 @@ module.exports = class mexc3 extends Exchange {
         //    }
         //
         const networkList = this.safeValue (fee, 'networkList', []);
-        const result = this.depositWithdrawFee ();
+        const result = this.depositWithdrawFee (fee);
         for (let j = 0; j < networkList.length; j++) {
             const networkEntry = networkList[j];
             const networkId = this.safeString (networkEntry, 'network');
