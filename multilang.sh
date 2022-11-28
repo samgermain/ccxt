@@ -77,11 +77,15 @@ function writeOutput {
   local path="$2"
   local args="$3"
   if result=$($interpretter "$path" $args); then
+    echo $result >&2
     if ${verbose}; then
       echo "$interpretter completed" >&2
     fi
     removeSpecial <<< "$result" | removeAndColorLines $color
   else
+    echo $? >&2
+    echo $interpretter "$path" $args >&2
+    echo $result >&2
     exit $?
   fi
 }
@@ -149,7 +153,7 @@ checkExitCode
 pythonLength=$(wc -l <<< "$pythonOutput")
 ((color++))
 
-phpOutput=$(writeOutput php $phpCli "$phpArgs")
+pythonOutput=$(writeOutput php $phpCli "$phpArgs")
 checkExitCode
 
 if ${stacked}; then
