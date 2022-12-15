@@ -1,7 +1,11 @@
 # -*- coding: utf-8 -*-
 
 import asyncio
-import ccxtpro
+import ccxt.pro
+
+
+print('CCXT Version:', ccxt.__version__)
+
 
 async def loop(exchange, symbol, timeframe, complete_candles_only = False):
     duration_in_seconds = exchange.parse_timeframe(timeframe)
@@ -15,30 +19,29 @@ async def loop(exchange, symbol, timeframe, complete_candles_only = False):
                 if complete_candles_only:
                     ohlcvc = [candle for candle in ohlcvc if int( candle[0] / duration_in_ms ) < current_minute]
                 if (len(ohlcvc) > 0):
+                    print ('-----------------------------------------------------------')
                     print("Symbol:", symbol, "timeframe:", timeframe)
-                    print ('-----------------------------------------------------------')
                     print (ohlcvc)
-                    print ('-----------------------------------------------------------')
 
         except Exception as e:
             print(str(e))
             # raise e  # uncomment to break all loops in case of an error in any one of them
             # break  # you can also break just this one loop if it fails
 
+
 async def main():
     # select the exchange
-    exchange = ccxtpro.ftx()
+    exchange = ccxt.pro.ftx()
     if exchange.has['watchTrades']:
         markets = await exchange.load_markets()
         # Change this value accordingly
         timeframe = '1m'
         limit = 5
-        marketList = [*markets]
-        selected_symbols = marketList[:limit]
+        selected_symbols = list(markets.values())[:limit]
         # you can also specify the symbols manually
-        # example: selected_symbols = ['BTC/USDT', 'ETH/USDT']
+        # selected_symbols = ['BTC/USDT', 'ETH/USDT']
 
-        # Use this variable to choose if only complete candles 
+        # Use this variable to choose if only complete candles
         # should be considered
         complete_candles_only = True
         await asyncio.gather(*[loop(exchange, symbol, timeframe, complete_candles_only) for symbol in selected_symbols])

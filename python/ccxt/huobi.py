@@ -13,7 +13,6 @@ from ccxt.base.errors import ArgumentsRequired
 from ccxt.base.errors import BadRequest
 from ccxt.base.errors import BadSymbol
 from ccxt.base.errors import InsufficientFunds
-from ccxt.base.errors import InvalidAddress
 from ccxt.base.errors import InvalidOrder
 from ccxt.base.errors import OrderNotFound
 from ccxt.base.errors import NotSupported
@@ -50,6 +49,7 @@ class huobi(Exchange):
                 'future': True,
                 'option': None,
                 'addMargin': None,
+                'borrowMargin': True,
                 'cancelAllOrders': True,
                 'cancelOrder': True,
                 'cancelOrders': True,
@@ -90,10 +90,10 @@ class huobi(Exchange):
                 'fetchMarketLeverageTiers': True,
                 'fetchMarkets': True,
                 'fetchMarkOHLCV': True,
-                'fetchMyBuys': None,
-                'fetchMySells': None,
                 'fetchMyTrades': True,
                 'fetchOHLCV': True,
+                'fetchOpenInterest': True,
+                'fetchOpenInterestHistory': True,
                 'fetchOpenOrder': None,
                 'fetchOpenOrders': True,
                 'fetchOrder': True,
@@ -105,7 +105,8 @@ class huobi(Exchange):
                 'fetchPositions': True,
                 'fetchPositionsRisk': False,
                 'fetchPremiumIndexOHLCV': True,
-                'fetchStatus': None,
+                'fetchSettlementHistory': True,
+                'fetchStatus': True,
                 'fetchTicker': True,
                 'fetchTickers': True,
                 'fetchTime': True,
@@ -117,11 +118,12 @@ class huobi(Exchange):
                 'fetchTransactionFees': None,
                 'fetchTransactions': None,
                 'fetchTransfers': None,
-                'fetchWithdrawAddressesByNetwork': True,
+                'fetchWithdrawAddresses': True,
                 'fetchWithdrawal': None,
                 'fetchWithdrawals': True,
                 'fetchWithdrawalWhitelist': None,
                 'reduceMargin': None,
+                'repayMargin': True,
                 'setLeverage': True,
                 'setMarginMode': False,
                 'setPositionMode': False,
@@ -151,14 +153,25 @@ class huobi(Exchange):
                 'hostnames': {
                     'contract': 'api.hbdm.com',
                     'spot': 'api.huobi.pro',
+                    'status': {
+                        'spot': 'status.huobigroup.com',
+                        'future': {
+                            'inverse': 'status-dm.huobigroup.com',
+                            'linear': 'status-linear-swap.huobigroup.com',  # USDT-Margined Contracts
+                        },
+                        'swap': {
+                            'inverse': 'status-swap.huobigroup.com',
+                            'linear': 'status-linear-swap.huobigroup.com',  # USDT-Margined Contracts
+                        },
+                    },
                     # recommended for AWS
                     # 'contract': 'api.hbdm.vn',
                     # 'spot': 'api-aws.huobi.pro',
                 },
                 'api': {
+                    'status': 'https://{hostname}',
                     'contract': 'https://{hostname}',
                     'spot': 'https://{hostname}',
-                    'market': 'https://{hostname}',
                     'public': 'https://{hostname}',
                     'private': 'https://{hostname}',
                     'v2Public': 'https://{hostname}',
@@ -166,7 +179,7 @@ class huobi(Exchange):
                 },
                 'www': 'https://www.huobi.com',
                 'referral': {
-                    'url': 'https://www.huobi.com/en-us/topic/double-reward/?invite_code=6rmm2223',
+                    'url': 'https://www.huobi.com/en-us/v/register/double-invite/?inviter_id=11343840&invite_code=6rmm2223',
                     'discount': 0.15,
                 },
                 'doc': [
@@ -244,18 +257,6 @@ class huobi(Exchange):
                         'etp/batch-cancel': 50,  # 杠杆ETP批量撤单
                     },
                 },
-                'market': {
-                    'get': {
-                        'history/kline': 1,  # 获取K线数据
-                        'detail/merged': 1,  # 获取聚合行情(Ticker)
-                        'depth': 1,  # 获取 Market Depth 数据
-                        'trade': 1,  # 获取 Trade Detail 数据
-                        'history/trade': 1,  # 批量获取最近的交易记录
-                        'detail': 1,  # 获取 Market Detail 24小时成交量数据
-                        'tickers': 1,
-                        'etp': 1,  # 获取杠杆ETP实时净值
-                    },
-                },
                 'public': {
                     'get': {
                         'common/symbols': 1,  # 查询系统支持的所有交易对
@@ -328,25 +329,65 @@ class huobi(Exchange):
                 # 'https://status-dm.huobigroup.com/api/v2/summary.json': 1,
                 # 'https://status-swap.huobigroup.com/api/v2/summary.json': 1,
                 # 'https://status-linear-swap.huobigroup.com/api/v2/summary.json': 1,
+                'status': {
+                    'public': {
+                        'spot': {
+                            'get': {
+                                'api/v2/summary.json': 1,
+                            },
+                        },
+                        'future': {
+                            'inverse': {
+                                'get': {
+                                    'api/v2/summary.json': 1,
+                                },
+                            },
+                            'linear': {
+                                'get': {
+                                    'api/v2/summary.json': 1,
+                                },
+                            },
+                        },
+                        'swap': {
+                            'inverse': {
+                                'get': {
+                                    'api/v2/summary.json': 1,
+                                },
+                            },
+                            'linear': {
+                                'get': {
+                                    'api/v2/summary.json': 1,
+                                },
+                            },
+                        },
+                    },
+                },
                 'spot': {
                     'public': {
                         'get': {
                             'v2/market-status': 1,
                             'v1/common/symbols': 1,
                             'v1/common/currencys': 1,
+                            'v2/settings/common/currencies': 1,
                             'v2/reference/currencies': 1,
                             'v1/common/timestamp': 1,
                             'v1/common/exchange': 1,  # order limits
+                            'v1/settings/common/chains': 1,
+                            'v1/settings/common/currencys': 1,
+                            'v1/settings/common/symbols': 1,
+                            'v2/settings/common/symbols': 1,
+                            'v1/settings/common/market-symbols': 1,
                             # Market Data
                             'market/history/candles': 1,
                             'market/history/kline': 1,
                             'market/detail/merged': 1,
                             'market/tickers': 1,
+                            'market/detail': 1,
                             'market/depth': 1,
                             'market/trade': 1,
                             'market/history/trade': 1,
                             'market/detail/': 1,
-                            'market/etp': 1,
+                            'market/etp': 1,  # Get real-time equity of leveraged ETP
                             # ETP
                             'v2/etp/reference': 1,
                             'v2/etp/rebalance': 1,
@@ -368,6 +409,7 @@ class huobi(Exchange):
                             'v2/account/withdraw/address': 1,
                             'v2/reference/currencies': 1,
                             'v1/query/deposit-withdraw': 1,
+                            'v1/query/withdraw/client-order-id': 1,
                             # Sub user management
                             'v2/user/api-key': 1,
                             'v2/user/uid': 1,
@@ -382,6 +424,7 @@ class huobi(Exchange):
                             'v1/order/openOrders': 0.4,
                             'v1/order/orders/{order-id}': 0.4,
                             'v1/order/orders/getClientOrder': 0.4,
+                            'v1/order/orders/{order-id}/matchresult': 0.4,
                             'v1/order/orders/{order-id}/matchresults': 0.4,
                             'v1/order/orders': 0.4,
                             'v1/order/history': 1,
@@ -401,6 +444,7 @@ class huobi(Exchange):
                             'v2/account/repayment': 5,
                             # Stable Coin Exchange
                             'v1/stable-coin/quote': 1,
+                            'v1/stable_coin/exchange_rate': 1,
                             # ETP
                             'v2/etp/transactions': 5,
                             'v2/etp/transaction': 5,
@@ -460,6 +504,7 @@ class huobi(Exchange):
                     'public': {
                         'get': {
                             'api/v1/timestamp': 1,
+                            'heartbeat/': 1,  # backslash is not a typo
                             # Future Market Data interface
                             'api/v1/contract_contract_info': 1,
                             'api/v1/contract_index': 1,
@@ -472,6 +517,7 @@ class huobi(Exchange):
                             'index/market/history/mark_price_kline': 1,
                             'market/detail/merged': 1,
                             'market/detail/batch_merged': 1,
+                            'v2/market/detail/batch_merged': 1,
                             'market/trade': 1,
                             'market/history/trade': 1,
                             'api/v1/contract_risk_info': 1,
@@ -487,6 +533,7 @@ class huobi(Exchange):
                             'index/market/history/index': 1,
                             'index/market/history/basis': 1,
                             'api/v1/contract_estimated_settlement_price': 1,
+                            'api/v3/contract_liquidation_orders': 1,
                             # Swap Market Data interface
                             'swap-api/v1/swap_contract_info': 1,
                             'swap-api/v1/swap_index': 1,
@@ -497,6 +544,8 @@ class huobi(Exchange):
                             'swap-ex/market/history/kline': 1,
                             'index/market/history/swap_mark_price_kline': 1,
                             'swap-ex/market/detail/merged': 1,
+                            'v2/swap-ex/market/detail/batch_merged': 1,
+                            'index/market/history/swap_premium_index_kline': 1,
                             'swap-ex/market/detail/batch_merged': 1,
                             'swap-ex/market/trade': 1,
                             'swap-ex/market/history/trade': 1,
@@ -514,7 +563,7 @@ class huobi(Exchange):
                             'swap-api/v1/swap_funding_rate': 1,
                             'swap-api/v1/swap_batch_funding_rate': 1,
                             'swap-api/v1/swap_historical_funding_rate': 1,
-                            'index/market/history/swap_premium_index_kline': 1,
+                            'swap-api/v3/swap_liquidation_orders': 1,
                             'index/market/history/swap_estimated_rate_kline': 1,
                             'index/market/history/swap_basis': 1,
                             # Swap Market Data interface
@@ -528,6 +577,7 @@ class huobi(Exchange):
                             'index/market/history/linear_swap_mark_price_kline': 1,
                             'linear-swap-ex/market/detail/merged': 1,
                             'linear-swap-ex/market/detail/batch_merged': 1,
+                            'v2/linear-swap-ex/market/detail/batch_merged': 1,
                             'linear-swap-ex/market/trade': 1,
                             'linear-swap-ex/market/history/trade': 1,
                             'linear-swap-api/v1/swap_risk_info': 1,
@@ -547,6 +597,7 @@ class huobi(Exchange):
                             'linear-swap-api/v1/swap_funding_rate': 1,
                             'linear-swap-api/v1/swap_batch_funding_rate': 1,
                             'linear-swap-api/v1/swap_historical_funding_rate': 1,
+                            'linear-swap-api/v3/swap_liquidation_orders': 1,
                             'index/market/history/linear_swap_premium_index_kline': 1,
                             'index/market/history/linear_swap_estimated_rate_kline': 1,
                             'index/market/history/linear_swap_basis': 1,
@@ -583,6 +634,8 @@ class huobi(Exchange):
                             'api/v1/contract_master_sub_transfer': 1,
                             'api/v1/contract_master_sub_transfer_record': 1,
                             'api/v1/contract_available_level_rate': 1,
+                            'api/v3/contract_financial_record': 1,
+                            'api/v3/contract_financial_record_exact': 1,
                             # Future Trade Interface
                             'api/v1/contract_order': 1,
                             'v1/contract_batchorder': 1,
@@ -597,6 +650,10 @@ class huobi(Exchange):
                             'api/v1/contract_hisorders_exact': 1,
                             'api/v1/contract_matchresults': 1,
                             'api/v1/contract_matchresults_exact': 1,
+                            'api/v3/contract_hisorders': 1,
+                            'api/v3/contract_hisorders_exact': 1,
+                            'api/v3/contract_matchresults': 1,
+                            'api/v3/contract_matchresults_exact': 1,
                             # Contract Strategy Order Interface
                             'api/v1/contract_trigger_order': 1,
                             'api/v1/contract_trigger_cancel': 1,
@@ -634,6 +691,8 @@ class huobi(Exchange):
                             'swap-api/v1/swap_position_limit': 1,
                             'swap-api/v1/swap_master_sub_transfer': 1,
                             'swap-api/v1/swap_master_sub_transfer_record': 1,
+                            'swap-api/v3/swap_financial_record': 1,
+                            'swap-api/v3/swap_financial_record_exact': 1,
                             # Swap Trade Interface
                             'swap-api/v1/swap_order': 1,
                             'swap-api/v1/swap_batchorder': 1,
@@ -648,6 +707,10 @@ class huobi(Exchange):
                             'swap-api/v1/swap_hisorders_exact': 1,
                             'swap-api/v1/swap_matchresults': 1,
                             'swap-api/v1/swap_matchresults_exact': 1,
+                            'swap-api/v3/swap_matchresults': 1,
+                            'swap-api/v3/swap_matchresults_exact': 1,
+                            'swap-api/v3/swap_hisorders': 1,
+                            'swap-api/v3/swap_hisorders_exact': 1,
                             # Swap Strategy Order Interface
                             'swap-api/v1/swap_trigger_order': 1,
                             'swap-api/v1/swap_trigger_cancel': 1,
@@ -699,6 +762,8 @@ class huobi(Exchange):
                             'linear-swap-api/v1/swap_master_sub_transfer': 1,
                             'linear-swap-api/v1/swap_master_sub_transfer_record': 1,
                             'linear-swap-api/v1/swap_transfer_inner': 1,
+                            'linear-swap-api/v3/swap_financial_record': 1,
+                            'linear-swap-api/v3/swap_financial_record_exact': 1,
                             # Swap Trade Interface
                             'linear-swap-api/v1/swap_order': 1,
                             'linear-swap-api/v1/swap_cross_order': 1,
@@ -728,6 +793,14 @@ class huobi(Exchange):
                             'linear-swap-api/v1/swap_cross_matchresults_exact': 1,
                             'linear-swap-api/v1/swap_switch_position_mode': 1,
                             'linear-swap-api/v1/swap_cross_switch_position_mode': 1,
+                            'linear-swap-api/v3/swap_matchresults': 1,
+                            'linear-swap-api/v3/swap_cross_matchresults': 1,
+                            'linear-swap-api/v3/swap_matchresults_exact': 1,
+                            'linear-swap-api/v3/swap_cross_matchresults_exact': 1,
+                            'linear-swap-api/v3/swap_hisorders': 1,
+                            'linear-swap-api/v3/swap_cross_hisorders': 1,
+                            'linear-swap-api/v3/swap_hisorders_exact': 1,
+                            'linear-swap-api/v3/swap_cross_hisorders_exact': 1,
                             # Swap Strategy Order Interface
                             'linear-swap-api/v1/swap_trigger_order': 1,
                             'linear-swap-api/v1/swap_cross_trigger_order': 1,
@@ -781,18 +854,23 @@ class huobi(Exchange):
                 },
                 'exact': {
                     # err-code
+                    '403': AuthenticationError,  # {"status":"error","err_code":403,"err_msg":"Incorrect Access key [Access key错误]","ts":1652774224344}
                     '1010': AccountNotEnabled,  # {"status":"error","err_code":1010,"err_msg":"Account doesnt exist.","ts":1648137970490}
+                    '1003': AuthenticationError,  # {code: '1003', message: 'invalid signature'}
+                    '1013': BadSymbol,  # {"status":"error","err_code":1013,"err_msg":"This contract symbol doesnt exist.","ts":1640550459583}
                     '1017': OrderNotFound,  # {"status":"error","err_code":1017,"err_msg":"Order doesnt exist.","ts":1640550859242}
                     '1034': InvalidOrder,  # {"status":"error","err_code":1034,"err_msg":"Incorrect field of order price type.","ts":1643802870182}
                     '1036': InvalidOrder,  # {"status":"error","err_code":1036,"err_msg":"Incorrect field of open long form.","ts":1643802518986}
                     '1039': InvalidOrder,  # {"status":"error","err_code":1039,"err_msg":"Buy price must be lower than 39270.9USDT. Sell price must exceed 37731USDT.","ts":1643802374403}
                     '1041': InvalidOrder,  # {"status":"error","err_code":1041,"err_msg":"The order amount exceeds the limit(170000Cont), please modify and order again.","ts":1643802784940}
                     '1047': InsufficientFunds,  # {"status":"error","err_code":1047,"err_msg":"Insufficient margin available.","ts":1643802672652}
+                    '1048': InsufficientFunds,  # {"status":"error","err_code":1048,"err_msg":"Insufficient close amount available.","ts":1652772408864}
+                    '1051': InvalidOrder,  # {"status":"error","err_code":1051,"err_msg":"No orders to cancel.","ts":1652552125876}
                     '1066': BadSymbol,  # {"status":"error","err_code":1066,"err_msg":"The symbol field cannot be empty. Please re-enter.","ts":1640550819147}
                     '1067': InvalidOrder,  # {"status":"error","err_code":1067,"err_msg":"The client_order_id field is invalid. Please re-enter.","ts":1643802119413}
-                    '1013': BadSymbol,  # {"status":"error","err_code":1013,"err_msg":"This contract symbol doesnt exist.","ts":1640550459583}
                     '1094': InvalidOrder,  # {"status":"error","err_code":1094,"err_msg":"The leverage cannot be empty, please switch the leverage or contact customer service","ts":1640496946243}
                     '1220': AccountNotEnabled,  # {"status":"error","err_code":1220,"err_msg":"You don’t have access permission as you have not opened contracts trading.","ts":1645096660718}
+                    '1461': InvalidOrder,  # {"status":"error","err_code":1461,"err_msg":"Current positions have triggered position limits(5000USDT). Please modify.","ts":1652554651234}
                     'bad-request': BadRequest,
                     'validation-format-error': BadRequest,  # {"status":"error","err-code":"validation-format-error","err-msg":"Format Error: order-id.","data":null}
                     'validation-constraints-required': BadRequest,  # {"status":"error","err-code":"validation-constraints-required","err-msg":"Field is missing: client-order-id.","data":null}
@@ -807,6 +885,7 @@ class huobi(Exchange):
                     'order-marketorder-amount-min-error': InvalidOrder,  # market order amount error, min: `0.01`
                     'order-limitorder-price-min-error': InvalidOrder,  # limit order price error
                     'order-limitorder-price-max-error': InvalidOrder,  # limit order price error
+                    'order-value-min-error': InvalidOrder,  # {"status":"error","err-code":"order-value-min-error","err-msg":"Order total cannot be lower than: 1 USDT","data":null}
                     'order-invalid-price': InvalidOrder,  # {"status":"error","err-code":"order-invalid-price","err-msg":"invalid price","data":null}
                     'order-holding-limit-failed': InvalidOrder,  # {"status":"error","err-code":"order-holding-limit-failed","err-msg":"Order failed, exceeded the holding limit of self currency","data":null}
                     'order-orderprice-precision-error': InvalidOrder,  # {"status":"error","err-code":"order-orderprice-precision-error","err-msg":"order price precision error, scale: `4`","data":null}
@@ -846,16 +925,50 @@ class huobi(Exchange):
                     },
                 },
                 'defaultType': 'spot',  # spot, future, swap
-                'defaultSubType': 'inverse',  # inverse, linear
+                'defaultSubType': 'linear',  # inverse, linear
                 'defaultNetwork': 'ERC20',
+                'defaultNetworks': {
+                    'ETH': 'ERC20',
+                    'BTC': 'BTC',
+                    'USDT': 'TRC20',
+                },
                 'networks': {
-                    'ETH': 'erc20',
-                    'TRX': 'trc20',
-                    'HRC20': 'hrc20',
-                    'HECO': 'hrc20',
-                    'HT': 'hrc20',
-                    'ALGO': 'algo',
-                    'OMNI': '',
+                    # by displaynames
+                    'ALGO': 'ALGO',
+                    'ALGORAND': 'ALGO',
+                    'BEP20': 'BEP20',
+                    'BSC': 'BEP20',
+                    'ERC20': 'ERC20',
+                    'ETH': 'ERC20',
+                    'AVALANCHE': 'AVAXCCHAIN',
+                    'AVAX': 'AVAXCCHAIN',
+                    'HRC20': 'HECO',
+                    'HECO': 'HECO',
+                    # 'HT': 'HECO',  # HT is not acceptable networkcode for unification
+                    'TRC20': 'TRC20',
+                    'TRX': 'TRC20',
+                    'BTC': 'BTC',
+                    'BITCOIN': 'BTC',
+                    'ARBITRUM': 'ARB',
+                    'ARB': 'ARB',
+                    'SOLANA': 'SOL',
+                    'SOL': 'SOL',
+                    'SPL': 'SOL',
+                    'PRC20': 'PRC20',
+                    'POLYGON': 'PRC20',
+                    'MATIC': 'PRC20',
+                },
+                'networksById': {
+                    'ALGO': 'ALGO',
+                    'BEP20': 'BEP20',
+                    'ERC20': 'ERC20',
+                    'AVAXCCHAIN': 'AVALANCHE',
+                    'HECO': 'HRC20',
+                    'TRC20': 'TRC20',
+                    'BTC': 'BTC',
+                    'ARB': 'ARBITRUM',
+                    'SOL': 'SOLANA',
+                    'PRC20': 'POLYGON',
                 },
                 # https://github.com/ccxt/ccxt/issues/5376
                 'fetchOrdersByStatesMethod': 'spot_private_get_v1_order_orders',  # 'spot_private_get_v1_order_history'  # https://github.com/ccxt/ccxt/pull/5392
@@ -868,6 +981,22 @@ class huobi(Exchange):
                     'spot': 'pro',
                     'funding': 'pro',
                     'future': 'futures',
+                },
+                'accountsById': {
+                    'spot': 'spot',
+                    'margin': 'margin',
+                    'otc': 'otc',
+                    'point': 'point',
+                    'super-margin': 'super-margin',
+                    'investment': 'investment',
+                    'borrow': 'borrow',
+                    'grid-trading': 'grid-trading',
+                    'deposit-earning': 'deposit-earning',
+                    'otc-options': 'otc-options',
+                },
+                'marginAccounts': {
+                    'cross': 'super-margin',
+                    'isolated': 'margin',
                 },
                 'typesByAccount': {
                     'pro': 'spot',
@@ -918,11 +1047,221 @@ class huobi(Exchange):
                 # https://en.cryptonomist.ch/blog/eidoo/the-edo-to-pnt-upgrade-what-you-need-to-know-updated/
                 'PNT': 'Penta',
                 'SBTC': 'Super Bitcoin',
+                'SOUL': 'Soulsaver',
                 'BIFI': 'Bitcoin File',  # conflict with Beefy.Finance https://github.com/ccxt/ccxt/issues/8706
             },
         })
 
+    def fetch_status(self, params={}):
+        self.load_markets()
+        marketType = None
+        marketType, params = self.handle_market_type_and_params('fetchMyTrades', None, params)
+        method = 'statusPublicSpotGetApiV2SummaryJson'
+        if marketType != 'spot':
+            subType = self.safe_string(params, 'subType', self.options['defaultSubType'])
+            if marketType == 'swap':
+                if subType == 'linear':
+                    method = 'statusPublicSwapLinearGetApiV2SummaryJson'
+                elif subType == 'inverse':
+                    method = 'statusPublicSwapInverseGetApiV2SummaryJson'
+            elif marketType == 'future':
+                if subType == 'linear':
+                    method = 'statusPublicFutureLinearGetApiV2SummaryJson'
+                elif subType == 'inverse':
+                    method = 'statusPublicFutureInverseGetApiV2SummaryJson'
+            elif marketType == 'contract':
+                method = 'contractPublicGetHeartbeat'
+        response = getattr(self, method)()
+        #
+        # statusPublicSpotGetApiV2SummaryJson, statusPublicSwapInverseGetApiV2SummaryJson, statusPublicFutureLinearGetApiV2SummaryJson, statusPublicFutureInverseGetApiV2SummaryJson
+        #
+        #      {
+        #          "page": {
+        #              "id":"mn7l2lw8pz4p",
+        #              "name":"Huobi Futures-USDT-margined Swaps",
+        #              "url":"https://status-linear-swap.huobigroup.com",
+        #              "time_zone":"Asia/Singapore",
+        #              "updated_at":"2022-04-29T12:47:21.319+08:00"},
+        #              "components": [
+        #                  {
+        #                      "id":"lrv093qk3yp5",
+        #                      "name":"market data",
+        #                      "status":"operational",
+        #                      "created_at":"2020-10-29T14:08:59.427+08:00",
+        #                      "updated_at":"2020-10-29T14:08:59.427+08:00",
+        #                      "position":1,"description":null,
+        #                      "showcase":false,
+        #                      "start_date":null,
+        #                      "group_id":null,
+        #                      "page_id":"mn7l2lw8pz4p",
+        #                      "group":true,
+        #                      "only_show_if_degraded":false,
+        #                      "components": [
+        #                          "82k5jxg7ltxd"  # list of related components
+        #                      ]
+        #                  },
+        #              ],
+        #              "incidents": [ # empty array if there are no issues
+        #                  {
+        #                      "id": "rclfxz2g21ly",  # incident id
+        #                      "name": "Market data is delayed",  # incident name
+        #                      "status": "investigating",  # incident status
+        #                      "created_at": "2020-02-11T03:15:01.913Z",  # incident create time
+        #                      "updated_at": "2020-02-11T03:15:02.003Z",   # incident update time
+        #                      "monitoring_at": null,
+        #                      "resolved_at": null,
+        #                      "impact": "minor",  # incident impact
+        #                      "shortlink": "http://stspg.io/pkvbwp8jppf9",
+        #                      "started_at": "2020-02-11T03:15:01.906Z",
+        #                      "page_id": "p0qjfl24znv5",
+        #                      "incident_updates": [
+        #                          {
+        #                              "id": "dwfsk5ttyvtb",
+        #                              "status": "investigating",
+        #                              "body": "Market data is delayed",
+        #                              "incident_id": "rclfxz2g21ly",
+        #                              "created_at": "2020-02-11T03:15:02.000Z",
+        #                              "updated_at": "2020-02-11T03:15:02.000Z",
+        #                              "display_at": "2020-02-11T03:15:02.000Z",
+        #                              "affected_components": [
+        #                                  {
+        #                                      "code": "nctwm9tghxh6",
+        #                                      "name": "Market data",
+        #                                      "old_status": "operational",
+        #                                      "new_status": "degraded_performance"
+        #                                  }
+        #                              ],
+        #                              "deliver_notifications": True,
+        #                              "custom_tweet": null,
+        #                              "tweet_id": null
+        #                          }
+        #                      ],
+        #                      "components": [
+        #                          {
+        #                              "id": "nctwm9tghxh6",
+        #                              "name": "Market data",
+        #                              "status": "degraded_performance",
+        #                              "created_at": "2020-01-13T09:34:48.284Z",
+        #                              "updated_at": "2020-02-11T03:15:01.951Z",
+        #                              "position": 8,
+        #                              "description": null,
+        #                              "showcase": False,
+        #                              "group_id": null,
+        #                              "page_id": "p0qjfl24znv5",
+        #                              "group": False,
+        #                              "only_show_if_degraded": False
+        #                          }
+        #                      ]
+        #                  }, ...
+        #              ],
+        #              "scheduled_maintenances":[ # empty array if there are no scheduled maintenances
+        #                  {
+        #                      "id": "k7g299zl765l",  # incident id
+        #                      "name": "Schedule maintenance",  # incident name
+        #                      "status": "scheduled",  # incident status
+        #                      "created_at": "2020-02-11T03:16:31.481Z",  # incident create time
+        #                      "updated_at": "2020-02-11T03:16:31.530Z",  # incident update time
+        #                      "monitoring_at": null,
+        #                      "resolved_at": null,
+        #                      "impact": "maintenance",  # incident impact
+        #                      "shortlink": "http://stspg.io/md4t4ym7nytd",
+        #                      "started_at": "2020-02-11T03:16:31.474Z",
+        #                      "page_id": "p0qjfl24znv5",
+        #                      "incident_updates": [
+        #                          {
+        #                              "id": "8whgr3rlbld8",
+        #                              "status": "scheduled",
+        #                              "body": "We will be undergoing scheduled maintenance during self time.",
+        #                              "incident_id": "k7g299zl765l",
+        #                              "created_at": "2020-02-11T03:16:31.527Z",
+        #                              "updated_at": "2020-02-11T03:16:31.527Z",
+        #                              "display_at": "2020-02-11T03:16:31.527Z",
+        #                              "affected_components": [
+        #                                  {
+        #                                      "code": "h028tnzw1n5l",
+        #                                      "name": "Deposit And Withdraw - Deposit",
+        #                                      "old_status": "operational",
+        #                                      "new_status": "operational"
+        #                                  }
+        #                              ],
+        #                              "deliver_notifications": True,
+        #                              "custom_tweet": null,
+        #                              "tweet_id": null
+        #                          }
+        #                      ],
+        #                      "components": [
+        #                          {
+        #                              "id": "h028tnzw1n5l",
+        #                              "name": "Deposit",
+        #                              "status": "operational",
+        #                              "created_at": "2019-12-05T02:07:12.372Z",
+        #                              "updated_at": "2020-02-10T12:34:52.970Z",
+        #                              "position": 1,
+        #                              "description": null,
+        #                              "showcase": False,
+        #                              "group_id": "gtd0nyr3pf0k",
+        #                              "page_id": "p0qjfl24znv5",
+        #                              "group": False,
+        #                              "only_show_if_degraded": False
+        #                          }
+        #                      ],
+        #                      "scheduled_for": "2020-02-15T00:00:00.000Z",  # scheduled maintenance start time
+        #                      "scheduled_until": "2020-02-15T01:00:00.000Z"  # scheduled maintenance end time
+        #                  }
+        #              ],
+        #              "status": {
+        #                  "indicator":"none",  # none, minor, major, critical, maintenance
+        #                  "description":"all systems operational"  # All Systems Operational, Minor Service Outage, Partial System Outage, Partially Degraded Service, Service Under Maintenance
+        #              }
+        #          }
+        #
+        #
+        # contractPublicGetHeartbeat
+        #
+        #      {
+        #          "status": "ok",  # 'ok', 'error'
+        #          "data": {
+        #              "heartbeat": 1,  # future 1: available, 0: maintenance with service suspended
+        #              "estimated_recovery_time": null,  # estimated recovery time in milliseconds
+        #              "swap_heartbeat": 1,
+        #              "swap_estimated_recovery_time": null,
+        #              "option_heartbeat": 1,
+        #              "option_estimated_recovery_time": null,
+        #              "linear_swap_heartbeat": 1,
+        #              "linear_swap_estimated_recovery_time": null
+        #          },
+        #          "ts": 1557714418033
+        #      }
+        #
+        status = None
+        updated = None
+        url = None
+        if method == 'contractPublicGetHeartbeat':
+            statusRaw = self.safe_string(response, 'status')
+            status = 'ok' if (statusRaw == 'ok') else 'maintenance'  # 'ok', 'error'
+            updated = self.safe_string(response, 'ts')
+        else:
+            statusData = self.safe_value(response, 'status', {})
+            statusRaw = self.safe_string(statusData, 'indicator')
+            status = 'ok' if (statusRaw == 'none') else 'maintenance'  # none, minor, major, critical, maintenance
+            pageData = self.safe_value(response, 'page', {})
+            datetime = self.safe_string(pageData, 'updated_at')
+            updated = self.parse8601(datetime)
+            url = self.safe_string(pageData, 'url')
+        return {
+            'status': status,
+            'updated': updated,
+            'eta': None,
+            'url': url,
+            'info': response,
+        }
+
     def fetch_time(self, params={}):
+        """
+        fetches the current integer timestamp in milliseconds from the exchange server
+        :param dict params: extra parameters specific to the huobi api endpoint
+        :returns int: the current integer timestamp in milliseconds from the exchange server
+        """
         options = self.safe_value(self.options, 'fetchTime', {})
         defaultType = self.safe_string(self.options, 'defaultType', 'spot')
         type = self.safe_string(options, 'type', defaultType)
@@ -961,6 +1300,12 @@ class huobi(Exchange):
         }
 
     def fetch_trading_fee(self, symbol, params={}):
+        """
+        fetch the trading fees for a market
+        :param str symbol: unified market symbol
+        :param dict params: extra parameters specific to the huobi api endpoint
+        :returns dict: a `fee structure <https://docs.ccxt.com/en/latest/manual.html#fee-structure>`
+        """
         self.load_markets()
         market = self.market(symbol)
         request = {
@@ -1052,6 +1397,11 @@ class huobi(Exchange):
         return self.decimal_to_precision(cost, TRUNCATE, self.markets[symbol]['precision']['cost'], self.precisionMode)
 
     def fetch_markets(self, params={}):
+        """
+        retrieves data on all markets for huobi
+        :param dict params: extra parameters specific to the exchange api endpoint
+        :returns [dict]: an array of objects representing market data
+        """
         options = self.safe_value(self.options, 'fetchMarkets', {})
         types = self.safe_value(options, 'types', {})
         allMarkets = []
@@ -1199,7 +1549,7 @@ class huobi(Exchange):
         #         "ts":1637474774467
         #     }
         #
-        markets = self.safe_value(response, 'data')
+        markets = self.safe_value(response, 'data', [])
         numMarkets = len(markets)
         if numMarkets < 1:
             raise NetworkError(self.id + ' fetchMarkets() returned an empty response: ' + self.json(markets))
@@ -1252,27 +1602,29 @@ class huobi(Exchange):
                     expiry = self.safe_integer(market, 'delivery_time')
                     symbol += '-' + self.yymmdd(expiry)
             contractSize = self.safe_number(market, 'contract_size')
+            minCost = self.safe_number(market, 'min-order-value')
+            maxAmount = self.safe_number(market, 'max-order-amt')
+            minAmount = self.safe_number(market, 'min-order-amt')
+            if contract:
+                if linear:
+                    minAmount = contractSize
+                elif inverse:
+                    minCost = contractSize
             pricePrecision = None
             amountPrecision = None
             costPrecision = None
             if spot:
-                pricePrecision = self.safe_string(market, 'price-precision')
-                pricePrecision = self.parse_number('1e-' + pricePrecision)
-                amountPrecision = self.safe_string(market, 'amount-precision')
-                amountPrecision = self.parse_number('1e-' + amountPrecision)
-                costPrecision = self.safe_string(market, 'value-precision')
-                costPrecision = self.parse_number('1e-' + costPrecision)
+                pricePrecision = self.parse_number(self.parse_precision(self.safe_string(market, 'price-precision')))
+                amountPrecision = self.parse_number(self.parse_precision(self.safe_string(market, 'amount-precision')))
+                costPrecision = self.parse_number(self.parse_precision(self.safe_string(market, 'value-precision')))
             else:
                 pricePrecision = self.safe_number(market, 'price_tick')
-                amountPrecision = 1
+                amountPrecision = self.parse_number('1')  # other markets have step size of 1 contract
             maker = None
             taker = None
             if spot:
-                maker = 0 if (base == 'OMG') else 0.2 / 100
-                taker = 0 if (base == 'OMG') else 0.2 / 100
-            minAmount = self.safe_number(market, 'min-order-amt')
-            maxAmount = self.safe_number(market, 'max-order-amt')
-            minCost = self.safe_number(market, 'min-order-value', 0)
+                maker = self.parse_number('0') if (base == 'OMG') else self.parse_number('0.002')
+                taker = self.parse_number('0') if (base == 'OMG') else self.parse_number('0.002')
             active = None
             if spot:
                 state = self.safe_string(market, 'state')
@@ -1430,9 +1782,15 @@ class huobi(Exchange):
             'baseVolume': baseVolume,
             'quoteVolume': quoteVolume,
             'info': ticker,
-        }, market, False)
+        }, market)
 
     def fetch_ticker(self, symbol, params={}):
+        """
+        fetches a price ticker, a statistical calculation with the information calculated over the past 24 hours for a specific market
+        :param str symbol: unified symbol of the market to fetch the ticker for
+        :param dict params: extra parameters specific to the huobi api endpoint
+        :returns dict: a `ticker structure <https://docs.ccxt.com/en/latest/manual.html#ticker-structure>`
+        """
         self.load_markets()
         market = self.market(symbol)
         request = {}
@@ -1500,15 +1858,27 @@ class huobi(Exchange):
         return ticker
 
     def fetch_tickers(self, symbols=None, params={}):
+        """
+        fetches price tickers for multiple markets, statistical calculations with the information calculated over the past 24 hours each market
+        see https://huobiapi.github.io/docs/spot/v1/en/#get-latest-tickers-for-all-pairs
+        see https://huobiapi.github.io/docs/usdt_swap/v1/en/#general-get-a-batch-of-market-data-overview
+        see https://huobiapi.github.io/docs/dm/v1/en/#get-a-batch-of-market-data-overview
+        see https://huobiapi.github.io/docs/coin_margined_swap/v1/en/#get-a-batch-of-market-data-overview-v2
+        :param [str]|None symbols: unified symbols of the markets to fetch the ticker for, all market tickers are returned if not assigned
+        :param dict params: extra parameters specific to the huobi api endpoint
+        :returns dict: an array of `ticker structures <https://docs.ccxt.com/en/latest/manual.html#ticker-structure>`
+        """
         self.load_markets()
-        options = self.safe_value(self.options, 'fetchTickers', {})
-        defaultType = self.safe_string(self.options, 'defaultType', 'spot')
-        type = self.safe_string(options, 'type', defaultType)
-        type = self.safe_string(params, 'type', type)
+        symbols = self.market_symbols(symbols)
+        first = self.safe_string(symbols, 0)
+        market = None
+        if first is not None:
+            market = self.market(first)
+        type = None
+        subType = None
         method = 'spotPublicGetMarketTickers'
-        defaultSubType = self.safe_string(self.options, 'defaultSubType', 'inverse')
-        subType = self.safe_string(options, 'subType', defaultSubType)
-        subType = self.safe_string(params, 'subType', subType)
+        type, params = self.handle_market_type_and_params('fetchTickers', market, params)
+        subType, params = self.handle_sub_type_and_params('fetchTickers', market, params)
         request = {}
         future = (type == 'future')
         swap = (type == 'swap')
@@ -1629,6 +1999,13 @@ class huobi(Exchange):
         return self.filter_by_array(result, 'symbol', symbols)
 
     def fetch_order_book(self, symbol, limit=None, params={}):
+        """
+        fetches information on open orders with bid(buy) and ask(sell) prices, volumes and other data
+        :param str symbol: unified symbol of the market to fetch the order book for
+        :param int|None limit: the maximum amount of order book entries to return
+        :param dict params: extra parameters specific to the huobi api endpoint
+        :returns dict: A dictionary of `order book structures <https://docs.ccxt.com/en/latest/manual.html#order-book-structure>` indexed by market symbols
+        """
         self.load_markets()
         market = self.market(symbol)
         request = {
@@ -1805,7 +2182,7 @@ class huobi(Exchange):
         if filledPoints is not None:
             if (feeCost is None) or Precise.string_equals(feeCost, '0'):
                 feeDeductCurrency = self.safe_string(trade, 'fee-deduct-currency')
-                if feeDeductCurrency != '':
+                if feeDeductCurrency is not None:
                     feeCost = filledPoints
                     feeCurrency = self.safe_currency_code(feeDeductCurrency)
         if feeCost is not None:
@@ -1832,8 +2209,20 @@ class huobi(Exchange):
         }, market)
 
     def fetch_order_trades(self, id, symbol=None, since=None, limit=None, params={}):
+        """
+        fetch all the trades made from a single order
+        :param str id: order id
+        :param str|None symbol: unified market symbol
+        :param int|None since: the earliest time in ms to fetch trades for
+        :param int|None limit: the maximum number of trades to retrieve
+        :param dict params: extra parameters specific to the huobi api endpoint
+        :returns [dict]: a list of `trade structures <https://docs.ccxt.com/en/latest/manual.html#trade-structure>`
+        """
+        market = None
+        if symbol is not None:
+            market = self.market(symbol)
         marketType = None
-        marketType, params = self.handle_market_type_and_params('fetchOrderTrades', None, params)
+        marketType, params = self.handle_market_type_and_params('fetchOrderTrades', market, params)
         method = self.get_supported_mapping(marketType, {
             'spot': 'fetchSpotOrderTrades',
             # 'swap': 'fetchContractOrderTrades',
@@ -1850,9 +2239,20 @@ class huobi(Exchange):
         return self.parse_trades(response['data'], None, since, limit)
 
     def fetch_my_trades(self, symbol=None, since=None, limit=None, params={}):
+        """
+        fetch all trades made by the user
+        :param str|None symbol: unified market symbol
+        :param int|None since: the earliest time in ms to fetch trades for
+        :param int|None limit: the maximum number of trades structures to retrieve
+        :param dict params: extra parameters specific to the huobi api endpoint
+        :returns [dict]: a list of `trade structures <https://docs.ccxt.com/en/latest/manual.html#trade-structure>`
+        """
         self.load_markets()
+        market = None
+        if symbol is not None:
+            market = self.market(symbol)
         marketType = None
-        marketType, params = self.handle_market_type_and_params('fetchMyTrades', None, params)
+        marketType, params = self.handle_market_type_and_params('fetchMyTrades', market, params)
         request = {
             # spot -----------------------------------------------------------
             # 'symbol': market['id'],
@@ -1873,7 +2273,6 @@ class huobi(Exchange):
             # 'size': limit,  # default 20, max 50
         }
         method = None
-        market = None
         if marketType == 'spot':
             if symbol is not None:
                 market = self.market(symbol)
@@ -1887,22 +2286,27 @@ class huobi(Exchange):
         else:
             if symbol is None:
                 raise ArgumentsRequired(self.id + ' fetchMyTrades() requires a symbol for ' + marketType + ' orders')
-            market = self.market(symbol)
-            request['contract_code'] = market['id']
+            request['contract'] = market['id']
             request['trade_type'] = 0  # 0 all, 1 open long, 2 open short, 3 close short, 4 close long, 5 liquidate long positions, 6 liquidate short positions
+            if since is not None:
+                request['start_time'] = since  # a date within 120 days from today
+                # request['end_time'] = self.sum(request['start_time'], 172800000)  # 48 hours window
+            if limit is not None:
+                request['page_size'] = limit  # default 100, max 500
             if market['linear']:
-                defaultMargin = 'cross' if market['future'] else 'isolated'
-                marginMode = self.safe_string_2(self.options, 'defaultMarginMode', 'marginMode', defaultMargin)
+                marginMode = None
+                marginMode, params = self.handle_margin_mode_and_params('fetchMyTrades', params)
+                marginMode = 'cross' if (marginMode is None) else marginMode
                 if marginMode == 'isolated':
-                    method = 'contractPrivatePostLinearSwapApiV1SwapMatchresultsExact'
+                    method = 'contractPrivatePostLinearSwapApiV3SwapMatchresultsExact'
                 elif marginMode == 'cross':
-                    method = 'contractPrivatePostLinearSwapApiV1SwapCrossMatchresultsExact'
+                    method = 'contractPrivatePostLinearSwapApiV3SwapCrossMatchresultsExact'
             elif market['inverse']:
                 if marketType == 'future':
-                    method = 'contractPrivatePostApiV1ContractMatchresultsExact'
+                    method = 'contractPrivatePostApiV3ContractMatchresultsExact'
                     request['symbol'] = market['settleId']
                 elif marketType == 'swap':
-                    method = 'contractPrivatePostSwapApiV1SwapMatchresultsExact'
+                    method = 'contractPrivatePostSwapApiV3SwapMatchresultsExact'
                 else:
                     raise NotSupported(self.id + ' fetchMyTrades() does not support ' + marketType + ' markets')
         response = getattr(self, method)(self.extend(request, params))
@@ -1978,6 +2382,14 @@ class huobi(Exchange):
         return self.parse_trades(trades, market, since, limit)
 
     def fetch_trades(self, symbol, since=None, limit=1000, params={}):
+        """
+        get the list of most recent trades for a particular symbol
+        :param str symbol: unified symbol of the market to fetch trades for
+        :param int|None since: timestamp in ms of the earliest trade to fetch
+        :param int|None limit: the maximum amount of trades to fetch
+        :param dict params: extra parameters specific to the huobi api endpoint
+        :returns [dict]: a list of `trade structures <https://docs.ccxt.com/en/latest/manual.html?#public-trades>`
+        """
         self.load_markets()
         market = self.market(symbol)
         request = {
@@ -2026,7 +2438,7 @@ class huobi(Exchange):
         #         ]
         #     }
         #
-        data = self.safe_value(response, 'data')
+        data = self.safe_value(response, 'data', [])
         result = []
         for i in range(0, len(data)):
             trades = self.safe_value(data[i], 'data', [])
@@ -2059,6 +2471,15 @@ class huobi(Exchange):
         ]
 
     def fetch_ohlcv(self, symbol, timeframe='1m', since=None, limit=None, params={}):
+        """
+        fetches historical candlestick data containing the open, high, low, and close price, and the volume of a market
+        :param str symbol: unified symbol of the market to fetch OHLCV data for
+        :param str timeframe: the length of time each candle represents
+        :param int|None since: timestamp in ms of the earliest candle to fetch
+        :param int|None limit: the maximum amount of candles to fetch
+        :param dict params: extra parameters specific to the huobi api endpoint
+        :returns [[int]]: A list of candles ordered as timestamp, open, high, low, close, volume
+        """
         self.load_markets()
         market = self.market(symbol)
         request = {
@@ -2121,6 +2542,7 @@ class huobi(Exchange):
         if market['contract']:
             if limit is None:
                 limit = 2000
+            request['size'] = limit
             if price is None:
                 duration = self.parse_timeframe(timeframe)
                 if since is None:
@@ -2148,25 +2570,12 @@ class huobi(Exchange):
         data = self.safe_value(response, 'data', [])
         return self.parse_ohlcvs(data, market, timeframe, since, limit)
 
-    def fetch_index_ohlcv(self, symbol, timeframe='1m', since=None, limit=None, params={}):
-        request = {
-            'price': 'index',
-        }
-        return self.fetch_ohlcv(symbol, timeframe, since, limit, self.extend(request, params))
-
-    def fetch_mark_ohlcv(self, symbol, timeframe='1m', since=None, limit=None, params={}):
-        request = {
-            'price': 'mark',
-        }
-        return self.fetch_ohlcv(symbol, timeframe, since, limit, self.extend(request, params))
-
-    def fetch_premium_index_ohlcv(self, symbol, timeframe='1m', since=None, limit=None, params={}):
-        request = {
-            'price': 'premiumIndex',
-        }
-        return self.fetch_ohlcv(symbol, timeframe, since, limit, self.extend(request, params))
-
     def fetch_accounts(self, params={}):
+        """
+        fetch all the accounts associated with a profile
+        :param dict params: extra parameters specific to the huobi api endpoint
+        :returns dict: a dictionary of `account structures <https://docs.ccxt.com/en/latest/manual.html#account-structure>` indexed by the account type
+        """
         self.load_markets()
         response = self.spotPrivateGetV1AccountAccounts(params)
         #
@@ -2178,7 +2587,27 @@ class huobi(Exchange):
         #         ]
         #     }
         #
-        return response['data']
+        data = self.safe_value(response, 'data')
+        return self.parse_accounts(data)
+
+    def parse_account(self, account):
+        #
+        #     {
+        #         "id": 5202591,
+        #         "type": "point",   # spot, margin, otc, point, super-margin, investment, borrow, grid-trading, deposit-earning, otc-options
+        #         "subtype": "",     # The corresponding trading symbol(currency pair) the isolated margin is based on, e.g. btcusdt
+        #         "state": "working"  # working, lock
+        #     }
+        #
+        typeId = self.safe_string(account, 'type')
+        accountsById = self.safe_value(self.options, 'accountsById', {})
+        type = self.safe_value(accountsById, typeId, typeId)
+        return {
+            'info': account,
+            'id': self.safe_string(account, 'id'),
+            'type': type,
+            'code': None,
+        }
 
     def fetch_account_id_by_type(self, type, params={}):
         accounts = self.load_accounts()
@@ -2191,80 +2620,83 @@ class huobi(Exchange):
         return self.safe_string(account, 'id')
 
     def fetch_currencies(self, params={}):
-        response = self.spotPublicGetV2ReferenceCurrencies()
-        #     {
-        #       "code": 200,
-        #       "data": [
-        #         {
-        #           "currency": "sxp",
-        #           "assetType": "1",
-        #           "chains": [
-        #             {
-        #               "chain": "sxp",
-        #               "displayName": "ERC20",
-        #               "baseChain": "ETH",
-        #               "baseChainProtocol": "ERC20",
-        #               "isDynamic": True,
-        #               "numOfConfirmations": "12",
-        #               "numOfFastConfirmations": "12",
-        #               "depositStatus": "allowed",
-        #               "minDepositAmt": "0.23",
-        #               "withdrawStatus": "allowed",
-        #               "minWithdrawAmt": "0.23",
-        #               "withdrawPrecision": "8",
-        #               "maxWithdrawAmt": "227000.000000000000000000",
-        #               "withdrawQuotaPerDay": "227000.000000000000000000",
-        #               "withdrawQuotaPerYear": null,
-        #               "withdrawQuotaTotal": null,
-        #               "withdrawFeeType": "fixed",
-        #               "transactFeeWithdraw": "11.1653",
-        #               "addrWithTag": False,
-        #               "addrDepositTag": False
-        #             }
-        #           ],
-        #           "instStatus": "normal"
-        #         }
-        #       ]
-        #     }
+        """
+        fetches all available currencies on an exchange
+        :param dict params: extra parameters specific to the huobi api endpoint
+        :returns dict: an associative dictionary of currencies
+        """
+        response = self.spotPublicGetV2ReferenceCurrencies(params)
+        #
+        #    {
+        #        "code": 200,
+        #        "data": [
+        #            {
+        #                "currency": "sxp",
+        #                "assetType": "1",
+        #                "chains": [
+        #                    {
+        #                        "chain": "sxp",
+        #                        "displayName": "ERC20",
+        #                        "baseChain": "ETH",
+        #                        "baseChainProtocol": "ERC20",
+        #                        "isDynamic": True,
+        #                        "numOfConfirmations": "12",
+        #                        "numOfFastConfirmations": "12",
+        #                        "depositStatus": "allowed",
+        #                        "minDepositAmt": "0.23",
+        #                        "withdrawStatus": "allowed",
+        #                        "minWithdrawAmt": "0.23",
+        #                        "withdrawPrecision": "8",
+        #                        "maxWithdrawAmt": "227000.000000000000000000",
+        #                        "withdrawQuotaPerDay": "227000.000000000000000000",
+        #                        "withdrawQuotaPerYear": null,
+        #                        "withdrawQuotaTotal": null,
+        #                        "withdrawFeeType": "fixed",
+        #                        "transactFeeWithdraw": "11.1653",
+        #                        "addrWithTag": False,
+        #                        "addrDepositTag": False
+        #                    }
+        #                ],
+        #                "instStatus": "normal"
+        #            }
+        #        ]
+        #    }
         #
         data = self.safe_value(response, 'data', [])
         result = {}
+        self.options['networkChainIdsByNames'] = {}
+        self.options['networkNamesByChainIds'] = {}
         for i in range(0, len(data)):
             entry = data[i]
             currencyId = self.safe_string(entry, 'currency')
             code = self.safe_currency_code(currencyId)
+            self.options['networkChainIdsByNames'][code] = {}
             chains = self.safe_value(entry, 'chains', [])
             networks = {}
             instStatus = self.safe_string(entry, 'instStatus')
             currencyActive = instStatus == 'normal'
-            fee = None
             minPrecision = None
             minWithdraw = None
             maxWithdraw = None
             deposit = None
             withdraw = None
             for j in range(0, len(chains)):
-                chain = chains[j]
-                networkId = self.safe_string(chain, 'chain')
-                baseChainProtocol = self.safe_string(chain, 'baseChainProtocol')
-                huobiToken = 'h' + currencyId
-                if baseChainProtocol is None:
-                    if huobiToken == networkId:
-                        baseChainProtocol = 'ERC20'
-                    else:
-                        baseChainProtocol = self.safe_string(chain, 'displayName')
-                network = self.safe_network(baseChainProtocol)
-                minWithdraw = self.safe_number(chain, 'minWithdrawAmt')
-                maxWithdraw = self.safe_number(chain, 'maxWithdrawAmt')
-                withdrawStatus = self.safe_string(chain, 'withdrawStatus')
-                depositStatus = self.safe_string(chain, 'depositStatus')
+                chainEntry = chains[j]
+                uniqueChainId = self.safe_string(chainEntry, 'chain')  # i.e. usdterc20, trc20usdt ...
+                title = self.safe_string(chainEntry, 'displayName')
+                self.options['networkChainIdsByNames'][code][title] = uniqueChainId
+                self.options['networkNamesByChainIds'][uniqueChainId] = title
+                networkCode = self.network_id_to_code(title, code)
+                minWithdraw = self.safe_number(chainEntry, 'minWithdrawAmt')
+                maxWithdraw = self.safe_number(chainEntry, 'maxWithdrawAmt')
+                withdrawStatus = self.safe_string(chainEntry, 'withdrawStatus')
+                depositStatus = self.safe_string(chainEntry, 'depositStatus')
                 withdrawEnabled = (withdrawStatus == 'allowed')
                 depositEnabled = (depositStatus == 'allowed')
                 active = withdrawEnabled and depositEnabled
-                precision = self.safe_string(chain, 'withdrawPrecision')
+                precision = self.parse_precision(self.safe_string(chainEntry, 'withdrawPrecision'))
                 if precision is not None:
-                    precision = self.parse_number('1e-' + precision)
-                    minPrecision = precision if (minPrecision is None) else max(precision, minPrecision)
+                    minPrecision = precision if (minPrecision is None) else Precise.string_min(precision, minPrecision)
                 if withdrawEnabled and not withdraw:
                     withdraw = True
                 elif not withdrawEnabled:
@@ -2273,11 +2705,11 @@ class huobi(Exchange):
                     deposit = True
                 elif not depositEnabled:
                     deposit = False
-                fee = self.safe_number(chain, 'transactFeeWithdraw')
-                networks[network] = {
-                    'info': chain,
-                    'id': networkId,
-                    'network': network,
+                fee = self.safe_number(chainEntry, 'transactFeeWithdraw')
+                networks[networkCode] = {
+                    'info': chainEntry,
+                    'id': uniqueChainId,
+                    'network': networkCode,
                     'limits': {
                         'withdraw': {
                             'min': minWithdraw,
@@ -2288,10 +2720,8 @@ class huobi(Exchange):
                     'deposit': depositEnabled,
                     'withdraw': withdrawEnabled,
                     'fee': fee,
-                    'precision': precision,
+                    'precision': self.parse_number(precision),
                 }
-            networksKeys = list(networks.keys())
-            networkLength = len(networksKeys)
             result[code] = {
                 'info': entry,
                 'code': code,
@@ -2299,7 +2729,7 @@ class huobi(Exchange):
                 'active': currencyActive,
                 'deposit': deposit,
                 'withdraw': withdraw,
-                'fee': fee if (networkLength <= 1) else None,
+                'fee': None,
                 'name': None,
                 'limits': {
                     'amount': {
@@ -2307,42 +2737,78 @@ class huobi(Exchange):
                         'max': None,
                     },
                     'withdraw': {
-                        'min': minWithdraw if (networkLength <= 1) else None,
-                        'max': maxWithdraw if (networkLength <= 1) else None,
+                        'min': minWithdraw,
+                        'max': maxWithdraw,
                     },
                 },
-                'precision': minPrecision,
+                'precision': self.parse_number(minPrecision),
                 'networks': networks,
             }
         return result
 
+    def network_id_to_code(self, networkId, currencyCode=None):
+        # here network-id is provided as a pair of currency & chain(i.e. trc20usdt)
+        keys = list(self.options['networkNamesByChainIds'].keys())
+        keysLength = len(keys)
+        if keysLength == 0:
+            raise ExchangeError(self.id + ' networkIdToCode() - markets need to be loaded at first')
+        networkTitle = self.safe_value(self.options['networkNamesByChainIds'], networkId, networkId)
+        return super(huobi, self).network_id_to_code(networkTitle)
+
+    def network_code_to_id(self, networkCode, currencyCode=None):
+        if currencyCode is None:
+            raise ArgumentsRequired(self.id + ' networkCodeToId() requires a currencyCode argument')
+        keys = list(self.options['networkChainIdsByNames'].keys())
+        keysLength = len(keys)
+        if keysLength == 0:
+            raise ExchangeError(self.id + ' networkCodeToId() - markets need to be loaded at first')
+        uniqueNetworkIds = self.safe_value(self.options['networkChainIdsByNames'], currencyCode, {})
+        networkTitle = super(huobi, self).network_code_to_id(networkCode)
+        return self.safe_value(uniqueNetworkIds, networkTitle, networkTitle)
+
     def fetch_balance(self, params={}):
+        """
+        query for balance and get the amount of funds available for trading or funds locked in orders
+        :param dict params: extra parameters specific to the huobi api endpoint
+        :returns dict: a `balance structure <https://docs.ccxt.com/en/latest/manual.html?#balance-structure>`
+        """
         self.load_markets()
-        options = self.safe_value(self.options, 'fetchTickers', {})
-        defaultType = self.safe_string(self.options, 'defaultType', 'spot')
-        type = self.safe_string(options, 'type', defaultType)
-        type = self.safe_string(params, 'type', type)
-        params = self.omit(params, 'type')
+        type = None
+        type, params = self.handle_market_type_and_params('fetchBalance', None, params)
+        options = self.safe_value(self.options, 'fetchBalance', {})
         request = {}
         method = None
+        margin = (type == 'margin')
         spot = (type == 'spot')
         future = (type == 'future')
         swap = (type == 'swap')
-        defaultSubType = self.safe_string(self.options, 'defaultSubType', 'inverse')
-        subType = self.safe_string(options, 'subType', defaultSubType)
-        subType = self.safe_string(params, 'subType', subType)
+        defaultSubType = self.safe_string_2(self.options, 'defaultSubType', 'subType', 'linear')
+        subType = self.safe_string_2(options, 'defaultSubType', 'subType', defaultSubType)
+        subType = self.safe_string_2(params, 'defaultSubType', 'subType', subType)
         inverse = (subType == 'inverse')
         linear = (subType == 'linear')
-        marginMode = self.safe_string_2(self.options, 'defaultMarginMode', 'marginMode', 'isolated')
+        marginMode = None
+        marginMode, params = self.handle_margin_mode_and_params('fetchBalance', params)
+        params = self.omit(params, ['defaultSubType', 'subType'])
         isolated = (marginMode == 'isolated')
         cross = (marginMode == 'cross')
         if spot:
-            self.load_accounts()
-            accountId = self.fetch_account_id_by_type(type, params)
-            request['account-id'] = accountId
-            method = 'spotPrivateGetV1AccountAccountsAccountIdBalance'
+            if isolated:
+                method = 'spotPrivateGetV1MarginAccountsBalance'
+            elif cross:
+                method = 'spotPrivateGetV1CrossMarginAccountsBalance'
+            else:
+                self.load_accounts()
+                accountId = self.fetch_account_id_by_type(type, params)
+                request['account-id'] = accountId
+                method = 'spotPrivateGetV1AccountAccountsAccountIdBalance'
+        elif margin:
+            if isolated:
+                method = 'spotPrivateGetV1MarginAccountsBalance'
+            else:
+                method = 'spotPrivateGetV1CrossMarginAccountsBalance'
         elif linear:
-            if marginMode == 'isolated':
+            if isolated:
                 method = 'contractPrivatePostLinearSwapApiV1SwapAccountInfo'
             else:
                 method = 'contractPrivatePostLinearSwapApiV1SwapCrossAccountInfo'
@@ -2356,122 +2822,181 @@ class huobi(Exchange):
         # spot
         #
         #     {
-        #         "status":"ok",
-        #         "data":{
-        #             "id":1528640,
-        #             "type":"spot",
-        #             "state":"working",
-        #             "list":[
-        #                 {"currency":"lun","type":"trade","balance":"0","seq-num":"0"},
-        #                 {"currency":"lun","type":"frozen","balance":"0","seq-num":"0"},
-        #                 {"currency":"ht","type":"frozen","balance":"0","seq-num":"145"},
+        #         "status": "ok",
+        #         "data": {
+        #             "id": 1528640,
+        #             "type": "spot",
+        #             "state": "working",
+        #             "list": [
+        #                 {"currency": "lun", "type": "trade", "balance": "0", "seq-num": "0"},
+        #                 {"currency": "lun", "type": "frozen", "balance": "0", "seq-num": "0"},
+        #                 {"currency": "ht", "type": "frozen", "balance": "0", "seq-num": "145"},
         #             ]
         #         },
         #         "ts":1637644827566
         #     }
         #
+        # cross margin
+        #
+        #     {
+        #         "status": "ok",
+        #         "data": {
+        #             "id": 51015302,
+        #             "type": "cross-margin",
+        #             "state": "working",
+        #             "risk-rate": "2",
+        #             "acct-balance-sum": "100",
+        #             "debt-balance-sum": "0",
+        #             "list": [
+        #                 {"currency": "usdt", "type": "trade", "balance": "100"},
+        #                 {"currency": "usdt", "type": "frozen", "balance": "0"},
+        #                 {"currency": "usdt", "type": "loan-available", "balance": "200"},
+        #                 {"currency": "usdt", "type": "transfer-out-available", "balance": "-1"},
+        #                 {"currency": "ht", "type": "loan-available", "balance": "36.60724091"},
+        #                 {"currency": "ht", "type": "transfer-out-available", "balance": "-1"},
+        #                 {"currency": "btc", "type": "trade", "balance": "1168.533000000000000000"},
+        #                 {"currency": "btc", "type": "frozen", "balance": "0.000000000000000000"},
+        #                 {"currency": "btc", "type": "loan", "balance": "-2.433000000000000000"},
+        #                 {"currency": "btc", "type": "interest", "balance": "-0.000533000000000000"},
+        #                 {"currency": "btc", "type": "transfer-out-available", "balance": "1163.872174670000000000"},
+        #                 {"currency": "btc", "type": "loan-available", "balance": "8161.876538350676000000"}
+        #             ]
+        #         },
+        #         "code": 200
+        #     }
+        #
+        # isolated margin
+        #
+        #     {
+        #         "data": [
+        #             {
+        #                 "id": 18264,
+        #                 "type": "margin",
+        #                 "state": "working",
+        #                 "symbol": "btcusdt",
+        #                 "fl-price": "0",
+        #                 "fl-type": "safe",
+        #                 "risk-rate": "475.952571086994250554",
+        #                 "list": [
+        #                     {"currency": "btc","type": "trade","balance": "1168.533000000000000000"},
+        #                     {"currency": "btc","type": "frozen","balance": "0.000000000000000000"},
+        #                     {"currency": "btc","type": "loan","balance": "-2.433000000000000000"},
+        #                     {"currency": "btc","type": "interest","balance": "-0.000533000000000000"},
+        #                     {"currency": "btc","type": "transfer-out-available", "balance": "1163.872174670000000000"},
+        #                     {"currency": "btc","type": "loan-available", "balance": "8161.876538350676000000"}
+        #                 ]
+        #             }
+        #         ]
+        #     }
+        #
         # future, swap isolated
         #
         #     {
-        #         "status":"ok",
-        #         "data":[
+        #         "status": "ok",
+        #         "data": [
         #             {
-        #                 "symbol":"BTC",
-        #                 "margin_balance":0,
-        #                 "margin_position":0E-18,
-        #                 "margin_frozen":0,
-        #                 "margin_available":0E-18,
-        #                 "profit_real":0,
-        #                 "profit_unreal":0,
-        #                 "risk_rate":null,
-        #                 "withdraw_available":0,
-        #                 "liquidation_price":null,
-        #                 "lever_rate":5,
-        #                 "adjust_factor":0.025000000000000000,
-        #                 "margin_static":0,
-        #                 "is_debit":0,  # future only
-        #                 "contract_code":"BTC-USD",  # swap only
-        #                 "margin_asset":"USDT",  # linear only
-        #                 "margin_mode":"isolated",  # linear only
-        #                 "margin_account":"BTC-USDT"  # linear only
-        #                 "transfer_profit_ratio":null  # inverse only
+        #                 "symbol": "BTC",
+        #                 "margin_balance": 0,
+        #                 "margin_position": 0E-18,
+        #                 "margin_frozen": 0,
+        #                 "margin_available": 0E-18,
+        #                 "profit_real": 0,
+        #                 "profit_unreal": 0,
+        #                 "risk_rate": null,
+        #                 "withdraw_available": 0,
+        #                 "liquidation_price": null,
+        #                 "lever_rate": 5,
+        #                 "adjust_factor": 0.025000000000000000,
+        #                 "margin_static": 0,
+        #                 "is_debit": 0,  # future only
+        #                 "contract_code": "BTC-USD",  # swap only
+        #                 "margin_asset": "USDT",  # linear only
+        #                 "margin_mode": "isolated",  # linear only
+        #                 "margin_account": "BTC-USDT"  # linear only
+        #                 "transfer_profit_ratio": null  # inverse only
         #             },
         #         ],
-        #         "ts":1637644827566
+        #         "ts": 1637644827566
         #     }
         #
         # linear cross futures and linear cross swap
         #
         #     {
-        #         "status":"ok",
-        #         "data":[
+        #         "status": "ok",
+        #         "data": [
         #             {
-        #                 "futures_contract_detail":[
+        #                 "futures_contract_detail": [
         #                     {
-        #                         "symbol":"ETH",
-        #                         "contract_code":"ETH-USDT-220325",
-        #                         "margin_position":0,
-        #                         "margin_frozen":0,
-        #                         "margin_available":200.000000000000000000,
-        #                         "profit_unreal":0E-18,
-        #                         "liquidation_price":null,
-        #                         "lever_rate":5,
-        #                         "adjust_factor":0.060000000000000000,
-        #                         "contract_type":"quarter",
-        #                         "pair":"ETH-USDT",
-        #                         "business_type":"futures"
+        #                         "symbol": "ETH",
+        #                         "contract_code": "ETH-USDT-220325",
+        #                         "margin_position": 0,
+        #                         "margin_frozen": 0,
+        #                         "margin_available": 200.000000000000000000,
+        #                         "profit_unreal": 0E-18,
+        #                         "liquidation_price": null,
+        #                         "lever_rate": 5,
+        #                         "adjust_factor": 0.060000000000000000,
+        #                         "contract_type": "quarter",
+        #                         "pair": "ETH-USDT",
+        #                         "business_type": "futures"
         #                     },
         #                 ],
-        #                 "margin_mode":"cross",
-        #                 "margin_account":"USDT",
-        #                 "margin_asset":"USDT",
-        #                 "margin_balance":200.000000000000000000,
-        #                 "margin_static":200.000000000000000000,
-        #                 "margin_position":0,
-        #                 "margin_frozen":0,
-        #                 "profit_real":0E-18,
-        #                 "profit_unreal":0,
-        #                 "withdraw_available":2E+2,
-        #                 "risk_rate":null,
-        #                 "contract_detail":[
+        #                 "margin_mode": "cross",
+        #                 "margin_account": "USDT",
+        #                 "margin_asset": "USDT",
+        #                 "margin_balance": 200.000000000000000000,
+        #                 "margin_static": 200.000000000000000000,
+        #                 "margin_position": 0,
+        #                 "margin_frozen": 0,
+        #                 "profit_real": 0E-18,
+        #                 "profit_unreal": 0,
+        #                 "withdraw_available": 2E+2,
+        #                 "risk_rate": null,
+        #                 "contract_detail": [
         #                     {
-        #                         "symbol":"MANA",
-        #                         "contract_code":"MANA-USDT",
-        #                         "margin_position":0,
-        #                         "margin_frozen":0,
-        #                         "margin_available":200.000000000000000000,
-        #                         "profit_unreal":0E-18,
-        #                         "liquidation_price":null,
-        #                         "lever_rate":5,
-        #                         "adjust_factor":0.100000000000000000,
-        #                         "contract_type":"swap",
-        #                         "pair":"MANA-USDT",
-        #                         "business_type":"swap"
+        #                         "symbol": "MANA",
+        #                         "contract_code": "MANA-USDT",
+        #                         "margin_position": 0,
+        #                         "margin_frozen": 0,
+        #                         "margin_available": 200.000000000000000000,
+        #                         "profit_unreal": 0E-18,
+        #                         "liquidation_price": null,
+        #                         "lever_rate": 5,
+        #                         "adjust_factor": 0.100000000000000000,
+        #                         "contract_type": "swap",
+        #                         "pair": "MANA-USDT",
+        #                         "business_type": "swap"
         #                     },
         #                 ]
         #             }
         #         ],
-        #         "ts":1640915104870
+        #         "ts": 1640915104870
         #     }
+        #
+        # TODO add balance parsing for linear swap
         #
         result = {'info': response}
         data = self.safe_value(response, 'data')
-        if spot:
-            balances = self.safe_value(data, 'list', [])
-            for i in range(0, len(balances)):
-                balance = balances[i]
-                currencyId = self.safe_string(balance, 'currency')
-                code = self.safe_currency_code(currencyId)
-                account = None
-                if code in result:
-                    account = result[code]
-                else:
-                    account = self.account()
-                if balance['type'] == 'trade':
-                    account['free'] = self.safe_string(balance, 'balance')
-                if balance['type'] == 'frozen':
-                    account['used'] = self.safe_string(balance, 'balance')
-                result[code] = account
+        if spot or margin:
+            if isolated:
+                for i in range(0, len(data)):
+                    entry = data[i]
+                    symbol = self.safe_symbol(self.safe_string(entry, 'symbol'))
+                    balances = self.safe_value(entry, 'list')
+                    subResult = {}
+                    for i in range(0, len(balances)):
+                        balance = balances[i]
+                        currencyId = self.safe_string(balance, 'currency')
+                        code = self.safe_currency_code(currencyId)
+                        subResult[code] = self.parse_margin_balance_helper(balance, code, subResult)
+                    result[symbol] = self.safe_balance(subResult)
+            else:
+                balances = self.safe_value(data, 'list', [])
+                for i in range(0, len(balances)):
+                    balance = balances[i]
+                    currencyId = self.safe_string(balance, 'currency')
+                    code = self.safe_currency_code(currencyId)
+                    result[code] = self.parse_margin_balance_helper(balance, code, result)
         elif linear:
             first = self.safe_value(data, 0, {})
             if cross:
@@ -2510,12 +3035,22 @@ class huobi(Exchange):
                 account['free'] = self.safe_string(balance, 'margin_available')
                 account['used'] = self.safe_string(balance, 'margin_frozen')
                 result[code] = account
-        return self.safe_balance(result)
+        isolatedMargin = isolated and (spot or margin)
+        return result if isolatedMargin else self.safe_balance(result)
 
     def fetch_order(self, id, symbol=None, params={}):
+        """
+        fetches information on an order made by the user
+        :param str|None symbol: unified symbol of the market the order was made in
+        :param dict params: extra parameters specific to the huobi api endpoint
+        :returns dict: An `order structure <https://docs.ccxt.com/en/latest/manual.html#order-structure>`
+        """
         self.load_markets()
+        market = None
+        if symbol is not None:
+            market = self.market(symbol)
         marketType = None
-        marketType, params = self.handle_market_type_and_params('fetchOrder', None, params)
+        marketType, params = self.handle_market_type_and_params('fetchOrder', market, params)
         request = {
             # spot -----------------------------------------------------------
             # 'order-id': 'id',
@@ -2530,7 +3065,6 @@ class huobi(Exchange):
             # 'contract_type': 'this_week',  # swap, self_week, next_week, quarter, next_ quarter
         }
         method = None
-        market = None
         if marketType == 'spot':
             clientOrderId = self.safe_string(params, 'clientOrderId')
             method = 'spotPrivateGetV1OrderOrdersOrderId'
@@ -2544,11 +3078,11 @@ class huobi(Exchange):
         else:
             if symbol is None:
                 raise ArgumentsRequired(self.id + ' fetchOrder() requires a symbol for ' + marketType + ' orders')
-            market = self.market(symbol)
             request['contract_code'] = market['id']
             if market['linear']:
-                defaultMargin = 'cross' if market['future'] else 'isolated'
-                marginMode = self.safe_string_2(self.options, 'defaultMarginMode', 'marginMode', defaultMargin)
+                marginMode = None
+                marginMode, params = self.handle_margin_mode_and_params('fetchOrder', params)
+                marginMode = 'cross' if (marginMode is None) else marginMode
                 if marginMode == 'isolated':
                     method = 'contractPrivatePostLinearSwapApiV1SwapOrderInfo'
                 elif marginMode == 'cross':
@@ -2698,6 +3232,18 @@ class huobi(Exchange):
             order = self.safe_value(order, 0)
         return self.parse_order(order)
 
+    def parse_margin_balance_helper(self, balance, code, result):
+        account = None
+        if code in result:
+            account = result[code]
+        else:
+            account = self.account()
+        if balance['type'] == 'trade':
+            account['free'] = self.safe_string(balance, 'balance')
+        if balance['type'] == 'frozen':
+            account['used'] = self.safe_string(balance, 'balance')
+        return account
+
     def fetch_spot_orders_by_states(self, states, symbol=None, since=None, limit=None, params={}):
         method = self.safe_string(self.options, 'fetchOrdersByStatesMethod', 'spot_private_get_v1_order_orders')  # spot_private_get_v1_order_history
         if method == 'spot_private_get_v1_order_orders':
@@ -2777,31 +3323,30 @@ class huobi(Exchange):
             # POST /api/v1/contract_hisorders inverse futures ----------------
             # 'symbol': market['settleId'],  # BTC, ETH, ...
             # 'order_type': '1',  # 1 limit，3 opponent，4 lightning, 5 trigger order, 6 pst_only, 7 optimal_5, 8 optimal_10, 9 optimal_20, 10 fok, 11 ioc
-            # POST /swap-api/v1/swap_hisorders inverse swap ------------------
-            # POST /linear-swap-api/v1/swap_hisorders linear isolated --------
-            # POST /linear-swap-api/v1/swap_cross_hisorders linear cross -----
-            'contract_code': market['id'],
-            'trade_type': 0,  # 0 all, 1 buy long, 2 sell short, 3 buy short, 4 sell long, 5 sell liquidation, 6 buy liquidation, 7 Delivery long, 8 Delivery short 11 reduce positions to close long, 12 reduce positions to close short
-            'type': 1,  # 1 all orders, 2 finished orders
-            'status': '0',  # comma separated, 0 all, 3 submitted orders, 4 partially matched, 5 partially cancelled, 6 fully matched and closed, 7 canceled
-            'create_date': 90,  # in days?
-            # 'page_index': 1,
-            # 'page_size': limit,  # default 20, max 50
-            # 'sort_by': 'create_date',  # create_date descending, update_time descending
+            # POST /swap-api/v3/swap_hisorders inverse swap ------------------
+            # POST /linear-swap-api/v3/swap_hisorders linear isolated --------
+            # POST /linear-swap-api/v3/swap_cross_hisorders linear cross -----
+            'contract': market['id'],
+            'trade_type': 0,  # 0:All; 1: Open long; 2: Open short; 3: Close short; 4: Close long; 5: Liquidate long positions; 6: Liquidate short positions, 17:buy(one-way mode), 18:sell(one-way mode)
+            'type': 1,  # 1:All Orders,2:Order in Finished Status
+            'status': '0',  # support multiple query seperated by ',',such as '3,4,5', 0: all. 3. Have sumbmitted the orders; 4. Orders partially matched; 5. Orders cancelled with partially matched; 6. Orders fully matched; 7. Orders cancelled
         }
+        if since is not None:
+            request['start_time'] = since  # max 90 days back
+            # request['end_time'] = since + 172800000  # 48 hours window
         method = None
-        request['contract_code'] = market['id']
         if market['linear']:
-            defaultMargin = 'cross' if market['future'] else 'isolated'
-            marginMode = self.safe_string_2(self.options, 'defaultMarginMode', 'marginMode', defaultMargin)
+            marginMode = None
+            marginMode, params = self.handle_margin_mode_and_params('fetchContractOrders', params)
+            marginMode = 'cross' if (marginMode is None) else marginMode
             method = self.get_supported_mapping(marginMode, {
-                'isolated': 'contractPrivatePostLinearSwapApiV1SwapHisorders',
-                'cross': 'contractPrivatePostLinearSwapApiV1SwapCrossHisorders',
+                'isolated': 'contractPrivatePostLinearSwapApiV3SwapHisorders',
+                'cross': 'contractPrivatePostLinearSwapApiV3SwapCrossHisorders',
             })
         elif market['inverse']:
             method = self.get_supported_mapping(marketType, {
-                'future': 'contractPrivatePostApiV1ContractHisorders',
-                'swap': 'contractPrivatePostSwapApiV1SwapHisorders',
+                'future': 'contractPrivatePostApiV3ContractHisorders',
+                'swap': 'contractPrivatePostSwapApiV3SwapHisorders',
             })
             if marketType == 'future':
                 request['symbol'] = market['settleId']
@@ -2840,11 +3385,14 @@ class huobi(Exchange):
         #                     "liquidation_type": "0",
         #                     "is_tpsl": 0,
         #                     "real_profit": 0
-        #                     "pair": "BTC-USDT",
-        #                     "business_type": "futures",
         #                     "margin_asset": "USDT",
         #                     "margin_mode": "cross",
         #                     "margin_account": "USDT",
+        #                     "trade_partition": "USDT",  # only in isolated & cross of linear
+        #                     "reduce_only": "1",  # only in isolated & cross of linear
+        #                     "contract_type": "quarter",  # only in cross-margin(inverse & linear)
+        #                     "pair": "BTC-USDT",  # only in cross-margin(inverse & linear)
+        #                     "business_type": "futures"  # only in cross-margin(inverse & linear)
         #                 }
         #             ],
         #             "total_page": 19,
@@ -2854,8 +3402,7 @@ class huobi(Exchange):
         #         "ts": 1604370617322
         #     }
         #
-        data = self.safe_value(response, 'data', {})
-        orders = self.safe_value(data, 'orders', [])
+        orders = self.safe_value(response, 'data', [])
         return self.parse_orders(orders, market, since, limit)
 
     def fetch_closed_contract_orders(self, symbol=None, since=None, limit=None, params={}):
@@ -2865,9 +3412,20 @@ class huobi(Exchange):
         return self.fetch_contract_orders(symbol, since, limit, self.extend(request, params))
 
     def fetch_orders(self, symbol=None, since=None, limit=None, params={}):
+        """
+        fetches information on multiple orders made by the user
+        :param str|None symbol: unified market symbol of the market orders were made in
+        :param int|None since: the earliest time in ms to fetch orders for
+        :param int|None limit: the maximum number of  orde structures to retrieve
+        :param dict params: extra parameters specific to the huobi api endpoint
+        :returns [dict]: a list of `order structures <https://docs.ccxt.com/en/latest/manual.html#order-structure>`
+        """
         self.load_markets()
+        market = None
+        if symbol is not None:
+            market = self.market(symbol)
         marketType = None
-        marketType, params = self.handle_market_type_and_params('fetchOrders', None, params)
+        marketType, params = self.handle_market_type_and_params('fetchOrders', market, params)
         method = self.get_supported_mapping(marketType, {
             'spot': 'fetchSpotOrders',
             'swap': 'fetchContractOrders',
@@ -2881,9 +3439,20 @@ class huobi(Exchange):
         return getattr(self, method)(symbol, since, limit, params)
 
     def fetch_closed_orders(self, symbol=None, since=None, limit=None, params={}):
+        """
+        fetches information on multiple closed orders made by the user
+        :param str|None symbol: unified market symbol of the market orders were made in
+        :param int|None since: the earliest time in ms to fetch orders for
+        :param int|None limit: the maximum number of  orde structures to retrieve
+        :param dict params: extra parameters specific to the huobi api endpoint
+        :returns [dict]: a list of `order structures <https://docs.ccxt.com/en/latest/manual.html#order-structure>`
+        """
         self.load_markets()
+        market = None
+        if symbol is not None:
+            market = self.market(symbol)
         marketType = None
-        marketType, params = self.handle_market_type_and_params('fetchClosedOrders', None, params)
+        marketType, params = self.handle_market_type_and_params('fetchClosedOrders', market, params)
         method = self.get_supported_mapping(marketType, {
             'spot': 'fetchClosedSpotOrders',
             'swap': 'fetchClosedContractOrders',
@@ -2894,9 +3463,20 @@ class huobi(Exchange):
         return getattr(self, method)(symbol, since, limit, params)
 
     def fetch_open_orders(self, symbol=None, since=None, limit=None, params={}):
+        """
+        fetch all unfilled currently open orders
+        :param str|None symbol: unified market symbol
+        :param int|None since: the earliest time in ms to fetch open orders for
+        :param int|None limit: the maximum number of  open orders structures to retrieve
+        :param dict params: extra parameters specific to the huobi api endpoint
+        :returns [dict]: a list of `order structures <https://docs.ccxt.com/en/latest/manual.html#order-structure>`
+        """
         self.load_markets()
+        market = None
+        if symbol is not None:
+            market = self.market(symbol)
         marketType = None
-        marketType, params = self.handle_market_type_and_params('fetchOpenOrders', None, params)
+        marketType, params = self.handle_market_type_and_params('fetchOpenOrders', market, params)
         request = {
             # spot -----------------------------------------------------------
             # 'account-id': account['id'],
@@ -2913,7 +3493,6 @@ class huobi(Exchange):
             # 'trade_type': 0,  # 0 all, 1 buy long, 2 sell short, 3 buy short, 4 sell long
         }
         method = None
-        market = None
         if marketType == 'spot':
             method = 'spotPrivateGetV1OrderOpenOrders'
             if symbol is not None:
@@ -2940,8 +3519,9 @@ class huobi(Exchange):
             market = self.market(symbol)
             request['contract_code'] = market['id']
             if market['linear']:
-                defaultMargin = 'cross' if market['future'] else 'isolated'
-                marginMode = self.safe_string_2(self.options, 'defaultMarginMode', 'marginMode', defaultMargin)
+                marginMode = None
+                marginMode, params = self.handle_margin_mode_and_params('fetchOpenOrders', params)
+                marginMode = 'cross' if (marginMode is None) else marginMode
                 if marginMode == 'isolated':
                     method = 'contractPrivatePostLinearSwapApiV1SwapOpenorders'
                 elif marginMode == 'cross':
@@ -3133,60 +3713,95 @@ class huobi(Exchange):
         # contracts fetchOrder detailed
         #
         #     {
-        #         "status": "ok",
-        #         "data": {
-        #             "symbol": "BTC",
-        #             "contract_code": "BTC-USDT",
-        #             "instrument_price": 0,
-        #             "final_interest": 0,
-        #             "adjust_value": 0,
-        #             "lever_rate": 10,
-        #             "direction": "sell",
-        #             "offset": "open",
-        #             "volume": 1.000000000000000000,
-        #             "price": 13059.800000000000000000,
-        #             "created_at": 1603703614712,
-        #             "canceled_at": 0,
-        #             "order_source": "api",
-        #             "order_price_type": "opponent",
-        #             "margin_frozen": 0,
-        #             "profit": 0,
-        #             "trades": [
-        #                 {
-        #                     "trade_id": 131560927,
-        #                     "trade_price": 13059.800000000000000000,
-        #                     "trade_volume": 1.000000000000000000,
-        #                     "trade_turnover": 13.059800000000000000,
-        #                     "trade_fee": -0.005223920000000000,
-        #                     "created_at": 1603703614715,
-        #                     "role": "taker",
-        #                     "fee_asset": "USDT",
-        #                     "profit": 0,
-        #                     "real_profit": 0,
-        #                     "id": "131560927-770334322963152896-1"
-        #                 }
-        #             ],
-        #             "total_page": 1,
-        #             "current_page": 1,
-        #             "total_size": 1,
-        #             "liquidation_type": "0",
-        #             "fee_asset": "USDT",
-        #             "fee": -0.005223920000000000,
-        #             "order_id": 770334322963152896,
-        #             "order_id_str": "770334322963152896",
-        #             "client_order_id": 57012021045,
-        #             "order_type": "1",
-        #             "status": 6,
-        #             "trade_avg_price": 13059.800000000000000000,
-        #             "trade_turnover": 13.059800000000000000,
-        #             "trade_volume": 1.000000000000000000,
-        #             "margin_asset": "USDT",
-        #             "margin_mode": "isolated",
-        #             "margin_account": "BTC-USDT",
-        #             "real_profit": 0,
-        #             "is_tpsl": 0
-        #         },
-        #         "ts": 1603703678477
+        #         "symbol": "BTC",
+        #         "contract_code": "BTC-USDT",
+        #         "instrument_price": 0,
+        #         "final_interest": 0,
+        #         "adjust_value": 0,
+        #         "lever_rate": 10,
+        #         "direction": "sell",
+        #         "offset": "open",
+        #         "volume": 1.000000000000000000,
+        #         "price": 13059.800000000000000000,
+        #         "created_at": 1603703614712,
+        #         "canceled_at": 0,
+        #         "order_source": "api",
+        #         "order_price_type": "opponent",
+        #         "margin_frozen": 0,
+        #         "profit": 0,
+        #         "trades": [
+        #             {
+        #                 "trade_id": 131560927,
+        #                 "trade_price": 13059.800000000000000000,
+        #                 "trade_volume": 1.000000000000000000,
+        #                 "trade_turnover": 13.059800000000000000,
+        #                 "trade_fee": -0.005223920000000000,
+        #                 "created_at": 1603703614715,
+        #                 "role": "taker",
+        #                 "fee_asset": "USDT",
+        #                 "profit": 0,
+        #                 "real_profit": 0,
+        #                 "id": "131560927-770334322963152896-1"
+        #             }
+        #         ],
+        #         "total_page": 1,
+        #         "current_page": 1,
+        #         "total_size": 1,
+        #         "liquidation_type": "0",
+        #         "fee_asset": "USDT",
+        #         "fee": -0.005223920000000000,
+        #         "order_id": 770334322963152896,
+        #         "order_id_str": "770334322963152896",
+        #         "client_order_id": 57012021045,
+        #         "order_type": "1",
+        #         "status": 6,
+        #         "trade_avg_price": 13059.800000000000000000,
+        #         "trade_turnover": 13.059800000000000000,
+        #         "trade_volume": 1.000000000000000000,
+        #         "margin_asset": "USDT",
+        #         "margin_mode": "isolated",
+        #         "margin_account": "BTC-USDT",
+        #         "real_profit": 0,
+        #         "is_tpsl": 0
+        #     }
+        #
+        # fetchOrders
+        #
+        #     {
+        #         "order_id": 773131315209248768,
+        #         "contract_code": "ADA201225",
+        #         "symbol": "ADA",
+        #         "lever_rate": 20,
+        #         "direction": "buy",
+        #         "offset": "close",
+        #         "volume": 1,
+        #         "price": 0.0925,
+        #         "create_date": 1604370469629,
+        #         "update_time": 1603704221118,
+        #         "order_source": "web",
+        #         "order_price_type": 6,
+        #         "order_type": 1,
+        #         "margin_frozen": 0,
+        #         "profit": 0,
+        #         "contract_type": "quarter",
+        #         "trade_volume": 0,
+        #         "trade_turnover": 0,
+        #         "fee": 0,
+        #         "trade_avg_price": 0,
+        #         "status": 3,
+        #         "order_id_str": "773131315209248768",
+        #         "fee_asset": "ADA",
+        #         "liquidation_type": "0",
+        #         "is_tpsl": 0,
+        #         "real_profit": 0
+        #         "margin_asset": "USDT",
+        #         "margin_mode": "cross",
+        #         "margin_account": "USDT",
+        #         "trade_partition": "USDT",  # only in isolated & cross of linear
+        #         "reduce_only": "1",  # only in isolated & cross of linear
+        #         "contract_type": "quarter",  # only in cross-margin(inverse & linear)
+        #         "pair": "BTC-USDT",  # only in cross-margin(inverse & linear)
+        #         "business_type": "futures"  # only in cross-margin(inverse & linear)
         #     }
         #
         id = self.safe_string_2(order, 'id', 'order_id_str')
@@ -3199,14 +3814,21 @@ class huobi(Exchange):
         status = self.parse_order_status(self.safe_string_2(order, 'state', 'status'))
         marketId = self.safe_string_2(order, 'contract_code', 'symbol')
         market = self.safe_market(marketId, market)
-        timestamp = self.safe_integer_2(order, 'created_at', 'created-at')
+        timestamp = self.safe_integer_n(order, ['created_at', 'created-at', 'create_date'])
         clientOrderId = self.safe_string_2(order, 'client_order_id', 'client-order-id')
-        amount = self.safe_string_2(order, 'volume', 'amount')
-        filled = self.safe_string_2(order, 'filled-amount', 'field-amount')  # typo in their API, filled amount
-        filled = self.safe_string(order, 'trade_volume', filled)
+        cost = None
+        amount = None
+        if (type is not None) and (type.find('market') >= 0):
+            # for market orders amount is in quote currency, meaning it is the cost
+            if side == 'sell':
+                cost = self.safe_string(order, 'field-cash-amount')
+            else:
+                cost = self.safe_string(order, 'amount')
+        else:
+            amount = self.safe_string_2(order, 'volume', 'amount')
+            cost = self.safe_string_n(order, ['filled-cash-amount', 'field-cash-amount', 'trade_turnover'])  # same typo
+        filled = self.safe_string_n(order, ['filled-amount', 'field-amount', 'trade_volume'])  # typo in their API, filled amount
         price = self.safe_string(order, 'price')
-        cost = self.safe_string_2(order, 'filled-cash-amount', 'field-cash-amount')  # same typo
-        cost = self.safe_string(order, 'trade_turnover', cost)
         feeCost = self.safe_string_2(order, 'filled-fees', 'field-fees')  # typo in their API, filled feeSide
         feeCost = self.safe_string(order, 'fee', feeCost)
         fee = None
@@ -3249,6 +3871,20 @@ class huobi(Exchange):
         }, market)
 
     def create_order(self, symbol, type, side, amount, price=None, params={}):
+        """
+        create a trade order
+        :param str symbol: unified symbol of the market to create an order in
+        :param str type: 'market' or 'limit'
+        :param str side: 'buy' or 'sell'
+        :param float amount: how much of currency you want to trade in units of base currency
+        :param float|None price: the price at which the order is to be fullfilled, in units of the quote currency, ignored in market orders
+        :param dict params: extra parameters specific to the huobi api endpoint
+        :param float|None params['stopPrice']: *spot and margin only* The price at which a trigger order is triggered at
+        :param str|None params['operator']: *spot and margin only* gte or lte, trigger price condition
+        :param str|None params['offset']: *contract only* 'open', 'close', or 'both', required in hedge mode
+        :param bool|None params['postOnly']: *contract only* True or False
+        :returns dict: an `order structure <https://docs.ccxt.com/en/latest/manual.html#order-structure>`
+        """
         self.load_markets()
         market = self.market(symbol)
         marketType, query = self.handle_market_type_and_params('createOrder', market, params)
@@ -3320,7 +3956,9 @@ class huobi(Exchange):
                     # https://github.com/ccxt/ccxt/pull/4395
                     # https://github.com/ccxt/ccxt/issues/7611
                     # we use amountToPrecision here because the exchange requires cost in base precision
-                    request['amount'] = self.cost_to_precision(symbol, float(amount) * float(price))
+                    amountString = self.number_to_string(amount)
+                    priceString = self.number_to_string(price)
+                    request['amount'] = self.cost_to_precision(symbol, Precise.string_mul(amountString, priceString))
             else:
                 request['amount'] = self.cost_to_precision(symbol, amount)
         else:
@@ -3358,21 +3996,19 @@ class huobi(Exchange):
 
     def create_contract_order(self, symbol, type, side, amount, price=None, params={}):
         offset = self.safe_string(params, 'offset')
-        if offset is None:
-            raise ArgumentsRequired(self.id + ' createOrder() requires a string offset parameter for contract orders, open or close')
         stopPrice = self.safe_string(params, 'stopPrice')
         if stopPrice is not None:
             raise NotSupported(self.id + ' createOrder() supports tp_trigger_price + tp_order_price for take profit orders and/or sl_trigger_price + sl_order price for stop loss orders, stop orders are supported only with open long orders and open short orders')
         market = self.market(symbol)
         request = {
-            # 'symbol': 'BTC',  # optional, case-insenstive, both uppercase and lowercase are supported, "BTC", "ETH", ...
+            # 'symbol': 'BTC',  # optional, case-insensitive, both uppercase and lowercase are supported, "BTC", "ETH", ...
             # 'contract_type': 'this_week',  # optional, self_week, next_week, quarter, next_quarter
             'contract_code': market['id'],  # optional BTC180914
             # 'client_order_id': clientOrderId,  # optional, must be less than 9223372036854775807
             # 'price': self.price_to_precision(symbol, price),  # optional
             'volume': self.amount_to_precision(symbol, amount),
             'direction': side,  # buy, sell
-            'offset': offset,  # open, close
+            # 'offset': offset,  # open, close, both
             #
             #     direction buy, offset open = open long
             #     direction sell, offset close = close long
@@ -3449,8 +4085,9 @@ class huobi(Exchange):
             params = self.omit(params, ['client_order_id', 'clientOrderId'])
         method = None
         if market['linear']:
-            defaultMargin = 'cross' if market['future'] else 'isolated'
-            marginMode = self.safe_string_2(self.options, 'defaultMarginMode', 'marginMode', defaultMargin)
+            marginMode = None
+            marginMode, params = self.handle_margin_mode_and_params('createOrder', params)
+            marginMode = 'cross' if (marginMode is None) else marginMode
             if marginMode == 'isolated':
                 method = 'contractPrivatePostLinearSwapApiV1SwapOrder'
             elif marginMode == 'cross':
@@ -3477,9 +4114,19 @@ class huobi(Exchange):
         return self.parse_order(data, market)
 
     def cancel_order(self, id, symbol=None, params={}):
+        """
+        cancels an open order
+        :param str id: order id
+        :param str|None symbol: unified symbol of the market the order was made in
+        :param dict params: extra parameters specific to the huobi api endpoint
+        :returns dict: An `order structure <https://docs.ccxt.com/en/latest/manual.html#order-structure>`
+        """
         self.load_markets()
+        market = None
+        if symbol is not None:
+            market = self.market(symbol)
         marketType = None
-        marketType, params = self.handle_market_type_and_params('cancelOrder', None, params)
+        marketType, params = self.handle_market_type_and_params('cancelOrder', market, params)
         request = {
             # spot -----------------------------------------------------------
             # 'order-id': 'id',
@@ -3493,7 +4140,6 @@ class huobi(Exchange):
             # 'contract_type': 'this_week',  # swap, self_week, next_week, quarter, next_ quarter
         }
         method = None
-        market = None
         if marketType == 'spot':
             clientOrderId = self.safe_string_2(params, 'client-order-id', 'clientOrderId')
             method = 'spotPrivatePostV1OrderOrdersOrderIdSubmitcancel'
@@ -3506,11 +4152,11 @@ class huobi(Exchange):
         else:
             if symbol is None:
                 raise ArgumentsRequired(self.id + ' cancelOrder() requires a symbol for ' + marketType + ' orders')
-            market = self.market(symbol)
             request['contract_code'] = market['id']
             if market['linear']:
-                defaultMargin = 'cross' if market['future'] else 'isolated'
-                marginMode = self.safe_string_2(self.options, 'defaultMarginMode', 'marginMode', defaultMargin)
+                marginMode = None
+                marginMode, params = self.handle_margin_mode_and_params('cancelOrder', params)
+                marginMode = 'cross' if (marginMode is None) else marginMode
                 if marginMode == 'isolated':
                     method = 'contractPrivatePostLinearSwapApiV1SwapCancel'
                 elif marginMode == 'cross':
@@ -3555,9 +4201,19 @@ class huobi(Exchange):
         })
 
     def cancel_orders(self, ids, symbol=None, params={}):
+        """
+        cancel multiple orders
+        :param [str] ids: order ids
+        :param str|None symbol: unified market symbol, default is None
+        :param dict params: extra parameters specific to the huobi api endpoint
+        :returns dict: an list of `order structures <https://docs.ccxt.com/en/latest/manual.html#order-structure>`
+        """
         self.load_markets()
+        market = None
+        if symbol is not None:
+            market = self.market(symbol)
         marketType = None
-        marketType, params = self.handle_market_type_and_params('cancelOrder', None, params)
+        marketType, params = self.handle_market_type_and_params('cancelOrders', market, params)
         request = {
             # spot -----------------------------------------------------------
             # 'order-ids': ids.jsoin(','),  # max 50
@@ -3590,8 +4246,9 @@ class huobi(Exchange):
             market = self.market(symbol)
             request['contract_code'] = market['id']
             if market['linear']:
-                defaultMargin = 'cross' if market['future'] else 'isolated'
-                marginMode = self.safe_string_2(self.options, 'defaultMarginMode', 'marginMode', defaultMargin)
+                marginMode = None
+                marginMode, params = self.handle_margin_mode_and_params('cancelOrders', params)
+                marginMode = 'cross' if (marginMode is None) else marginMode
                 if marginMode == 'isolated':
                     method = 'contractPrivatePostLinearSwapApiV1SwapCancel'
                 elif marginMode == 'cross':
@@ -3666,9 +4323,18 @@ class huobi(Exchange):
         return response
 
     def cancel_all_orders(self, symbol=None, params={}):
+        """
+        cancel all open orders
+        :param str|None symbol: unified market symbol, only orders in the market of self symbol are cancelled when symbol is not None
+        :param dict params: extra parameters specific to the huobi api endpoint
+        :returns [dict]: a list of `order structures <https://docs.ccxt.com/en/latest/manual.html#order-structure>`
+        """
         self.load_markets()
+        market = None
+        if symbol is not None:
+            market = self.market(symbol)
         marketType = None
-        marketType, params = self.handle_market_type_and_params('cancelOrder', None, params)
+        marketType, params = self.handle_market_type_and_params('cancelAllOrders', market, params)
         request = {
             # spot -----------------------------------------------------------
             # 'account-id': account['id'],
@@ -3683,7 +4349,6 @@ class huobi(Exchange):
             # 'direction': 'buy':  # buy, sell
             # 'offset': 'open',  # open, close
         }
-        market = None
         method = None
         if marketType == 'spot':
             if symbol is not None:
@@ -3692,12 +4357,13 @@ class huobi(Exchange):
             method = 'spotPrivatePostV1OrderOrdersBatchCancelOpenOrders'
         else:
             if symbol is None:
-                raise ArgumentsRequired(self.id + ' cancelOrders() requires a symbol for ' + marketType + ' orders')
+                raise ArgumentsRequired(self.id + ' cancelAllOrders() requires a symbol for ' + marketType + ' orders')
             market = self.market(symbol)
             request['contract_code'] = market['id']
             if market['linear']:
-                defaultMargin = 'cross' if market['future'] else 'isolated'
-                marginMode = self.safe_string_2(self.options, 'defaultMarginMode', 'marginMode', defaultMargin)
+                marginMode = None
+                marginMode, params = self.handle_margin_mode_and_params('cancelAllOrders', params)
+                marginMode = 'cross' if (marginMode is None) else marginMode
                 if marginMode == 'isolated':
                     method = 'contractPrivatePostLinearSwapApiV1SwapCancelallall'
                 elif marginMode == 'cross':
@@ -3709,7 +4375,7 @@ class huobi(Exchange):
                 elif marketType == 'swap':
                     method = 'contractPrivatePostSwapApiV1SwapCancelall'
                 else:
-                    raise NotSupported(self.id + ' cancelOrders() does not support ' + marketType + ' markets')
+                    raise NotSupported(self.id + ' cancelAllOrders() does not support ' + marketType + ' markets')
         response = getattr(self, method)(self.extend(request, params))
         #
         #     {
@@ -3723,17 +4389,6 @@ class huobi(Exchange):
         #
         return response
 
-    def currency_to_precision(self, code, fee):
-        return self.decimal_to_precision(fee, 0, self.currencies[code]['precision'])
-
-    def safe_network(self, networkId):
-        lastCharacterIndex = len(networkId) - 1
-        lastCharacter = networkId[lastCharacterIndex]
-        if lastCharacter == '1':
-            networkId = networkId[0:lastCharacterIndex]
-        networksById = {}
-        return self.safe_string(networksById, networkId, networkId)
-
     def parse_deposit_address(self, depositAddress, currency=None):
         #
         #     {
@@ -3745,28 +4400,28 @@ class huobi(Exchange):
         #
         address = self.safe_string(depositAddress, 'address')
         tag = self.safe_string(depositAddress, 'addressTag')
-        if tag == '':
-            tag = None
         currencyId = self.safe_string(depositAddress, 'currency')
         currency = self.safe_currency(currencyId, currency)
         code = self.safe_currency_code(currencyId, currency)
-        networkId = self.safe_string(depositAddress, 'chain')
-        networks = self.safe_value(currency, 'networks', {})
-        networksById = self.index_by(networks, 'id')
-        networkValue = self.safe_value(networksById, networkId, networkId)
-        network = self.safe_string(networkValue, 'network')
         note = self.safe_string(depositAddress, 'note')
+        networkId = self.safe_string(depositAddress, 'chain')
         self.check_address(address)
         return {
             'currency': code,
             'address': address,
             'tag': tag,
-            'network': network,
+            'network': self.network_id_to_code(networkId, code),
             'note': note,
             'info': depositAddress,
         }
 
     def fetch_deposit_addresses_by_network(self, code, params={}):
+        """
+        fetch a dictionary of addresses for a currency, indexed by network
+        :param str code: unified currency code of the currency for the deposit address
+        :param dict params: extra parameters specific to the huobi api endpoint
+        :returns dict: a dictionary of `address structures <https://docs.ccxt.com/en/latest/manual.html#address-structure>` indexed by the network
+        """
         self.load_markets()
         currency = self.currency(code)
         request = {
@@ -3791,32 +4446,19 @@ class huobi(Exchange):
         return self.index_by(parsed, 'network')
 
     def fetch_deposit_address(self, code, params={}):
-        rawNetwork = self.safe_string_upper(params, 'network')
-        networks = self.safe_value(self.options, 'networks', {})
-        network = self.safe_string_upper(networks, rawNetwork, rawNetwork)
-        params = self.omit(params, 'network')
-        response = self.fetch_deposit_addresses_by_network(code, params)
-        result = None
-        if network is None:
-            result = self.safe_value(response, code)
-            if result is None:
-                alias = self.safe_string(networks, code, code)
-                result = self.safe_value(response, alias)
-                if result is None:
-                    defaultNetwork = self.safe_string(self.options, 'defaultNetwork', 'ERC20')
-                    result = self.safe_value(response, defaultNetwork)
-                    if result is None:
-                        values = list(response.values())
-                        result = self.safe_value(values, 0)
-                        if result is None:
-                            raise InvalidAddress(self.id + ' fetchDepositAddress() cannot find deposit address for ' + code)
-            return result
-        result = self.safe_value(response, network)
-        if result is None:
-            raise InvalidAddress(self.id + ' fetchDepositAddress() cannot find ' + network + ' deposit address for ' + code)
-        return result
+        """
+        fetch the deposit address for a currency associated with self account
+        :param str code: unified currency code
+        :param dict params: extra parameters specific to the huobi api endpoint
+        :returns dict: an `address structure <https://docs.ccxt.com/en/latest/manual.html#address-structure>`
+        """
+        self.load_markets()
+        networkCode, paramsOmited = self.handle_network_code_and_params(params)
+        indexedAddresses = self.fetch_deposit_addresses_by_network(code, paramsOmited)
+        selectedNetworkCode = self.select_network_code_from_unified_networks(code, networkCode, indexedAddresses)
+        return indexedAddresses[selectedNetworkCode]
 
-    def fetch_withdraw_addresses_by_network(self, code, params={}):
+    def fetch_withdraw_addresses(self, code, note=None, networkCode=None, params={}):
         self.load_markets()
         currency = self.currency(code)
         request = {
@@ -3838,36 +4480,25 @@ class huobi(Exchange):
         #     }
         #
         data = self.safe_value(response, 'data', [])
-        parsed = self.parse_deposit_addresses(data, [code], False)
-        return self.index_by(parsed, 'network')
-
-    def fetch_withdraw_address(self, code, params={}):
-        rawNetwork = self.safe_string_upper(params, 'network')
-        networks = self.safe_value(self.options, 'networks', {})
-        network = self.safe_string_upper(networks, rawNetwork, rawNetwork)
-        params = self.omit(params, 'network')
-        response = self.fetch_withdraw_addresses_by_network(code, params)
-        result = None
-        if network is None:
-            result = self.safe_value(response, code)
-            if result is None:
-                alias = self.safe_string(networks, code, code)
-                result = self.safe_value(response, alias)
-                if result is None:
-                    defaultNetwork = self.safe_string(self.options, 'defaultNetwork', 'ERC20')
-                    result = self.safe_value(response, defaultNetwork)
-                    if result is None:
-                        values = list(response.values())
-                        result = self.safe_value(values, 0)
-                        if result is None:
-                            raise InvalidAddress(self.id + ' fetchWithdrawAddress() cannot find withdraw address for ' + code)
-            return result
-        result = self.safe_value(response, network)
-        if result is None:
-            raise InvalidAddress(self.id + ' fetchWithdrawAddress() cannot find ' + network + ' withdraw address for ' + code)
-        return result
+        allAddresses = self.parse_deposit_addresses(data, [code], False)
+        addresses = []
+        for i in range(0, len(allAddresses)):
+            address = allAddresses[i]
+            noteMatch = (note is None) or (address['note'] == note)
+            networkMatch = (networkCode is None) or (address['network'] == networkCode)
+            if noteMatch and networkMatch:
+                addresses.append(address)
+        return addresses
 
     def fetch_deposits(self, code=None, since=None, limit=None, params={}):
+        """
+        fetch all deposits made to an account
+        :param str|None code: unified currency code
+        :param int|None since: the earliest time in ms to fetch deposits for
+        :param int|None limit: the maximum number of deposits structures to retrieve
+        :param dict params: extra parameters specific to the huobi api endpoint
+        :returns [dict]: a list of `transaction structures <https://docs.ccxt.com/en/latest/manual.html#transaction-structure>`
+        """
         if limit is None or limit > 100:
             limit = 100
         self.load_markets()
@@ -3883,10 +4514,43 @@ class huobi(Exchange):
         if limit is not None:
             request['size'] = limit  # max 100
         response = self.spotPrivateGetV1QueryDepositWithdraw(self.extend(request, params))
-        # return response
+        #
+        #    {
+        #         "status": "ok",
+        #         "data": [
+        #             {
+        #                 "id": "75115912",
+        #                 "type": "deposit",
+        #                 "sub-type": "NORMAL",
+        #                 "request-id": "trc20usdt-a2e229a44ef2a948c874366230bb56aa73631cc0a03d177bd8b4c9d38262d7ff-200",
+        #                 "currency": "usdt",
+        #                 "chain": "trc20usdt",
+        #                 "tx-hash": "a2e229a44ef2a948c874366230bb56aa73631cc0a03d177bd8b4c9d38262d7ff",
+        #                 "amount": "12.000000000000000000",
+        #                 "from-addr-tag": "",
+        #                 "address-id": "0",
+        #                 "address": "TRFTd1FxepQE6CnpwzUEMEbFaLm5bJK67s",
+        #                 "address-tag": "",
+        #                 "fee": "0",
+        #                 "state": "safe",
+        #                 "wallet-confirm": "2",
+        #                 "created-at": "1621843808662",
+        #                 "updated-at": "1621843857137"
+        #             },
+        #         ]
+        #     }
+        #
         return self.parse_transactions(response['data'], currency, since, limit)
 
     def fetch_withdrawals(self, code=None, since=None, limit=None, params={}):
+        """
+        fetch all withdrawals made from an account
+        :param str|None code: unified currency code
+        :param int|None since: the earliest time in ms to fetch withdrawals for
+        :param int|None limit: the maximum number of withdrawals structures to retrieve
+        :param dict params: extra parameters specific to the huobi api endpoint
+        :returns [dict]: a list of `transaction structures <https://docs.ccxt.com/en/latest/manual.html#transaction-structure>`
+        """
         if limit is None or limit > 100:
             limit = 100
         self.load_markets()
@@ -3902,7 +4566,30 @@ class huobi(Exchange):
         if limit is not None:
             request['size'] = limit  # max 100
         response = self.spotPrivateGetV1QueryDepositWithdraw(self.extend(request, params))
-        # return response
+        #
+        #    {
+        #         "status": "ok",
+        #         "data": [
+        #             {
+        #                 "id": "61335312",
+        #                 "type": "withdraw",
+        #                 "sub-type": "NORMAL",
+        #                 "currency": "usdt",
+        #                 "chain": "trc20usdt",
+        #                 "tx-hash": "30a3111f2fead74fae45c6218ca3150fc33cab2aa59cfe41526b96aae79ce4ec",
+        #                 "amount": "12.000000000000000000",
+        #                 "from-addr-tag": "",
+        #                 "address-id": "27321591",
+        #                 "address": "TRf5JacJQRsF4Nm2zu11W6maDGeiEWQu9e",
+        #                 "address-tag": "",
+        #                 "fee": "1.000000000000000000",
+        #                 "state": "confirmed",
+        #                 "created-at": "1621852316553",
+        #                 "updated-at": "1621852467041"
+        #             },
+        #         ]
+        #     }
+        #
         return self.parse_transactions(response['data'], currency, since, limit)
 
     def parse_transaction(self, transaction, currency=None):
@@ -3910,35 +4597,43 @@ class huobi(Exchange):
         # fetchDeposits
         #
         #     {
-        #         'id': 8211029,
-        #         'type': 'deposit',
-        #         'currency': 'eth',
-        #         'chain': 'eth',
-        #         'tx-hash': 'bd315....',
-        #         'amount': 0.81162421,
-        #         'address': '4b8b....',
-        #         'address-tag': '',
-        #         'fee': 0,
-        #         'state': 'safe',
-        #         'created-at': 1542180380965,
-        #         'updated-at': 1542180788077
-        #     }
+        #         "id": "75115912",
+        #         "type": "deposit",
+        #         "sub-type": "NORMAL",
+        #         "request-id": "trc20usdt-a2e229a44ef2a948c874366230bb56aa73631cc0a03d177bd8b4c9d38262d7ff-200",
+        #         "currency": "usdt",
+        #         "chain": "trc20usdt",
+        #         "tx-hash": "a2e229a44ef2a948c874366230bb56aa73631cc0a03d177bd8b4c9d38262d7ff",
+        #         "amount": "2849.000000000000000000",
+        #         "from-addr-tag": "",
+        #         "address-id": "0",
+        #         "address": "TRFTd1FxepQE6CnpwzUEMEbFaLm5bJK67s",
+        #         "address-tag": "",
+        #         "fee": "0",
+        #         "state": "safe",
+        #         "wallet-confirm": "2",
+        #         "created-at": "1621843808662",
+        #         "updated-at": "1621843857137"
+        #     },
         #
         # fetchWithdrawals
         #
         #     {
-        #         'id': 6908275,
-        #         'type': 'withdraw',
-        #         'currency': 'btc',
-        #         'chain': 'btc',
-        #         'tx-hash': 'c1a1a....',
-        #         'amount': 0.80257005,
-        #         'address': '1QR....',
-        #         'address-tag': '',
-        #         'fee': 0.0005,
-        #         'state': 'confirmed',
-        #         'created-at': 1552107295685,
-        #         'updated-at': 1552108032859
+        #         "id": "61335312",
+        #         "type": "withdraw",
+        #         "sub-type": "NORMAL",
+        #         "currency": "usdt",
+        #         "chain": "trc20usdt",
+        #         "tx-hash": "30a3111f2fead74fae45c6218ca3150fc33cab2aa59cfe41526b96aae79ce4ec",
+        #         "amount": "12.000000000000000000",
+        #         "from-addr-tag": "",
+        #         "address-id": "27321591",
+        #         "address": "TRf5JacJQRsF4Nm2zu11W6maDGeiEWQu9e",
+        #         "address-tag": "",
+        #         "fee": "1.000000000000000000",
+        #         "state": "confirmed",
+        #         "created-at": "1621852316553",
+        #         "updated-at": "1621852467041"
         #     }
         #
         # withdraw
@@ -3949,39 +4644,35 @@ class huobi(Exchange):
         #     }
         #
         timestamp = self.safe_integer(transaction, 'created-at')
-        updated = self.safe_integer(transaction, 'updated-at')
         code = self.safe_currency_code(self.safe_string(transaction, 'currency'))
         type = self.safe_string(transaction, 'type')
         if type == 'withdraw':
             type = 'withdrawal'
-        status = self.parse_transaction_status(self.safe_string(transaction, 'state'))
-        tag = self.safe_string(transaction, 'address-tag')
-        feeCost = self.safe_number(transaction, 'fee')
+        feeCost = self.safe_string(transaction, 'fee')
         if feeCost is not None:
-            feeCost = abs(feeCost)
-        address = self.safe_string(transaction, 'address')
-        network = self.safe_string_upper(transaction, 'chain')
+            feeCost = Precise.string_abs(feeCost)
+        networkId = self.safe_string(transaction, 'chain')
         return {
             'info': transaction,
             'id': self.safe_string_2(transaction, 'id', 'data'),
             'txid': self.safe_string(transaction, 'tx-hash'),
             'timestamp': timestamp,
             'datetime': self.iso8601(timestamp),
-            'network': network,
-            'address': address,
+            'network': self.network_id_to_code(networkId, code),
+            'address': self.safe_string(transaction, 'address'),
             'addressTo': None,
             'addressFrom': None,
-            'tag': tag,
+            'tag': self.safe_string(transaction, 'address-tag'),
             'tagTo': None,
             'tagFrom': None,
             'type': type,
             'amount': self.safe_number(transaction, 'amount'),
             'currency': code,
-            'status': status,
-            'updated': updated,
+            'status': self.parse_transaction_status(self.safe_string(transaction, 'state')),
+            'updated': self.safe_integer(transaction, 'updated-at'),
             'fee': {
                 'currency': code,
-                'cost': feeCost,
+                'cost': self.parse_number(feeCost),
                 'rate': None,
             },
         }
@@ -4010,6 +4701,15 @@ class huobi(Exchange):
         return self.safe_string(statuses, status, status)
 
     def withdraw(self, code, amount, address, tag=None, params={}):
+        """
+        make a withdrawal
+        :param str code: unified currency code
+        :param float amount: the amount to withdraw
+        :param str address: the address to withdraw to
+        :param str|None tag:
+        :param dict params: extra parameters specific to the huobi api endpoint
+        :returns dict: a `transaction structure <https://docs.ccxt.com/en/latest/manual.html#transaction-structure>`
+        """
         tag, params = self.handle_withdraw_tag_and_params(tag, params)
         self.load_markets()
         self.check_address(address)
@@ -4021,17 +4721,10 @@ class huobi(Exchange):
         }
         if tag is not None:
             request['addr-tag'] = tag  # only for XRP?
-        networks = self.safe_value(self.options, 'networks', {})
-        network = self.safe_string_upper(params, 'network')  # self line allows the user to specify either ERC20 or ETH
-        network = self.safe_string_lower(networks, network, network)  # handle ETH>ERC20 alias
-        if network is not None:
-            # possible chains - usdterc20, trc20usdt, hrc20usdt, usdt, algousdt
-            if network == 'erc20':
-                request['chain'] = currency['id'] + network
-            else:
-                request['chain'] = network + currency['id']
-            params = self.omit(params, 'network')
-        response = self.spotPrivatePostV1DwWithdrawApiCreate(self.extend(request, params))
+        networkCode, paramsOmited = self.handle_network_code_and_params(params)
+        if networkCode is not None:
+            request['chain'] = self.network_code_to_id(networkCode, code)
+        response = self.spotPrivatePostV1DwWithdrawApiCreate(self.extend(request, paramsOmited))
         #
         #     {
         #         "status": "ok",
@@ -4064,6 +4757,15 @@ class huobi(Exchange):
         }
 
     def transfer(self, code, amount, fromAccount, toAccount, params={}):
+        """
+        transfer currency internally between wallets on the same account
+        :param str code: unified currency code
+        :param float amount: amount to transfer
+        :param str fromAccount: account to transfer from
+        :param str toAccount: account to transfer to
+        :param dict params: extra parameters specific to the huobi api endpoint
+        :returns dict: a `transfer structure <https://docs.ccxt.com/en/latest/manual.html#transfer-structure>`
+        """
         self.load_markets()
         currency = self.currency(code)
         type = self.safe_string(params, 'type')
@@ -4095,43 +4797,50 @@ class huobi(Exchange):
         })
 
     def fetch_borrow_rates_per_symbol(self, params={}):
+        """
+        fetch borrow rates for currencies within individual markets
+        :param dict params: extra parameters specific to the huobi api endpoint
+        :returns dict: a dictionary of `borrow rate structures <https://docs.ccxt.com/en/latest/manual.html#borrow-rate-structure>` indexed by market symbol
+        """
         self.load_markets()
         response = self.spotPrivateGetV1MarginLoanInfo(params)
-        # {
-        #     "status": "ok",
-        #     "data": [
-        #         {
-        #             "symbol": "1inchusdt",
-        #             "currencies": [
-        #                 {
-        #                     "currency": "1inch",
-        #                     "interest-rate": "0.00098",
-        #                     "min-loan-amt": "90.000000000000000000",
-        #                     "max-loan-amt": "1000.000000000000000000",
-        #                     "loanable-amt": "0.0",
-        #                     "actual-rate": "0.00098"
-        #                 },
-        #                 {
-        #                     "currency": "usdt",
-        #                     "interest-rate": "0.00098",
-        #                     "min-loan-amt": "100.000000000000000000",
-        #                     "max-loan-amt": "1000.000000000000000000",
-        #                     "loanable-amt": "0.0",
-        #                     "actual-rate": "0.00098"
-        #                 }
-        #             ]
-        #         },
-        #         ...
-        #     ]
-        # }
+        #
+        #    {
+        #        "status": "ok",
+        #        "data": [
+        #            {
+        #                "symbol": "1inchusdt",
+        #                "currencies": [
+        #                    {
+        #                        "currency": "1inch",
+        #                        "interest-rate": "0.00098",
+        #                        "min-loan-amt": "90.000000000000000000",
+        #                        "max-loan-amt": "1000.000000000000000000",
+        #                        "loanable-amt": "0.0",
+        #                        "actual-rate": "0.00098"
+        #                    },
+        #                    {
+        #                        "currency": "usdt",
+        #                        "interest-rate": "0.00098",
+        #                        "min-loan-amt": "100.000000000000000000",
+        #                        "max-loan-amt": "1000.000000000000000000",
+        #                        "loanable-amt": "0.0",
+        #                        "actual-rate": "0.00098"
+        #                    }
+        #                ]
+        #            },
+        #            ...
+        #        ]
+        #    }
+        #
         timestamp = self.milliseconds()
-        data = self.safe_value(response, 'data')
+        data = self.safe_value(response, 'data', [])
         rates = {
             'info': response,
         }
         for i in range(0, len(data)):
             rate = data[i]
-            currencies = self.safe_value(rate, 'currencies')
+            currencies = self.safe_value(rate, 'currencies', [])
             symbolRates = {}
             for j in range(0, len(currencies)):
                 currency = currencies[j]
@@ -4150,6 +4859,11 @@ class huobi(Exchange):
         return rates
 
     def fetch_borrow_rates(self, params={}):
+        """
+        fetch the borrow interest rates of all currencies
+        :param dict params: extra parameters specific to the huobi api endpoint
+        :returns dict: a list of `borrow rate structures <https://docs.ccxt.com/en/latest/manual.html#borrow-rate-structure>`
+        """
         self.load_markets()
         response = self.spotPrivateGetV1MarginLoanInfo(params)
         # {
@@ -4180,11 +4894,11 @@ class huobi(Exchange):
         #     ]
         # }
         timestamp = self.milliseconds()
-        data = self.safe_value(response, 'data')
+        data = self.safe_value(response, 'data', [])
         rates = {}
         for i in range(0, len(data)):
             market = data[i]
-            currencies = self.safe_value(market, 'currencies')
+            currencies = self.safe_value(market, 'currencies', [])
             for j in range(0, len(currencies)):
                 currency = currencies[j]
                 currencyId = self.safe_string(currency, 'currency')
@@ -4200,14 +4914,14 @@ class huobi(Exchange):
         return rates
 
     def fetch_funding_rate_history(self, symbol=None, since=None, limit=None, params={}):
-        #
-        # Gets a history of funding rates with their timestamps
-        #  (param) symbol: Future currency pair
-        #  (param) limit: not used by huobi
-        #  (param) since: not used by huobi
-        #  (param) params: Object containing more params for the request
-        #  return: [{symbol, fundingRate, timestamp, dateTime}]
-        #
+        """
+        fetches historical funding rate prices
+        :param str|None symbol: unified symbol of the market to fetch the funding rate history for
+        :param int|None since: not used by huobi, but filtered internally by ccxt
+        :param int|None limit: not used by huobi, but filtered internally by ccxt
+        :param dict params: extra parameters specific to the huobi api endpoint
+        :returns [dict]: a list of `funding rate structures <https://docs.ccxt.com/en/latest/manual.html?#funding-rate-history-structure>`
+        """
         if symbol is None:
             raise ArgumentsRequired(self.id + ' fetchFundingRateHistory() requires a symbol argument')
         self.load_markets()
@@ -4246,13 +4960,13 @@ class huobi(Exchange):
         # }
         #
         data = self.safe_value(response, 'data')
-        result = self.safe_value(data, 'data')
+        result = self.safe_value(data, 'data', [])
         rates = []
         for i in range(0, len(result)):
             entry = result[i]
             marketId = self.safe_string(entry, 'contract_code')
             symbol = self.safe_symbol(marketId)
-            timestamp = self.safe_string(entry, 'funding_time')
+            timestamp = self.safe_integer(entry, 'funding_time')
             rates.append({
                 'info': entry,
                 'symbol': symbol,
@@ -4263,7 +4977,7 @@ class huobi(Exchange):
         sorted = self.sort_by(rates, 'timestamp')
         return self.filter_by_symbol_since_limit(sorted, market['symbol'], since, limit)
 
-    def parse_funding_rate(self, fundingRate, market=None):
+    def parse_funding_rate(self, contract, market=None):
         #
         # {
         #      "status": "ok",
@@ -4279,13 +4993,13 @@ class huobi(Exchange):
         #     "ts": 1639085854775
         # }
         #
-        nextFundingRate = self.safe_number(fundingRate, 'estimated_rate')
-        fundingTimestamp = self.safe_integer(fundingRate, 'funding_time')
-        nextFundingTimestamp = self.safe_integer(fundingRate, 'next_funding_time')
-        marketId = self.safe_string(fundingRate, 'contract_code')
+        nextFundingRate = self.safe_number(contract, 'estimated_rate')
+        fundingTimestamp = self.safe_integer(contract, 'funding_time')
+        nextFundingTimestamp = self.safe_integer(contract, 'next_funding_time')
+        marketId = self.safe_string(contract, 'contract_code')
         symbol = self.safe_symbol(marketId, market)
         return {
-            'info': fundingRate,
+            'info': contract,
             'symbol': symbol,
             'markPrice': None,
             'indexPrice': None,
@@ -4293,7 +5007,7 @@ class huobi(Exchange):
             'estimatedSettlePrice': None,
             'timestamp': None,
             'datetime': None,
-            'fundingRate': self.safe_number(fundingRate, 'funding_rate'),
+            'fundingRate': self.safe_number(contract, 'funding_rate'),
             'fundingTimestamp': fundingTimestamp,
             'fundingDatetime': self.iso8601(fundingTimestamp),
             'nextFundingRate': nextFundingRate,
@@ -4305,6 +5019,12 @@ class huobi(Exchange):
         }
 
     def fetch_funding_rate(self, symbol, params={}):
+        """
+        fetch the current funding rate
+        :param str symbol: unified market symbol
+        :param dict params: extra parameters specific to the huobi api endpoint
+        :returns dict: a `funding rate structure <https://docs.ccxt.com/en/latest/manual.html#funding-rate-structure>`
+        """
         self.load_markets()
         market = self.market(symbol)
         method = None
@@ -4313,7 +5033,7 @@ class huobi(Exchange):
         elif market['linear']:
             method = 'contractPublicGetLinearSwapApiV1SwapFundingRate'
         else:
-            raise NotSupported(self.id + ' fetchFundingRateHistory() supports inverse and linear swaps only')
+            raise NotSupported(self.id + ' fetchFundingRate() supports inverse and linear swaps only')
         request = {
             'contract_code': market['id'],
         }
@@ -4336,8 +5056,15 @@ class huobi(Exchange):
         result = self.safe_value(response, 'data', {})
         return self.parse_funding_rate(result, market)
 
-    def fetch_funding_rates(self, symbols, params={}):
+    def fetch_funding_rates(self, symbols=None, params={}):
+        """
+        fetch the funding rate for multiple markets
+        :param [str]|None symbols: list of unified market symbols
+        :param dict params: extra parameters specific to the huobi api endpoint
+        :returns dict: a dictionary of `funding rates structures <https://docs.ccxt.com/en/latest/manual.html#funding-rates-structure>`, indexe by market symbols
+        """
         self.load_markets()
+        symbols = self.market_symbols(symbols)
         options = self.safe_value(self.options, 'fetchFundingRates', {})
         defaultSubType = self.safe_string(self.options, 'defaultSubType', 'inverse')
         subType = self.safe_string(options, 'subType', defaultSubType)
@@ -4374,9 +5101,19 @@ class huobi(Exchange):
         return self.filter_by_array(result, 'symbol', symbols)
 
     def fetch_borrow_interest(self, code=None, symbol=None, since=None, limit=None, params={}):
+        """
+        fetch the interest owed by the user for borrowing currency for margin trading
+        :param str|None code: unified currency code
+        :param str|None symbol: unified market symbol when fetch interest in isolated markets
+        :param int|None since: the earliest time in ms to fetch borrrow interest for
+        :param int|None limit: the maximum number of structures to retrieve
+        :param dict params: extra parameters specific to the huobi api endpoint
+        :returns [dict]: a list of `borrow interest structures <https://docs.ccxt.com/en/latest/manual.html#borrow-interest-structure>`
+        """
         self.load_markets()
-        defaultMargin = self.safe_string(params, 'marginMode', 'cross')  # cross or isolated
-        marginMode = self.safe_string_2(self.options, 'defaultMarginMode', 'marginMode', defaultMargin)
+        marginMode = None
+        marginMode, params = self.handle_margin_mode_and_params('fetchBorrowInterest', params)
+        marginMode = 'cross' if (marginMode is None) else marginMode
         request = {}
         if since is not None:
             request['start-date'] = self.yyyymmdd(since)
@@ -4472,7 +5209,6 @@ class huobi(Exchange):
             'account': symbol if (marginMode == 'isolated') else 'cross',  # deprecated
             'symbol': symbol,
             'marginMode': marginMode,
-            'marginType': marginMode,
             'currency': self.safe_currency_code(self.safe_string(info, 'currency')),
             'interest': self.safe_number(info, 'interest-amount'),
             'interestRate': self.safe_number(info, 'interest-rate'),
@@ -4487,9 +5223,7 @@ class huobi(Exchange):
         query = self.omit(params, self.extract_params(path))
         if isinstance(api, str):
             # signing implementation for the old endpoints
-            if api == 'market':
-                url += api
-            elif (api == 'public') or (api == 'private'):
+            if (api == 'public') or (api == 'private'):
                 url += self.version
             elif (api == 'v2Public') or (api == 'v2Private'):
                 url += 'v2'
@@ -4532,8 +5266,16 @@ class huobi(Exchange):
             # type, access = api
             type = self.safe_string(api, 0)
             access = self.safe_string(api, 1)
+            levelOneNestedPath = self.safe_string(api, 2)
+            levelTwoNestedPath = self.safe_string(api, 3)
+            hostname = None
+            hostnames = self.safe_value(self.urls['hostnames'], type)
+            if not isinstance(hostnames, str):
+                hostnames = self.safe_value(hostnames, levelOneNestedPath)
+                if (not isinstance(hostname, str)) and (levelTwoNestedPath is not None):
+                    hostnames = self.safe_value(hostnames, levelTwoNestedPath)
+            hostname = hostnames
             url += self.implode_params(path, params)
-            hostname = self.safe_string(self.urls['hostnames'], type)
             if access == 'public':
                 if query:
                     url += '?' + self.urlencode(query)
@@ -4557,6 +5299,8 @@ class huobi(Exchange):
                 url += '?' + auth
                 if method == 'POST':
                     body = self.json(query)
+                    if len(body) == 2:
+                        body = '{}'
                     headers = {
                         'Content-Type': 'application/json',
                     }
@@ -4568,9 +5312,6 @@ class huobi(Exchange):
                 'hostname': hostname,
             }) + url
         return {'url': url, 'method': method, 'body': body, 'headers': headers}
-
-    def calculate_rate_limiter_cost(self, api, method, path, params, config={}, context={}):
-        return self.safe_integer(config, 'cost', 1)
 
     def handle_errors(self, httpCode, reason, url, method, headers, body, response, requestHeaders, requestBody):
         if response is None:
@@ -4588,8 +5329,21 @@ class huobi(Exchange):
                 message = self.safe_string_2(response, 'err-msg', 'err_msg')
                 self.throw_exactly_matched_exception(self.exceptions['exact'], message, feedback)
                 raise ExchangeError(feedback)
+        if 'code' in response:
+            # {code: '1003', message: 'invalid signature'}
+            feedback = self.id + ' ' + body
+            code = self.safe_string(response, 'code')
+            self.throw_exactly_matched_exception(self.exceptions['exact'], code, feedback)
 
     def fetch_funding_history(self, symbol=None, since=None, limit=None, params={}):
+        """
+        fetch the history of funding payments paid and received on self account
+        :param str|None symbol: unified market symbol
+        :param int|None since: the earliest time in ms to fetch funding history for
+        :param int|None limit: the maximum number of funding history structures to retrieve
+        :param dict params: extra parameters specific to the huobi api endpoint
+        :returns dict: a `funding history structure <https://docs.ccxt.com/en/latest/manual.html#funding-history-structure>`
+        """
         self.load_markets()
         market = self.market(symbol)
         marketType, query = self.handle_market_type_and_params('fetchFundingHistory', market, params)
@@ -4597,8 +5351,10 @@ class huobi(Exchange):
         request = {
             'type': '30,31',
         }
+        if since is not None:
+            request['start_date'] = since
         if market['linear']:
-            method = 'contractPrivatePostLinearSwapApiV1SwapFinancialRecordExact'
+            method = 'contractPrivatePostLinearSwapApiV3SwapFinancialRecordExact'
             #
             # {
             #   status: 'ok',
@@ -4620,54 +5376,62 @@ class huobi(Exchange):
             #   },
             #   ts: '1641189898425'
             # }
-            defaultMargin = 'cross' if market['future'] else 'isolated'
-            marginMode = self.safe_string_2(self.options, 'defaultMarginMode', 'marginMode', defaultMargin)
+            marginMode = None
+            marginMode, params = self.handle_margin_mode_and_params('fetchFundingHistory', params)
+            marginMode = 'cross' if (marginMode is None) else marginMode
             if marginMode == 'isolated':
-                request['margin_account'] = market['id']
+                request['mar_acct'] = market['id']
             else:
-                request['margin_account'] = market['quoteId']
+                request['mar_acct'] = market['quoteId']
         else:
             if marketType == 'swap':
-                method = 'contractPrivatePostSwapApiV1SwapFinancialRecordExact'
-                request['contract_code'] = market['id']
+                method = 'contractPrivatePostSwapApiV3SwapFinancialRecordExact'
+                request['contract'] = market['id']
+                #
+                #     {
+                #         "code": 200,
+                #         "msg": "",
+                #         "data": [
+                #             {
+                #                 "query_id": 138798248,
+                #                 "id": 117840,
+                #                 "type": 5,
+                #                 "amount": -0.024464850000000000,
+                #                 "ts": 1638758435635,
+                #                 "contract_code": "BTC-USDT-211210",
+                #                 "asset": "USDT",
+                #                 "margin_account": "USDT",
+                #                 "face_margin_account": ""
+                #             }
+                #         ],
+                #         "ts": 1604312615051
+                #     }
+                #
             else:
-                raise ExchangeError(self.id + ' fetchFundingHistory() only makes sense for swap contracts')
-            #
-            # swap
-            #     {
-            #       status: 'ok',
-            #       data: {
-            #         financial_record: [
-            #           {
-            #             id: '1667436164',
-            #             symbol: 'BTC',
-            #             type: '30',
-            #             amount: '3.9755491985E-8',
-            #             ts: '1641168097323',
-            #             contract_code: 'BTC-USD'
-            #           },
-            #         ],
-            #         remain_size: '0',
-            #         next_id: null
-            #       },
-            #       ts: '1641190296379'
-            #     }
-            #
+                method = 'contractPrivatePostApiV3ContractFinancialRecordExact'
+                request['symbol'] = market['id']
         response = getattr(self, method)(self.extend(request, query))
-        data = self.safe_value(response, 'data', {})
-        financialRecord = self.safe_value(data, 'financial_record', [])
-        return self.parse_incomes(financialRecord, market, since, limit)
+        data = self.safe_value(response, 'data', [])
+        return self.parse_incomes(data, market, since, limit)
 
     def set_leverage(self, leverage, symbol=None, params={}):
+        """
+        set the level of leverage for a market
+        :param float leverage: the rate of leverage
+        :param str symbol: unified market symbol
+        :param dict params: extra parameters specific to the huobi api endpoint
+        :returns dict: response from the exchange
+        """
         if symbol is None:
             raise ArgumentsRequired(self.id + ' setLeverage() requires a symbol argument')
         self.load_markets()
         market = self.market(symbol)
-        marketType, query = self.handle_market_type_and_params('fetchPosition', market, params)
+        marketType, query = self.handle_market_type_and_params('setLeverage', market, params)
         method = None
         if market['linear']:
-            defaultMargin = 'cross' if market['future'] else 'isolated'
-            marginMode = self.safe_string_2(self.options, 'defaultMarginMode', 'marginMode', defaultMargin)
+            marginMode = None
+            marginMode, params = self.handle_margin_mode_and_params('setLeverage', params)
+            marginMode = 'cross' if (marginMode is None) else marginMode
             method = self.get_supported_mapping(marginMode, {
                 'isolated': 'contractPrivatePostLinearSwapApiV1SwapSwitchLeverRate',
                 'cross': 'contractPrivatePostLinearSwapApiV1SwapCrossSwitchLeverRate',
@@ -4788,7 +5552,7 @@ class huobi(Exchange):
         contracts = self.safe_string(position, 'volume')
         contractSize = self.safe_value(market, 'contractSize')
         contractSizeString = self.number_to_string(contractSize)
-        entryPrice = self.safe_number(position, 'cost_hold')
+        entryPrice = self.safe_number(position, 'cost_open')
         initialMargin = self.safe_string(position, 'position_margin')
         rawSide = self.safe_string(position, 'direction')
         side = 'long' if (rawSide == 'buy') else 'short'
@@ -4813,6 +5577,7 @@ class huobi(Exchange):
         marginRatio = Precise.string_div(maintenanceMargin, collateral)
         return {
             'info': position,
+            'id': None,
             'symbol': symbol,
             'contracts': self.parse_number(contracts),
             'contractSize': contractSize,
@@ -4823,7 +5588,6 @@ class huobi(Exchange):
             'leverage': self.parse_number(leverage),
             'percentage': self.parse_number(percentage),
             'marginMode': marginMode,
-            'marginType': marginMode,  # deprecated
             'notional': self.parse_number(notional),
             'markPrice': None,
             'liquidationPrice': liquidationPrice,
@@ -4837,10 +5601,22 @@ class huobi(Exchange):
         }
 
     def fetch_positions(self, symbols=None, params={}):
+        """
+        fetch all open positions
+        :param [str]|None symbols: list of unified market symbols
+        :param dict params: extra parameters specific to the huobi api endpoint
+        :returns [dict]: a list of `position structure <https://docs.ccxt.com/en/latest/manual.html#position-structure>`
+        """
         self.load_markets()
-        marginMode = self.safe_string_2(self.options, 'defaultMarginMode', 'marginMode', 'isolated')
+        symbols = self.market_symbols(symbols)
+        marginMode = None
+        marginMode, params = self.handle_margin_mode_and_params('fetchPositions', params)
+        marginMode = 'cross' if (marginMode is None) else marginMode
         defaultSubType = self.safe_string(self.options, 'defaultSubType', 'inverse')
-        marketType, query = self.handle_market_type_and_params('fetchPositions', None, params)
+        marketType = None
+        marketType, params = self.handle_market_type_and_params('fetchPositions', None, params)
+        if marketType == 'spot':
+            marketType = 'future'
         method = None
         if defaultSubType == 'linear':
             method = self.get_supported_mapping(marginMode, {
@@ -4929,8 +5705,8 @@ class huobi(Exchange):
             #       ts: '1641109636572'
             #     }
             #
-        response = getattr(self, method)(query)
-        data = self.safe_value(response, 'data')
+        response = getattr(self, method)(params)
+        data = self.safe_value(response, 'data', [])
         timestamp = self.safe_integer(response, 'ts')
         result = []
         for i in range(0, len(data)):
@@ -4943,11 +5719,17 @@ class huobi(Exchange):
         return self.filter_by_array(result, 'symbol', symbols, False)
 
     def fetch_position(self, symbol, params={}):
+        """
+        fetch data on a single open contract trade position
+        :param str symbol: unified market symbol of the market the position is held in, default is None
+        :param dict params: extra parameters specific to the huobi api endpoint
+        :returns dict: a `position structure <https://docs.ccxt.com/en/latest/manual.html#position-structure>`
+        """
         self.load_markets()
         market = self.market(symbol)
-        marginMode = self.safe_string_2(self.options, 'defaultMarginMode', 'marginMode', 'isolated')
-        marginMode = self.safe_string_2(params, 'marginMode', 'defaultMarginMode', marginMode)
-        params = self.omit(params, ['defaultMarginMode', 'marginMode'])
+        marginMode = None
+        marginMode, params = self.handle_margin_mode_and_params('fetchPosition', params)
+        marginMode = 'cross' if (marginMode is None) else marginMode
         marketType, query = self.handle_market_type_and_params('fetchPosition', market, params)
         method = None
         if market['linear']:
@@ -4956,51 +5738,120 @@ class huobi(Exchange):
                 'cross': 'contractPrivatePostLinearSwapApiV1SwapCrossAccountPositionInfo',
             })
             #
+            # isolated
+            #
             #     {
-            #       status: 'ok',
-            #       data: [
-            #         {
-            #           positions: [
+            #         "status": "ok",
+            #         "data": [
             #             {
-            #               symbol: 'BTC',
-            #               contract_code: 'BTC-USDT',
-            #               volume: 1,
-            #               available: 1,
-            #               frozen: 0,
-            #               cost_open: 47027.1,
-            #               cost_hold: 47324.4,
-            #               profit_unreal: 0.1705,
-            #               profit_rate: -0.269631765513927,
-            #               lever_rate: 100,
-            #               position_margin: 0.471539,
-            #               direction: 'sell',
-            #               profit: -0.1268,
-            #               last_price: 47153.9,
-            #               margin_asset: 'USDT',
-            #               margin_mode: 'isolated',
-            #               margin_account: 'BTC-USDT'
-            #             }
-            #           ],
-            #           symbol: 'BTC',
-            #           margin_balance: 8.01274699,
-            #           margin_position: 0.471539,
-            #           margin_frozen: 0,
-            #           margin_available: 7.54120799,
-            #           profit_real: 0,
-            #           profit_unreal: 0.1705,
-            #           risk_rate: 16.442755615124092,
-            #           withdraw_available: 7.37070799,
-            #           liquidation_price: 54864.89009448036,
-            #           lever_rate: 100,
-            #           adjust_factor: 0.55,
-            #           margin_static: 7.84224699,
-            #           contract_code: 'BTC-USDT',
-            #           margin_asset: 'USDT',
-            #           margin_mode: 'isolated',
-            #           margin_account: 'BTC-USDT'
-            #         }
-            #       ],
-            #       ts: 1641162539767
+            #                 "positions": [],
+            #                 "symbol": "BTC",
+            #                 "margin_balance": 1.949728350000000000,
+            #                 "margin_position": 0,
+            #                 "margin_frozen": 0E-18,
+            #                 "margin_available": 1.949728350000000000,
+            #                 "profit_real": -0.050271650000000000,
+            #                 "profit_unreal": 0,
+            #                 "risk_rate": null,
+            #                 "withdraw_available": 1.949728350000000000,
+            #                 "liquidation_price": null,
+            #                 "lever_rate": 20,
+            #                 "adjust_factor": 0.150000000000000000,
+            #                 "margin_static": 1.949728350000000000,
+            #                 "contract_code": "BTC-USDT",
+            #                 "margin_asset": "USDT",
+            #                 "margin_mode": "isolated",
+            #                 "margin_account": "BTC-USDT",
+            #                 "trade_partition": "USDT",
+            #                 "position_mode": "dual_side"
+            #             },
+            #             ... opposite side position can be present here too(if hedge)
+            #         ],
+            #         "ts": 1653605008286
+            #     }
+            #
+            # cross
+            #
+            #     {
+            #         "status": "ok",
+            #         "data": {
+            #             "positions": [
+            #                 {
+            #                     "symbol": "BTC",
+            #                     "contract_code": "BTC-USDT",
+            #                     "volume": "1.000000000000000000",
+            #                     "available": "1.000000000000000000",
+            #                     "frozen": "0E-18",
+            #                     "cost_open": "29530.000000000000000000",
+            #                     "cost_hold": "29530.000000000000000000",
+            #                     "profit_unreal": "-0.010000000000000000",
+            #                     "profit_rate": "-0.016931933626820200",
+            #                     "lever_rate": "50",
+            #                     "position_margin": "0.590400000000000000",
+            #                     "direction": "buy",
+            #                     "profit": "-0.010000000000000000",
+            #                     "last_price": "29520",
+            #                     "margin_asset": "USDT",
+            #                     "margin_mode": "cross",
+            #                     "margin_account": "USDT",
+            #                     "contract_type": "swap",
+            #                     "pair": "BTC-USDT",
+            #                     "business_type": "swap",
+            #                     "trade_partition": "USDT",
+            #                     "position_mode": "dual_side"
+            #                 },
+            #                 ... opposite side position can be present here too(if hedge)
+            #             ],
+            #             "futures_contract_detail": [
+            #                 {
+            #                     "symbol": "BTC",
+            #                     "contract_code": "BTC-USDT-220624",
+            #                     "margin_position": "0",
+            #                     "margin_frozen": "0E-18",
+            #                     "margin_available": "1.497799766913531118",
+            #                     "profit_unreal": "0",
+            #                     "liquidation_price": null,
+            #                     "lever_rate": "30",
+            #                     "adjust_factor": "0.250000000000000000",
+            #                     "contract_type": "quarter",
+            #                     "pair": "BTC-USDT",
+            #                     "business_type": "futures",
+            #                     "trade_partition": "USDT"
+            #                 },
+            #                 ... other items listed with different expiration(contract_code)
+            #             ],
+            #             "margin_mode": "cross",
+            #             "margin_account": "USDT",
+            #             "margin_asset": "USDT",
+            #             "margin_balance": "2.088199766913531118",
+            #             "margin_static": "2.098199766913531118",
+            #             "margin_position": "0.590400000000000000",
+            #             "margin_frozen": "0E-18",
+            #             "profit_real": "-0.016972710000000000",
+            #             "profit_unreal": "-0.010000000000000000",
+            #             "withdraw_available": "1.497799766913531118",
+            #             "risk_rate": "9.105496355562965147",
+            #             "contract_detail": [
+            #                {
+            #                     "symbol": "BTC",
+            #                     "contract_code": "BTC-USDT",
+            #                     "margin_position": "0.590400000000000000",
+            #                     "margin_frozen": "0E-18",
+            #                     "margin_available": "1.497799766913531118",
+            #                     "profit_unreal": "-0.010000000000000000",
+            #                     "liquidation_price": "27625.176468365024050352",
+            #                     "lever_rate": "50",
+            #                     "adjust_factor": "0.350000000000000000",
+            #                     "contract_type": "swap",
+            #                     "pair": "BTC-USDT",
+            #                     "business_type": "swap",
+            #                     "trade_partition": "USDT"
+            #                 },
+            #                 ... all symbols listed
+            #             ],
+            #             "position_mode": "dual_side"
+            #         },
+            #         "ts": "1653604697466"
             #     }
             #
         else:
@@ -5008,121 +5859,74 @@ class huobi(Exchange):
                 'future': 'contractPrivatePostApiV1ContractAccountPositionInfo',
                 'swap': 'contractPrivatePostSwapApiV1SwapAccountPositionInfo',
             })
-            # future
+            #
+            # future, swap
+            #
             #     {
-            #       status: 'ok',
-            #       data: [
+            #       "status": "ok",
+            #       "data": [
             #         {
-            #           symbol: 'BTC',
-            #           contract_code: 'BTC-USD',
-            #           margin_balance: 0.000752347253890835,
-            #           margin_position: 0.000705870726835087,
-            #           margin_frozen: 0,
-            #           margin_available: 0.000046476527055748,
-            #           profit_real: 0,
-            #           profit_unreal: -0.000004546248622,
-            #           risk_rate: 1.0508428311146076,
-            #           withdraw_available: 0.000046476527055748,
-            #           liquidation_price: 35017.91655851386,
-            #           lever_rate: 3,
-            #           adjust_factor: 0.015,
-            #           margin_static: 0.000756893502512835,
-            #           positions: [
-            #             {
-            #               symbol: 'BTC',
-            #               contract_code: 'BTC-USD',
-            #               volume: 1,
-            #               available: 1,
-            #               frozen: 0,
-            #               cost_open: 47150.000000000015,
-            #               cost_hold: 47324.6,
-            #               profit_unreal: -0.000004546248622,
-            #               profit_rate: 0.00463757067530574,
-            #               lever_rate: 3,
-            #               position_margin: 0.000705870726835087,
-            #               direction: 'buy',
-            #               profit: 0.0000032785936199,
-            #               last_price: 47223
-            #             }
-            #           ]
+            #             "symbol": "XRP",
+            #             "contract_code": "XRP-USD",  # only present in swap
+            #             "margin_balance": 12.186361450698276582,
+            #             "margin_position": 5.036261079774375503,
+            #             "margin_frozen": 0E-18,
+            #             "margin_available": 7.150100370923901079,
+            #             "profit_real": -0.012672343876723438,
+            #             "profit_unreal": 0.163382354575000020,
+            #             "risk_rate": 2.344723929650649798,
+            #             "withdraw_available": 6.986718016348901059,
+            #             "liquidation_price": 0.271625200493799547,
+            #             "lever_rate": 5,
+            #             "adjust_factor": 0.075000000000000000,
+            #             "margin_static": 12.022979096123276562,
+            #             "positions": [
+            #                 {
+            #                     "symbol": "XRP",
+            #                     "contract_code": "XRP-USD",
+            #                     # "contract_type": "self_week",  # only present in future
+            #                     "volume": 1.0,
+            #                     "available": 1.0,
+            #                     "frozen": 0E-18,
+            #                     "cost_open": 0.394560000000000000,
+            #                     "cost_hold": 0.394560000000000000,
+            #                     "profit_unreal": 0.163382354575000020,
+            #                     "profit_rate": 0.032232070910556005,
+            #                     "lever_rate": 5,
+            #                     "position_margin": 5.036261079774375503,
+            #                     "direction": "buy",
+            #                     "profit": 0.163382354575000020,
+            #                     "last_price": 0.39712
+            #                 },
+            #                 ... opposite side position can be present here too(if hedge)
+            #             ]
             #         }
             #       ],
-            #       ts: 1641162795228
+            #       "ts": 1653600470199
             #     }
             #
-            # swap
-            #     {
-            #       status: 'ok',
-            #       data: [
-            #         {
-            #           positions: [
-            #             {
-            #               symbol: 'BTC',
-            #               contract_code: 'BTC-USDT',
-            #               volume: 1,
-            #               available: 1,
-            #               frozen: 0,
-            #               cost_open: 47027.1,
-            #               cost_hold: 47324.4,
-            #               profit_unreal: 0.1705,
-            #               profit_rate: -0.269631765513927,
-            #               lever_rate: 100,
-            #               position_margin: 0.471539,
-            #               direction: 'sell',
-            #               profit: -0.1268,
-            #               last_price: 47153.9,
-            #               margin_asset: 'USDT',
-            #               margin_mode: 'isolated',
-            #               margin_account: 'BTC-USDT'
-            #             }
-            #           ],
-            #           symbol: 'BTC',
-            #           margin_balance: 8.01274699,
-            #           margin_position: 0.471539,
-            #           margin_frozen: 0,
-            #           margin_available: 7.54120799,
-            #           profit_real: 0,
-            #           profit_unreal: 0.1705,
-            #           risk_rate: 16.442755615124092,
-            #           withdraw_available: 7.37070799,
-            #           liquidation_price: 54864.89009448036,
-            #           lever_rate: 100,
-            #           adjust_factor: 0.55,
-            #           margin_static: 7.84224699,
-            #           contract_code: 'BTC-USDT',
-            #           margin_asset: 'USDT',
-            #           margin_mode: 'isolated',
-            #           margin_account: 'BTC-USDT'
-            #         }
-            #       ],
-            #       ts: 1641162539767
-            #     }
             # cross usdt swap
-            # {
-            #     "status":"ok",
-            #     "data":{
-            #        "positions":[
-            #        ],
-            #        "futures_contract_detail":[
-            #            (...)
-            #        ]
-            #        "margin_mode":"cross",
-            #        "margin_account":"USDT",
-            #        "margin_asset":"USDT",
-            #        "margin_balance":"1.000000000000000000",
-            #        "margin_static":"1.000000000000000000",
-            #        "margin_position":"0",
-            #        "margin_frozen":"1.000000000000000000",
-            #        "profit_real":"0E-18",
-            #        "profit_unreal":"0",
-            #        "withdraw_available":"0",
-            #        "risk_rate":"15.666666666666666666",
-            #        "contract_detail":[
-            #          (...)
-            #        ]
-            #     },
-            #     "ts":"1645521118946"
-            #  }
+            #
+            #     {
+            #         "status":"ok",
+            #         "data":{
+            #             "positions":[],
+            #             "futures_contract_detail":[]
+            #             "margin_mode":"cross",
+            #             "margin_account":"USDT",
+            #             "margin_asset":"USDT",
+            #             "margin_balance":"1.000000000000000000",
+            #             "margin_static":"1.000000000000000000",
+            #             "margin_position":"0",
+            #             "margin_frozen":"1.000000000000000000",
+            #             "profit_real":"0E-18",
+            #             "profit_unreal":"0",
+            #             "withdraw_available":"0",
+            #             "risk_rate":"15.666666666666666666",
+            #             "contract_detail":[]
+            #         },
+            #         "ts":"1645521118946"
+            #     }
             #
         request = {}
         if market['future'] and market['inverse']:
@@ -5218,6 +6022,14 @@ class huobi(Exchange):
         }
 
     def fetch_ledger(self, code=None, since=None, limit=None, params={}):
+        """
+        fetch the history of changes, actions done by the user or operations that altered balance of the user
+        :param str|None code: unified currency code, default is None
+        :param int|None since: timestamp in ms of the earliest ledger entry, default is None
+        :param int|None limit: max number of ledger entrys to return, default is None
+        :param dict params: extra parameters specific to the huobi api endpoint
+        :returns dict: a `ledger structure <https://docs.ccxt.com/en/latest/manual.html#ledger-structure>`
+        """
         self.load_markets()
         accountId = self.fetch_account_id_by_type('spot', params)
         request = {
@@ -5275,6 +6087,12 @@ class huobi(Exchange):
         return self.parse_ledger(data, currency, since, limit)
 
     def fetch_leverage_tiers(self, symbols=None, params={}):
+        """
+        retrieve information on the maximum leverage, and maintenance margin for trades of varying trade sizes
+        :param [str]|None symbols: list of unified market symbols
+        :param dict params: extra parameters specific to the huobi api endpoint
+        :returns dict: a dictionary of `leverage tiers structures <https://docs.ccxt.com/en/latest/manual.html#leverage-tiers-structure>`, indexed by market symbols
+        """
         self.load_markets()
         response = self.contractPublicGetLinearSwapApiV1SwapAdjustfactor(params)
         #
@@ -5310,12 +6128,18 @@ class huobi(Exchange):
         return self.parse_leverage_tiers(data, symbols, 'contract_code')
 
     def fetch_market_leverage_tiers(self, symbol, params={}):
+        """
+        retrieve information on the maximum leverage, and maintenance margin for trades of varying trade sizes for a single market
+        :param str symbol: unified market symbol
+        :param dict params: extra parameters specific to the huobi api endpoint
+        :returns dict: a `leverage tiers structure <https://docs.ccxt.com/en/latest/manual.html#leverage-tiers-structure>`
+        """
         self.load_markets()
         request = {}
         if symbol is not None:
             market = self.market(symbol)
             if not market['contract']:
-                raise BadRequest(self.id + ' fetchLeverageTiers() symbol supports contract markets only')
+                raise BadRequest(self.id + ' fetchMarketLeverageTiers() symbol supports contract markets only')
             request['contract_code'] = market['id']
         response = self.contractPublicGetLinearSwapApiV1SwapAdjustfactor(self.extend(request, params))
         #
@@ -5351,7 +6175,7 @@ class huobi(Exchange):
         tiers = self.parse_leverage_tiers(data, [symbol], 'contract_code')
         return self.safe_value(tiers, symbol)
 
-    def parse_leverage_tiers(self, response, symbols, marketIdKey):
+    def parse_leverage_tiers(self, response, symbols=None, marketIdKey=None):
         result = {}
         for i in range(0, len(response)):
             item = response[i]
@@ -5360,7 +6184,7 @@ class huobi(Exchange):
             currency = self.safe_string(item, 'trade_partition')
             id = self.safe_string(item, marketIdKey)
             symbol = self.safe_symbol(id)
-            if self.in_array(symbols, symbol):
+            if self.in_array(symbol, symbols):
                 for j in range(0, len(list)):
                     obj = list[j]
                     leverage = self.safe_string(obj, 'lever_rate')
@@ -5379,3 +6203,593 @@ class huobi(Exchange):
                         })
                 result[symbol] = tiers
         return result
+
+    def fetch_open_interest_history(self, symbol, timeframe='1h', since=None, limit=None, params={}):
+        """
+        Retrieves the open interest history of a currency
+        see https://huobiapi.github.io/docs/dm/v1/en/#query-information-on-open-interest
+        see https://huobiapi.github.io/docs/coin_margined_swap/v1/en/#query-information-on-open-interest
+        see https://huobiapi.github.io/docs/usdt_swap/v1/en/#general-query-information-on-open-interest
+        :param str symbol: Unified CCXT market symbol
+        :param str timeframe: '1h', '4h', '12h', or '1d'
+        :param int|None since: Not used by huobi api, but response parsed by CCXT
+        :param int|None limit: Default：48，Data Range [1,200]
+        :param dict params: Exchange specific parameters
+        :param int params['amount_type']: *required* Open interest unit. 1-cont，2-cryptocurrency
+        :param int|None params['pair']: eg BTC-USDT *Only for USDT-M*
+        :returns dict: an array of `open interest structures <https://docs.ccxt.com/en/latest/manual.html#open-interest-structure>`
+        """
+        if timeframe != '1h' and timeframe != '4h' and timeframe != '12h' and timeframe != '1d':
+            raise BadRequest(self.id + ' fetchOpenInterestHistory cannot only use the 1h, 4h, 12h and 1d timeframe')
+        self.load_markets()
+        timeframes = {
+            '1h': '60min',
+            '4h': '4hour',
+            '12h': '12hour',
+            '1d': '1day',
+        }
+        market = self.market(symbol)
+        amountType = self.safe_number_2(params, 'amount_type', 'amountType')
+        if amountType is None:
+            raise ArgumentsRequired(self.id + ' fetchOpenInterestHistory requires parameter params.amountType to be either 1(cont), or 2(cryptocurrency)')
+        request = {
+            'period': timeframes[timeframe],
+            'amount_type': amountType,
+        }
+        method = None
+        if market['future']:
+            request['contract_type'] = self.safe_string(market['info'], 'contract_type')
+            request['symbol'] = market['baseId']  # currency code on coin-m futures
+            method = 'contractPublicGetApiV1ContractHisOpenInterest'  # coin-m futures
+        elif market['linear']:
+            request['contract_type'] = 'swap'
+            request['contract_code'] = market['id']
+            request['contract_code'] = market['id']
+            method = 'contractPublicGetLinearSwapApiV1SwapHisOpenInterest'  # USDT-M
+        else:
+            request['contract_code'] = market['id']
+            method = 'contractPublicGetSwapApiV1SwapHisOpenInterest'  # coin-m swaps
+        if limit is not None:
+            request['size'] = limit
+        response = getattr(self, method)(self.extend(request, params))
+        #
+        #  contractPublicGetlinearSwapApiV1SwapHisOpenInterest
+        #    {
+        #        status: 'ok',
+        #        data: {
+        #            symbol: 'BTC',
+        #            tick: [
+        #                {
+        #                    volume: '4385.4350000000000000',
+        #                    amount_type: '2',
+        #                    ts: '1648220400000',
+        #                    value: '194059884.1850000000000000'
+        #                },
+        #                ...
+        #            ],
+        #            contract_code: 'BTC-USDT',
+        #            business_type: 'swap',
+        #            pair: 'BTC-USDT',
+        #            contract_type: 'swap',
+        #            trade_partition: 'USDT'
+        #        },
+        #        ts: '1648223733007'
+        #    }
+        #
+        #  contractPublicGetSwapApiV1SwapHisOpenInterest
+        #    {
+        #        "status": "ok",
+        #        "data": {
+        #            "symbol": "CRV",
+        #            "tick": [
+        #                {
+        #                    "volume": 19174.0000000000000000,
+        #                    "amount_type": 1,
+        #                    "ts": 1648224000000
+        #                },
+        #                ...
+        #            ],
+        #            "contract_code": "CRV-USD"
+        #        },
+        #        "ts": 1648226554260
+        #    }
+        #
+        #  contractPublicGetApiV1ContractHisOpenInterest
+        #    {
+        #         "status": "ok",
+        #         "data": {
+        #             "symbol": "BTC",
+        #             "contract_type": "self_week",
+        #             "tick": [
+        #                {
+        #                     "volume": "48419.0000000000000000",
+        #                     "amount_type": 1,
+        #                     "ts": 1648224000000
+        #                },
+        #                ...
+        #            ]
+        #        },
+        #        "ts": 1648227062944
+        #    }
+        #
+        data = self.safe_value(response, 'data')
+        tick = self.safe_value(data, 'tick')
+        return self.parse_open_interests(tick, market, since, limit)
+
+    def fetch_open_interest(self, symbol, params={}):
+        """
+        Retrieves the open interest of a currency
+        see https://huobiapi.github.io/docs/dm/v1/en/#get-contract-open-interest-information
+        see https://huobiapi.github.io/docs/coin_margined_swap/v1/en/#get-swap-open-interest-information
+        see https://huobiapi.github.io/docs/usdt_swap/v1/en/#general-get-swap-open-interest-information
+        :param str symbol: Unified CCXT market symbol
+        :param dict params: exchange specific parameters
+        :returns dict} an open interest structure{@link https://docs.ccxt.com/en/latest/manual.html#interest-history-structure:
+        """
+        self.load_markets()
+        market = self.market(symbol)
+        if not market['contract']:
+            raise BadRequest(self.id + ' fetchOpenInterest() supports contract markets only')
+        if market['option']:
+            raise NotSupported(self.id + ' fetchOpenInterest() does not currently support option markets')
+        request = {
+            'contract_code': market['id'],
+        }
+        method = None
+        if market['future']:
+            request['contract_type'] = self.safe_string(market['info'], 'contract_type')
+            request['symbol'] = market['baseId']
+            method = 'contractPublicGetApiV1ContractOpenInterest'  # COIN-M futures
+        elif market['linear']:
+            request['contract_type'] = 'swap'
+            method = 'contractPublicGetLinearSwapApiV1SwapOpenInterest'  # USDT-M
+        else:
+            method = 'contractPublicGetSwapApiV1SwapOpenInterest'  # COIN-M swaps
+        response = getattr(self, method)(self.extend(request, params))
+        #
+        # USDT-M contractPublicGetLinearSwapApiV1SwapOpenInterest
+        #
+        #     {
+        #         "status": "ok",
+        #         "data": [
+        #             {
+        #                 "volume": 7192610.000000000000000000,
+        #                 "amount": 7192.610000000000000000,
+        #                 "symbol": "BTC",
+        #                 "value": 134654290.332000000000000000,
+        #                 "contract_code": "BTC-USDT",
+        #                 "trade_amount": 70692.804,
+        #                 "trade_volume": 70692804,
+        #                 "trade_turnover": 1379302592.9518,
+        #                 "business_type": "swap",
+        #                 "pair": "BTC-USDT",
+        #                 "contract_type": "swap",
+        #                 "trade_partition": "USDT"
+        #             }
+        #         ],
+        #         "ts": 1664336503144
+        #     }
+        #
+        # COIN-M Swap contractPublicGetSwapApiV1SwapOpenInterest
+        #
+        #     {
+        #         "status": "ok",
+        #         "data": [
+        #             {
+        #                 "volume": 518018.000000000000000000,
+        #                 "amount": 2769.675777407074725180,
+        #                 "symbol": "BTC",
+        #                 "contract_code": "BTC-USD",
+        #                 "trade_amount": 9544.4032080046491323463688602729806842458,
+        #                 "trade_volume": 1848448,
+        #                 "trade_turnover": 184844800.000000000000000000
+        #             }
+        #         ],
+        #         "ts": 1664337226028
+        #     }
+        #
+        # COIN-M Futures contractPublicGetApiV1ContractOpenInterest
+        #
+        #     {
+        #         "status": "ok",
+        #         "data": [
+        #             {
+        #                 "volume": 118850.000000000000000000,
+        #                 "amount": 635.502025211544374189,
+        #                 "symbol": "BTC",
+        #                 "contract_type": "self_week",
+        #                 "contract_code": "BTC220930",
+        #                 "trade_amount": 1470.9400749347598691119206024033947897351,
+        #                 "trade_volume": 286286,
+        #                 "trade_turnover": 28628600.000000000000000000
+        #             }
+        #         ],
+        #         "ts": 1664337928805
+        #     }
+        #
+        data = self.safe_value(response, 'data', [])
+        openInterest = self.parse_open_interest(data[0], market)
+        timestamp = self.safe_integer(response, 'ts')
+        return self.extend(openInterest, {
+            'timestamp': timestamp,
+            'datetime': self.iso8601(timestamp),
+        })
+
+    def parse_open_interest(self, interest, market=None):
+        #
+        # fetchOpenInterestHistory
+        #
+        #    {
+        #        volume: '4385.4350000000000000',
+        #        amount_type: '2',
+        #        ts: '1648220400000',
+        #        value: '194059884.1850000000000000'
+        #    }
+        #
+        # fetchOpenInterest: USDT-M
+        #
+        #     {
+        #         "volume": 7192610.000000000000000000,
+        #         "amount": 7192.610000000000000000,
+        #         "symbol": "BTC",
+        #         "value": 134654290.332000000000000000,
+        #         "contract_code": "BTC-USDT",
+        #         "trade_amount": 70692.804,
+        #         "trade_volume": 70692804,
+        #         "trade_turnover": 1379302592.9518,
+        #         "business_type": "swap",
+        #         "pair": "BTC-USDT",
+        #         "contract_type": "swap",
+        #         "trade_partition": "USDT"
+        #     }
+        #
+        # fetchOpenInterest: COIN-M Swap
+        #
+        #     {
+        #         "volume": 518018.000000000000000000,
+        #         "amount": 2769.675777407074725180,
+        #         "symbol": "BTC",
+        #         "contract_code": "BTC-USD",
+        #         "trade_amount": 9544.4032080046491323463688602729806842458,
+        #         "trade_volume": 1848448,
+        #         "trade_turnover": 184844800.000000000000000000
+        #     }
+        #
+        # fetchOpenInterest: COIN-M Futures
+        #
+        #     {
+        #         "volume": 118850.000000000000000000,
+        #         "amount": 635.502025211544374189,
+        #         "symbol": "BTC",
+        #         "contract_type": "self_week",
+        #         "contract_code": "BTC220930",
+        #         "trade_amount": 1470.9400749347598691119206024033947897351,
+        #         "trade_volume": 286286,
+        #         "trade_turnover": 28628600.000000000000000000
+        #     }
+        #
+        timestamp = self.safe_integer(interest, 'ts')
+        amount = self.safe_number(interest, 'volume')
+        value = self.safe_number(interest, 'value')
+        return {
+            'symbol': self.safe_string(market, 'symbol'),
+            'baseVolume': amount,  # deprecated
+            'quoteVolume': value,  # deprecated
+            'openInterestAmount': amount,
+            'openInterestValue': value,
+            'timestamp': timestamp,
+            'datetime': self.iso8601(timestamp),
+            'info': interest,
+        }
+
+    def borrow_margin(self, code, amount, symbol=None, params={}):
+        """
+        create a loan to borrow margin
+        see https://huobiapi.github.io/docs/spot/v1/en/#request-a-margin-loan-isolated
+        see https://huobiapi.github.io/docs/spot/v1/en/#request-a-margin-loan-cross
+        :param str code: unified currency code of the currency to borrow
+        :param float amount: the amount to borrow
+        :param str|None symbol: unified market symbol, required for isolated margin
+        :param dict params: extra parameters specific to the huobi api endpoint
+        :returns dict: a `margin loan structure <https://docs.ccxt.com/en/latest/manual.html#margin-loan-structure>`
+        """
+        self.load_markets()
+        currency = self.currency(code)
+        request = {
+            'currency': currency['id'],
+            'amount': self.currency_to_precision(code, amount),
+        }
+        marginMode = None
+        marginMode, params = self.handle_margin_mode_and_params('borrowMargin', params)
+        marginMode = 'cross' if (marginMode is None) else marginMode
+        method = None
+        if marginMode == 'isolated':
+            if symbol is None:
+                raise ArgumentsRequired(self.id + ' borrowMargin() requires a symbol argument for isolated margin')
+            market = self.market(symbol)
+            request['symbol'] = market['id']
+            method = 'privatePostMarginOrders'
+        elif marginMode == 'cross':
+            method = 'privatePostCrossMarginOrders'
+        response = getattr(self, method)(self.extend(request, params))
+        #
+        # Cross
+        #
+        #     {
+        #         "status": "ok",
+        #         "data": null
+        #     }
+        #
+        # Isolated
+        #
+        #     {
+        #         "data": 1000
+        #     }
+        #
+        transaction = self.parse_margin_loan(response, currency)
+        return self.extend(transaction, {
+            'amount': amount,
+            'symbol': symbol,
+        })
+
+    def repay_margin(self, code, amount, symbol=None, params={}):
+        """
+        repay borrowed margin and interest
+        see https://huobiapi.github.io/docs/spot/v1/en/#repay-margin-loan-cross-isolated
+        :param str code: unified currency code of the currency to repay
+        :param float amount: the amount to repay
+        :param str|None symbol: unified market symbol
+        :param dict params: extra parameters specific to the huobi api endpoint
+        :returns dict: a `margin loan structure <https://docs.ccxt.com/en/latest/manual.html#margin-loan-structure>`
+        """
+        self.load_markets()
+        currency = self.currency(code)
+        marginMode = None
+        marginMode, params = self.handle_margin_mode_and_params('repayMargin', params)
+        marginMode = 'cross' if (marginMode is None) else marginMode
+        marginAccounts = self.safe_value(self.options, 'marginAccounts', {})
+        accountType = self.get_supported_mapping(marginMode, marginAccounts)
+        accountId = self.fetch_account_id_by_type(accountType, params)
+        request = {
+            'currency': currency['id'],
+            'amount': self.currency_to_precision(code, amount),
+            'accountId': accountId,
+        }
+        response = self.v2PrivatePostAccountRepayment(self.extend(request, params))
+        #
+        #     {
+        #         "code":200,
+        #         "data": [
+        #             {
+        #                 "repayId":1174424,
+        #                 "repayTime":1600747722018
+        #             }
+        #         ]
+        #     }
+        #
+        data = self.safe_value(response, 'Data', [])
+        loan = self.safe_value(data, 0)
+        transaction = self.parse_margin_loan(loan, currency)
+        return self.extend(transaction, {
+            'amount': amount,
+            'symbol': symbol,
+        })
+
+    def parse_margin_loan(self, info, currency=None):
+        #
+        # borrowMargin cross
+        #
+        #     {
+        #         "status": "ok",
+        #         "data": null
+        #     }
+        #
+        # borrowMargin isolated
+        #
+        #     {
+        #         "data": 1000
+        #     }
+        #
+        # repayMargin
+        #
+        #     {
+        #         "repayId":1174424,
+        #         "repayTime":1600747722018
+        #     }
+        #
+        timestamp = self.safe_integer(info, 'repayTime')
+        return {
+            'id': self.safe_integer_2(info, 'repayId', 'data'),
+            'currency': self.safe_currency_code(None, currency),
+            'amount': None,
+            'symbol': None,
+            'timestamp': timestamp,
+            'datetime': self.iso8601(timestamp),
+            'info': info,
+        }
+
+    def fetch_settlement_history(self, symbol=None, since=None, limit=None, params={}):
+        """
+        Fetches historical settlement records
+        :param str symbol: unified symbol of the market to fetch the settlement history for
+        :param int since: timestamp in ms, value range = current time - 90 days，default = current time - 90 days
+        :param int limit: page items, default 20, shall not exceed 50
+        :param dict params: exchange specific params
+        :param int params['until']: timestamp in ms, value range = start_time -> current time，default = current time
+        :param int params['page_index']: page index, default page 1 if not filled
+        :param int params['code']: unified currency code, can be used when symbol is None
+        :returns: A list of settlement history objects
+        """
+        code = self.safe_string(params, 'code')
+        until = self.safe_integer_2(params, 'until', 'till')
+        params = self.omit(params, ['until', 'till'])
+        market = None if (symbol is None) else self.market(symbol)
+        type, query = self.handle_market_type_and_params('fetchSettlementHistory', market, params)
+        if type == 'future':
+            if symbol is None and code is None:
+                raise ArgumentsRequired(self.id + ' requires a symbol argument or params["code"] for fetchSettlementHistory future')
+        elif symbol is None:
+            raise ArgumentsRequired(self.id + ' requires a symbol argument for fetchSettlementHistory swap')
+        request = {}
+        if market['future']:
+            request['symbol'] = market['baseId']
+        else:
+            request['contract_code'] = market['id']
+        if since is not None:
+            request['start_at'] = since
+        if limit is not None:
+            request['page_size'] = limit
+        if until is not None:
+            request['end_at'] = until
+        method = 'contractPublicGetApiV1ContractSettlementRecords'
+        if market['swap']:
+            if market['linear']:
+                method = 'contractPublicGetLinearSwapApiV1SwapSettlementRecords'
+            else:
+                method = 'contractPublicGetSwapApiV1SwapSettlementRecords'
+        response = getattr(self, method)(self.extend(request, query))
+        #
+        # linear swap, coin-m swap
+        #
+        #    {
+        #        "status": "ok",
+        #        "data": {
+        #        "total_page": 14,
+        #        "current_page": 1,
+        #        "total_size": 270,
+        #        "settlement_record": [
+        #            {
+        #                "symbol": "ADA",
+        #                "contract_code": "ADA-USDT",
+        #                "settlement_time": 1652313600000,
+        #                "clawback_ratio": 0E-18,
+        #                "settlement_price": 0.512303000000000000,
+        #                "settlement_type": "settlement",
+        #                "business_type": "swap",
+        #                "pair": "ADA-USDT",
+        #                "trade_partition": "USDT"
+        #            },
+        #            ...
+        #        ],
+        #        "ts": 1652338693256
+        #    }
+        #
+        # coin-m future
+        #
+        #    {
+        #        "status": "ok",
+        #        "data": {
+        #            "total_page": 5,
+        #            "current_page": 1,
+        #            "total_size": 90,
+        #            "settlement_record": [
+        #                {
+        #                    "symbol": "FIL",
+        #                    "settlement_time": 1652342400000,
+        #                    "clawback_ratio": 0E-18,
+        #                    "list": [
+        #                        {
+        #                            "contract_code": "FIL220513",
+        #                            "settlement_price": 7.016000000000000000,
+        #                            "settlement_type": "settlement"
+        #                        },
+        #                        ...
+        #                    ]
+        #                },
+        #            ]
+        #        }
+        #    }
+        #
+        data = self.safe_value(response, 'data')
+        settlementRecord = self.safe_value(data, 'settlement_record')
+        settlements = self.parse_settlements(settlementRecord, market)
+        return self.sort_by(settlements, 'timestamp')
+
+    def parse_settlements(self, settlements, market):
+        #
+        # linear swap, coin-m swap, fetchSettlementHistory
+        #
+        #    [
+        #        {
+        #            "symbol": "ADA",
+        #            "contract_code": "ADA-USDT",
+        #            "settlement_time": 1652313600000,
+        #            "clawback_ratio": 0E-18,
+        #            "settlement_price": 0.512303000000000000,
+        #            "settlement_type": "settlement",
+        #            "business_type": "swap",
+        #            "pair": "ADA-USDT",
+        #            "trade_partition": "USDT"
+        #        },
+        #        ...
+        #    ]
+        #
+        # coin-m future, fetchSettlementHistory
+        #
+        #    [
+        #        {
+        #            "symbol": "FIL",
+        #            "settlement_time": 1652342400000,
+        #            "clawback_ratio": 0E-18,
+        #            "list": [
+        #                {
+        #                    "contract_code": "FIL220513",
+        #                    "settlement_price": 7.016000000000000000,
+        #                    "settlement_type": "settlement"
+        #                },
+        #                ...
+        #            ]
+        #        },
+        #    ]
+        #
+        result = []
+        for i in range(0, len(settlements)):
+            settlement = settlements[i]
+            list = self.safe_value(settlement, 'list')
+            if list is not None:
+                timestamp = self.safe_integer(settlement, 'settlement_time')
+                timestampDetails = {
+                    'timestamp': timestamp,
+                    'datetime': self.iso8601(timestamp),
+                }
+                for j in range(0, len(list)):
+                    item = list[j]
+                    parsedSettlement = self.parse_settlement(item, market)
+                    result.append(self.extend(parsedSettlement, timestampDetails))
+            else:
+                result.append(self.parse_settlement(settlements[i], market))
+        return result
+
+    def parse_settlement(self, settlement, market):
+        #
+        # linear swap, coin-m swap, fetchSettlementHistory
+        #
+        #    {
+        #        "symbol": "ADA",
+        #        "contract_code": "ADA-USDT",
+        #        "settlement_time": 1652313600000,
+        #        "clawback_ratio": 0E-18,
+        #        "settlement_price": 0.512303000000000000,
+        #        "settlement_type": "settlement",
+        #        "business_type": "swap",
+        #        "pair": "ADA-USDT",
+        #        "trade_partition": "USDT"
+        #    }
+        #
+        # coin-m future, fetchSettlementHistory
+        #
+        #    {
+        #        "contract_code": "FIL220513",
+        #        "settlement_price": 7.016000000000000000,
+        #        "settlement_type": "settlement"
+        #    }
+        #
+        timestamp = self.safe_integer(settlement, 'settlement_time')
+        marketId = self.safe_string(settlement, 'contract_code')
+        return {
+            'info': settlement,
+            'symbol': self.safe_symbol(marketId, market),
+            'price': self.safe_number(settlement, 'settlement_price'),
+            'timestamp': timestamp,
+            'datetime': self.iso8601(timestamp),
+        }

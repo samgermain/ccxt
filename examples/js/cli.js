@@ -74,7 +74,6 @@ let settings = localKeysFile ? (require (localKeysFile)[exchangeId] || {}) : {}
 
 const timeout = 30000
 let exchange = undefined
-const enableRateLimit = true
 
 const { Agent } = require ('https')
 
@@ -84,13 +83,11 @@ const httpsAgent = new Agent ({
 })
 
 try {
-
-    exchange = new (ccxt)[exchangeId] ({
-        timeout,
-        enableRateLimit,
-        httpsAgent,
-        ... settings,
-    })
+    if (ccxt.pro.exchanges.includes(exchangeId)) {
+        exchange = new (ccxt.pro)[exchangeId] ({ timeout, httpsAgent, ... settings })
+    } else {
+        exchange = new (ccxt)[exchangeId] ({ timeout, httpsAgent, ... settings })
+    }
 
     if (isSpot) {
         exchange.options['defaultType'] = 'spot';
@@ -202,8 +199,7 @@ const printHumanReadable = (exchange, result) => {
 
 //-----------------------------------------------------------------------------
 
-
-async function main () {
+async function run () {
 
     if (!exchangeId) {
 
@@ -275,13 +271,23 @@ async function main () {
 
                 let i = 0;
 
+                let isWsMethod = false
+                if (methodName.startsWith("watch")) { // handle WS methods
+                    isWsMethod = true;
+                }
+
                 while (true) {
                     try {
                         const result = await exchange[methodName] (... args)
                         end = exchange.milliseconds ()
-                        console.log (exchange.iso8601 (end), 'iteration', i++, 'passed in', end - start, 'ms\n')
-                        start = end
+                        if (!isWsMethod) {
+                            console.log (exchange.iso8601 (end), 'iteration', i++, 'passed in', end - start, 'ms\n')
+                        }
                         printHumanReadable (exchange, result)
+                        if (!isWsMethod) {
+                            console.log (exchange.iso8601 (end), 'iteration', i, 'passed in', end - start, 'ms\n')
+                        }
+                        start = end
                     } catch (e) {
                         if (e instanceof ExchangeError) {
                             log.red (e.constructor.name, e.message)
@@ -302,7 +308,7 @@ async function main () {
                         console.log (firstKey, httpsAgent.freeSockets[firstKey].length)
                     }
 
-                    if (!poll){
+                    if (!poll && !isWsMethod){
                         break
                     }
                 }
@@ -321,4 +327,4 @@ async function main () {
 
 //-----------------------------------------------------------------------------
 
-main ()
+run ()
