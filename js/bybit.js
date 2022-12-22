@@ -2751,15 +2751,8 @@ module.exports = class bybit extends Exchange {
     parseBalance (response) {
         //
         // margin wallet
+        //
         //     [
-        //         {
-        //             "free": "0.001143855",
-        //             "interest": "0",
-        //             "loan": "0",
-        //             "locked": "0",
-        //             "tokenId": "BTC",
-        //             "total": "0.001143855"
-        //         },
         //         {
         //             "free": "200.00005568",
         //             "interest": "0.0008391",
@@ -2768,9 +2761,11 @@ module.exports = class bybit extends Exchange {
         //             "tokenId": "USDT",
         //             "total": "200.00005568"
         //         },
+        //         ...
         //     ]
         //
         // usdc wallet
+        //
         //    {
         //      "result": {
         //           "walletBalance": "10.0000",
@@ -2832,20 +2827,6 @@ module.exports = class bybit extends Exchange {
         //
         //     [
         //         {
-        //             "coin": "BTC",
-        //             "equity": "0.00000002",
-        //             "walletBalance": "0.00000002",
-        //             "positionMargin": "0",
-        //             "availableBalance": "0.00000002",
-        //             "orderMargin": "0",
-        //             "occClosingFee": "0",
-        //             "occFundingFee": "0",
-        //             "unrealisedPnl": "0",
-        //             "cumRealisedPnl": "-0.00010941",
-        //             "givenCash": "0",
-        //             "serviceCash": "0"
-        //         },
-        //         {
         //             "coin": "USDT",
         //             "equity": "3662.81038535",
         //             "walletBalance": "3662.81038535",
@@ -2859,32 +2840,29 @@ module.exports = class bybit extends Exchange {
         //             "givenCash": "0",
         //             "serviceCash": "0"
         //         }
+        //         ...
         //     ]
+        //
         // spot
-        //     {
-        //       retCode: '0',
-        //       retMsg: 'OK',
-        //       result: {
-        //         balances: [
-        //           {
-        //             coin: 'BTC',
-        //             coinId: 'BTC',
-        //             total: '0.00977041118',
-        //             free: '0.00877041118',
-        //             locked: '0.001'
-        //           },
-        //           {
-        //             coin: 'EOS',
-        //             coinId: 'EOS',
-        //             total: '2000',
-        //             free: '2000',
-        //             locked: '0'
-        //           }
-        //         ]
-        //       },
-        //       retExtInfo: {},
-        //       time: '1670002625754'
-        //  }
+        //
+        //    {
+        //        retCode: '0',
+        //        retMsg: 'OK',
+        //        result: {
+        //            balances: [
+        //                {
+        //                    coin: 'BTC',
+        //                    coinId: 'BTC',
+        //                    total: '0.00977041118',
+        //                    free: '0.00877041118',
+        //                    locked: '0.001'
+        //                },
+        //                ...
+        //            ]
+        //        },
+        //        retExtInfo: {},
+        //        time: '1670002625754'
+        //    }
         //
         const result = {
             'info': response,
@@ -2927,62 +2905,53 @@ module.exports = class bybit extends Exchange {
             method = 'privateGetSpotV3PrivateCrossMarginAccount';
         }
         const response = await this[method] (params);
+        //
         // spot wallet
-        //     {
-        //       retCode: '0',
-        //       retMsg: 'OK',
-        //       result: {
-        //         balances: [
-        //           {
-        //             coin: 'BTC',
-        //             coinId: 'BTC',
-        //             total: '0.00977041118',
-        //             free: '0.00877041118',
-        //             locked: '0.001'
-        //           },
-        //           {
-        //             coin: 'EOS',
-        //             coinId: 'EOS',
-        //             total: '2000',
-        //             free: '2000',
-        //             locked: '0'
-        //           }
-        //         ]
-        //       },
-        //       retExtInfo: {},
-        //       time: '1670002625754'
-        //     }
+        //
+        //    {
+        //        retCode: '0',
+        //        retMsg: 'OK',
+        //        result: {
+        //            balances: [
+        //                {
+        //                    coin: 'BTC',
+        //                    coinId: 'BTC',
+        //                    total: '0.00977041118',
+        //                    free: '0.00877041118',
+        //                    locked: '0.001'
+        //                },
+        //                ...
+        //            ]
+        //        },
+        //        retExtInfo: {},
+        //        time: '1670002625754'
+        //    }
+        //
         // cross
-        //     {
-        //         "retCode": 0,
-        //         "retMsg": "success",
-        //         "result": {
-        //             "acctBalanceSum": "0.122995614474732872",
-        //             "debtBalanceSum": "0.011734191124529754",
-        //             "loanAccountList": [
-        //                 {
-        //                     "free": "0.001143855",
-        //                     "interest": "0",
-        //                     "loan": "0",
-        //                     "locked": "0",
-        //                     "tokenId": "BTC",
-        //                     "total": "0.001143855"
-        //                 },
-        //                 {
-        //                     "free": "200.00005568",
-        //                     "interest": "0.0008391",
-        //                     "loan": "200",
-        //                     "locked": "0",
-        //                     "tokenId": "USDT",
-        //                     "total": "200.00005568"
-        //                 },
-        //             ],
-        //             "riskRate": "0.0954",
-        //             "status": 1
-        //         },
-        //         "retExtInfo": {},
-        //         "time": 1669843584123
-        //     }
+        //
+        //    {
+        //        "retCode": 0,
+        //        "retMsg": "success",
+        //        "result": {
+        //            "acctBalanceSum": "0.122995614474732872",
+        //            "debtBalanceSum": "0.011734191124529754",
+        //            "loanAccountList": [
+        //                {
+        //                    "free": "0.001143855",
+        //                    "interest": "0",
+        //                    "loan": "0",
+        //                    "locked": "0",
+        //                    "tokenId": "BTC",
+        //                    "total": "0.001143855"
+        //                },
+        //                ...
+        //            ],
+        //            "riskRate": "0.0954",
+        //            "status": 1
+        //        },
+        //        "retExtInfo": {},
+        //        "time": 1669843584123
+        //    }
         //
         return this.parseBalance (response);
     }
@@ -3056,20 +3025,7 @@ module.exports = class bybit extends Exchange {
         //                     "givenCash": "0",
         //                     "serviceCash": "0"
         //                 },
-        //                 {
-        //                     "coin": "USDT",
-        //                     "equity": "3662.81038535",
-        //                     "walletBalance": "3662.81038535",
-        //                     "positionMargin": "0",
-        //                     "availableBalance": "3662.81038535",
-        //                     "orderMargin": "0",
-        //                     "occClosingFee": "0",
-        //                     "occFundingFee": "0",
-        //                     "unrealisedPnl": "0",
-        //                     "cumRealisedPnl": "-36.01761465",
-        //                     "givenCash": "0",
-        //                     "serviceCash": "0"
-        //                 },
+        //                 ...
         //             ]
         //         },
         //         "retExtInfo": {},
