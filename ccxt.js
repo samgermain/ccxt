@@ -37,7 +37,7 @@ const Exchange  = require ('./js/base/Exchange')
 //-----------------------------------------------------------------------------
 // this is updated by vss.js when building
 
-const version = '2.2.72'
+const version = '2.5.36'
 
 Exchange.ccxtVersion = version
 
@@ -47,7 +47,6 @@ const exchanges = {
     'alpaca':                  require ('./js/alpaca.js'),
     'ascendex':                require ('./js/ascendex.js'),
     'bequant':                 require ('./js/bequant.js'),
-    'bibox':                   require ('./js/bibox.js'),
     'bigone':                  require ('./js/bigone.js'),
     'binance':                 require ('./js/binance.js'),
     'binancecoinm':            require ('./js/binancecoinm.js'),
@@ -138,8 +137,8 @@ const exchanges = {
     'paymium':                 require ('./js/paymium.js'),
     'phemex':                  require ('./js/phemex.js'),
     'poloniex':                require ('./js/poloniex.js'),
+    'poloniexfutures':         require ('./js/poloniexfutures.js'),
     'probit':                  require ('./js/probit.js'),
-    'qtrade':                  require ('./js/qtrade.js'),
     'ripio':                   require ('./js/ripio.js'),
     'stex':                    require ('./js/stex.js'),
     'therock':                 require ('./js/therock.js'),
@@ -159,6 +158,7 @@ const exchanges = {
 }
 
 const pro = {
+    'alpaca':                  require ('./js/pro/alpaca.js'),
     'ascendex':                require ('./js/pro/ascendex.js'),
     'bequant':                 require ('./js/pro/bequant.js'),
     'binance':                 require ('./js/pro/binance.js'),
@@ -176,6 +176,7 @@ const pro = {
     'bitstamp':                require ('./js/pro/bitstamp.js'),
     'bittrex':                 require ('./js/pro/bittrex.js'),
     'bitvavo':                 require ('./js/pro/bitvavo.js'),
+    'btcex':                   require ('./js/pro/btcex.js'),
     'bybit':                   require ('./js/pro/bybit.js'),
     'cex':                     require ('./js/pro/cex.js'),
     'coinbaseprime':           require ('./js/pro/coinbaseprime.js'),
