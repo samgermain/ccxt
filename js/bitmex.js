@@ -39,7 +39,7 @@ module.exports = class bitmex extends Exchange {
                 'editOrder': true,
                 'fetchBalance': true,
                 'fetchClosedOrders': true,
-                'fetchDepositAddress': false,
+                'fetchDepositAddress': true,
                 'fetchDepositAddressesByNetwork': true,
                 'fetchFundingHistory': false,
                 'fetchFundingRate': false,
@@ -255,6 +255,61 @@ module.exports = class bitmex extends Exchange {
             },
         });
     }
+
+    // async fetchCurrencies (params = {}) {
+    //     /**
+    //      * @method
+    //      * @name ascendex#fetchCurrencies
+    //      * @description fetches all available currencies on an exchange
+    //      * @param {object} params extra parameters specific to the ascendex api endpoint
+    //      * @returns {object} an associative dictionary of currencies
+    //      */
+    //     const assets = await this.v1PublicGetAssets (params);
+    //     const assetsData = this.safeValue (assets, 'data', []);
+    //     const marginData = this.safeValue (margin, 'data', []);
+    //     const cashData = this.safeValue (cash, 'data', []);
+    //     const assetsById = this.indexBy (assetsData, 'assetCode');
+    //     const marginById = this.indexBy (marginData, 'assetCode');
+    //     const cashById = this.indexBy (cashData, 'assetCode');
+    //     const dataById = this.deepExtend (assetsById, marginById, cashById);
+    //     const ids = Object.keys (dataById);
+    //     const result = {};
+    //     for (let i = 0; i < ids.length; i++) {
+    //         const id = ids[i];
+    //         const currency = dataById[id];
+    //         const code = this.safeCurrencyCode (id);
+    //         const scale = this.safeString2 (currency, 'precisionScale', 'nativeScale');
+    //         const precision = this.parseNumber (this.parsePrecision (scale));
+    //         const fee = this.safeNumber2 (currency, 'withdrawFee', 'withdrawalFee');
+    //         const status = this.safeString2 (currency, 'status', 'statusCode');
+    //         const active = (status === 'Normal');
+    //         const margin = ('borrowAssetCode' in currency);
+    //         result[code] = {
+    //             'id': id,
+    //             'code': code,
+    //             'info': currency,
+    //             'type': undefined,
+    //             'margin': margin,
+    //             'name': this.safeString (currency, 'assetName'),
+    //             'active': active,
+    //             'deposit': undefined,
+    //             'withdraw': undefined,
+    //             'fee': fee,
+    //             'precision': precision,
+    //             'limits': {
+    //                 'amount': {
+    //                     'min': precision,
+    //                     'max': undefined,
+    //                 },
+    //                 'withdraw': {
+    //                     'min': this.safeNumber (currency, 'minWithdrawalAmt'),
+    //                     'max': undefined,
+    //                 },
+    //             },
+    //         };
+    //     }
+    //     return result;
+    // }
 
     async fetchMarkets (params = {}) {
         /**
@@ -2692,6 +2747,48 @@ module.exports = class bitmex extends Exchange {
             'enabled': enabled,
         };
         return await this.privatePostPositionIsolate (this.extend (request, params));
+    }
+
+    async fetchDepositAddress (code, params = {}) {
+        /**
+         * @method
+         * @name bitmex#fetchDepositAddress
+         * @description fetch the deposit address for a currency associated with this account
+         * @param {string} code unified currency code
+         * @param {object} params extra parameters specific to the bitmex api endpoint
+         * @param {string} network unified network code
+         * @returns {object} an [address structure]{@link https://docs.ccxt.com/en/latest/manual.html#address-structure}
+         */
+        await this.loadMarkets ();
+        const currency = this.currency (code);
+        const request = {
+            'currency': currency['id'],
+            'network': this.networkCodeToId (this.safeString (params, 'network')),
+        };
+        const response = await this.privateGetUserDepositAddress (this.extend (request, params));
+        return response;
+        //
+        //
+        return this.parseDepositAddress (response, currency);
+    }
+
+    parseDepositAddress (depositAddress, currency = undefined) {
+        //
+        //     {
+        //         'address': '0xf14b94518d74aff2b1a6d3429471bcfcd3881d42',
+        //         'hasTx': False
+        //     }
+        //
+        const address = this.safeString (depositAddress, 'address');
+        this.checkAddress (address);
+        const code = this.safeCurrencyCode (undefined, currency);
+        return {
+            'currency': code,
+            'network': undefined,
+            'address': address,
+            'tag': undefined,
+            'info': depositAddress,
+        };
     }
 
     async fetchDepositAddressesByNetwork (code, params = {}) {
