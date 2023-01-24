@@ -282,6 +282,13 @@ module.exports = class kucoinfutures extends kucoin {
                 'code': 'USDT',
                 'marginModes': {},
                 'marginTypes': {},
+                'accounts': {
+                    'main': 'main',
+                    'funding': 'main',
+                    'futures': 'future',
+                    'swap': 'future',
+                    'contract': 'future',
+                },
                 // endpoint versions
                 'versions': {
                     'futuresPrivate': {
@@ -1630,7 +1637,9 @@ module.exports = class kucoinfutures extends kucoin {
          * @param {object} params extra parameters specific to the kucoinfutures api endpoint
          * @returns {object} a [transfer structure]{@link https://docs.ccxt.com/en/latest/manual.html#transfer-structure}
          */
-        if ((toAccount !== 'main' && toAccount !== 'funding') || (fromAccount !== 'futures' && fromAccount !== 'future' && fromAccount !== 'contract')) {
+        fromAccount = this.safeString (this.options['accounts'], toAccount);
+        toAccount = this.safeString (this.options['accounts'], toAccount);
+        if (toAccount !== 'main' || fromAccount !== 'future') {
             throw new BadRequest (this.id + ' transfer() only supports transfers from contract(future) account to main(funding) account');
         }
         await this.loadMarkets ();
@@ -1653,8 +1662,6 @@ module.exports = class kucoinfutures extends kucoin {
         const data = this.safeValue (response, 'data');
         return this.extend (this.parseTransfer (data, currency), {
             'amount': this.parseNumber (amountToPrecision),
-            'fromAccount': 'future',
-            'toAccount': 'spot',
         });
     }
 
