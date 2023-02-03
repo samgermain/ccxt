@@ -954,7 +954,8 @@ module.exports = class exmo extends Exchange {
         if (symbols === undefined) {
             ids = this.ids.join (',');
             // max URL length is 2083 symbols, including http schema, hostname, tld, etc...
-            if (ids.length > 2048) {
+            const idsLength = ids.length;
+            if (idsLength > 2048) {
                 const numIds = this.ids.length;
                 throw new ExchangeError (this.id + ' fetchOrderBooks() has ' + numIds.toString () + ' symbols exceeding max URL length, you are required to specify a list of symbols in the first argument to fetchOrderBooks');
             }
