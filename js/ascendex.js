@@ -1317,7 +1317,8 @@ module.exports = class ascendex extends Exchange {
         const id = this.safeString (order, 'orderId');
         let clientOrderId = this.safeString (order, 'id');
         if (clientOrderId !== undefined) {
-            if (clientOrderId.length < 1) {
+            const clientOrderIdLength = clientOrderId.length;
+            if (clientOrderIdLength < 1) {
                 clientOrderId = undefined;
             }
         }
