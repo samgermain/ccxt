@@ -37,7 +37,7 @@ module.exports = class huobi extends Exchange {
                 'cancelOrders': true,
                 'createDepositAddress': undefined,
                 'createOrder': true,
-                'createReduceOnlyOrder': false,
+                'createReduceOnlyOrder': true,
                 'createStopLimitOrder': true,
                 'createStopMarketOrder': true,
                 'createStopOrder': true,
@@ -4115,6 +4115,7 @@ module.exports = class huobi extends Exchange {
          * @param {string|undefined} params.operator *spot and margin only* gte or lte, trigger price condition
          * @param {string|undefined} params.offset *contract only* 'open', 'close', or 'both', required in hedge mode
          * @param {bool|undefined} params.postOnly *contract only* true or false
+         * @param {bool|undefined} params.reduceOnly *contract only* true for reduce only orders
          * @returns {object} an [order structure]{@link https://docs.ccxt.com/en/latest/manual.html#order-structure}
          */
         await this.loadMarkets ();
@@ -4242,6 +4243,7 @@ module.exports = class huobi extends Exchange {
     async createContractOrder (symbol, type, side, amount, price = undefined, params = {}) {
         const offset = this.safeString (params, 'offset');
         const stopPrice = this.safeString (params, 'stopPrice');
+        const reduceOnly = this.safeValue (params, 'reduceOnly');
         if (stopPrice !== undefined) {
             throw new NotSupported (this.id + ' createOrder() supports tp_trigger_price + tp_order_price for take profit orders and/or sl_trigger_price + sl_order price for stop loss orders, stop orders are supported only with open long orders and open short orders');
         }
@@ -4322,7 +4324,7 @@ module.exports = class huobi extends Exchange {
         if (isStopOrder && !isOpenOrder) {
             throw new NotSupported (this.id + ' createOrder() supports tp_trigger_price + tp_order_price for take profit orders and/or sl_trigger_price + sl_order price for stop loss orders, stop orders are supported only with open long orders and open short orders');
         }
-        params = this.omit (params, [ 'sl_order_price', 'sl_trigger_price', 'tp_order_price', 'tp_trigger_price' ]);
+        params = this.omit (params, [ 'sl_order_price', 'sl_trigger_price', 'tp_order_price', 'tp_trigger_price', 'reduceOnly' ]);
         const postOnly = this.safeValue (params, 'postOnly', false);
         if (postOnly) {
             type = 'post_only';
@@ -4355,6 +4357,9 @@ module.exports = class huobi extends Exchange {
             } else if (market['future']) {
                 method = 'contractPrivatePostApiV1ContractOrder';
             }
+        }
+        if (reduceOnly === true) {
+            request['reduce_only'] = 1;
         }
         const response = await this[method] (this.extend (request, params));
         //
