@@ -16,7 +16,7 @@ module.exports = class coinex extends coinexRest {
                 'ws': true,
                 'watchBalance': true,
                 'watchTicker': true,
-                'watchTickers': false,
+                'watchTickers': true,
                 'watchTrades': true,
                 'watchMyTrades': false, // can query but can't subscribe
                 'watchOrders': true,
@@ -371,6 +371,7 @@ module.exports = class coinex extends coinexRest {
          * @method
          * @name coinex#watchTicker
          * @description watches a price ticker, a statistical calculation with the information calculated over the past 24 hours for a specific market
+         * @see https://viabtc.github.io/coinex_api_en_doc/spot/#docsspot004_websocket007_state_subscribe
          * @param {string} symbol unified symbol of the market to fetch the ticker for
          * @param {object} params extra parameters specific to the coinex api endpoint
          * @returns {object} a [ticker structure]{@link https://docs.ccxt.com/en/latest/manual.html#ticker-structure}
@@ -381,6 +382,39 @@ module.exports = class coinex extends coinexRest {
         [ type, params ] = this.handleMarketTypeAndParams ('watchTicker', market, params);
         const url = this.urls['api']['ws'][type];
         const messageHash = 'ticker:' + symbol;
+        const subscribe = {
+            'method': 'state.subscribe',
+            'id': this.requestId (),
+            'params': [
+                market['id'],
+            ],
+        };
+        const request = this.deepExtend (subscribe, params);
+        return await this.watch (url, messageHash, request, messageHash, request);
+    }
+
+    async watchTickers (symbols = undefined, params = {}) {
+        /**
+         * @method
+         * @name coinex#watchTicker
+         * @description watches a price ticker, a statistical calculation with the information calculated over the past 24 hours for a specific market
+         * @see https://viabtc.github.io/coinex_api_en_doc/spot/#docsspot004_websocket007_state_subscribe
+         * @param {[string]} symbols unified symbol of the market to fetch the ticker for
+         * @param {object} params extra parameters specific to the gate api endpoint
+         * @returns {object} a [ticker structure]{@link https://docs.ccxt.com/en/latest/manual.html#ticker-structure}
+         */
+        await this.loadMarkets ();
+        let market = undefined;
+        let marketIds = '';
+        if (symbols !== undefined) {
+            symbols = this.marketSymbols (symbols);
+            market = this.market (symbols[0]);
+            marketIds = this.marketIds (symbols);
+        }
+        let type = undefined;
+        [ type, params ] = this.handleMarketTypeAndParams ('watchTicker', market, params);
+        const url = this.urls['api']['ws'][type];
+        const messageHash = 'ticker:' + marketIds;
         const subscribe = {
             'method': 'state.subscribe',
             'id': this.requestId (),
