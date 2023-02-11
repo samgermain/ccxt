@@ -1576,10 +1576,10 @@ module.exports = class bitfinex extends Exchange {
         //     ]
         //
         const response = this.safeValue (responses, 0, {});
-        const id = this.safeNumber (response, 'withdrawal_id');
+        const id = this.safeString (response, 'withdrawal_id');
         const message = this.safeString (response, 'message');
         const errorMessage = this.findBroadlyMatchedKey (this.exceptions['broad'], message);
-        if (id === 0) {
+        if (Precise.stringEq (id, '0')) {
             if (errorMessage !== undefined) {
                 const ExceptionClass = this.exceptions['broad'][errorMessage];
                 throw new ExceptionClass (this.id + ' ' + message);
