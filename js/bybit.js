@@ -31,6 +31,7 @@ module.exports = class bybit extends Exchange {
                 'cancelOrder': true,
                 'createOrder': true,
                 'createPostOnlyOrder': true,
+                'createReduceOnlyOrder': true,
                 'createStopLimitOrder': true,
                 'createStopMarketOrder': true,
                 'createStopOrder': true,
@@ -1874,7 +1875,7 @@ module.exports = class bybit extends Exchange {
          * @see https://bybit-exchange.github.io/docs/spot/v3/#t-spot_latestsymbolinfo
          * @param {[string]|undefined} symbols unified symbols of the markets to fetch the ticker for, all market tickers are returned if not assigned
          * @param {object} params extra parameters specific to the bybit api endpoint
-         * @returns {object} an array of [ticker structures]{@link https://docs.ccxt.com/en/latest/manual.html#ticker-structure}
+         * @returns {object} a dictionary of [ticker structures]{@link https://docs.ccxt.com/en/latest/manual.html#ticker-structure}
          */
         await this.loadMarkets ();
         let market = undefined;
@@ -1949,25 +1950,23 @@ module.exports = class bybit extends Exchange {
     async fetchSpotOHLCV (symbol, timeframe = '1m', since = undefined, limit = undefined, params = {}) {
         await this.loadMarkets ();
         const market = this.market (symbol);
+        const duration = this.parseTimeframe (timeframe);
         const request = {
             'symbol': market['id'],
+            'limit': limit,
         };
-        const duration = this.parseTimeframe (timeframe);
-        const now = this.seconds ();
-        let sinceTimestamp = undefined;
-        if (limit === undefined) {
-            limit = 200; // default is 200 when requested with `since`
-        }
-        if (since === undefined) {
-            sinceTimestamp = now - limit * duration;
-        } else {
-            sinceTimestamp = parseInt (since / 1000);
+        if (since !== undefined) {
+            request['startTime'] = since;
+            if (limit === undefined) {
+                request['endTime'] = this.sum (since, 1000 * duration * 1000);
+            } else {
+                request['endTime'] = this.sum (since, limit * duration * 1000);
+            }
         }
         if (limit !== undefined) {
-            request['limit'] = limit; // max 200, default 200
+            request['limit'] = limit; // max 1000, default 1000
         }
         request['interval'] = timeframe;
-        request['from'] = sinceTimestamp;
         const response = await this.publicGetSpotV3PublicQuoteKline (this.extend (request, params));
         //
         //     {
@@ -3213,6 +3212,7 @@ module.exports = class bybit extends Exchange {
             'New': 'open',
             'Rejected': 'rejected', // order is triggered but failed upon being placed
             'PartiallyFilled': 'open',
+            'PartiallyFilledCancelled': 'canceled',
             'Filled': 'closed',
             'PendingCancel': 'open',
             'Cancelled': 'canceled',
@@ -4515,28 +4515,18 @@ module.exports = class bybit extends Exchange {
     async fetchDerivativesOrders (symbol = undefined, since = undefined, limit = undefined, params = {}) {
         await this.loadMarkets ();
         let market = undefined;
-        let settle = undefined;
         const request = {
             // 'symbol': market['id'],
-            // 'order_id': 'string'
-            // 'order_link_id': 'string', // unique client order id, max 36 characters
-            // 'symbol': market['id'], // default BTCUSD
-            // 'order': 'desc', // asc
-            // 'page': 1,
-            // 'limit': 20, // max 50
-            // 'order_status': 'Created,New'
-            // conditional orders ---------------------------------------------
-            // 'stop_order_id': 'string',
-            // 'stop_order_status': 'Untriggered',
+            // 'orderId': 'string'
+            // 'orderLinkId': 'string', // unique client order id, max 36 characters
+            // 'orderStatus': 'Created,New'
+            // 'orderFilter': 'StopOrder', // 'Order' or 'StopOrder'
+            // 'limit': 20, // Limit for data size per page. [1, 50]. Default: 20
+            // 'cursor': 'string', // used for pagination
         };
         if (symbol !== undefined) {
             market = this.market (symbol);
-            settle = market['settle'];
             request['symbol'] = market['id'];
-        }
-        [ settle, params ] = this.handleOptionAndParams (params, 'cancelAllOrders', 'settle', settle);
-        if (settle !== undefined) {
-            request['settleCoin'] = settle;
         }
         const isStop = this.safeValue (params, 'stop', false);
         params = this.omit (params, [ 'stop' ]);
@@ -5116,7 +5106,7 @@ module.exports = class bybit extends Exchange {
         //                 {
         //                     "orderType": "Limit",
         //                     "symbol": "BTC-14JUL22-17500-C",
-        //                     "orderLinkId": "188889689-yuanzhen-558998998898",
+        //                     "orderLinkId": "188889689-yuanzhen-558998998899",
         //                     "side": "Buy",
         //                     "orderId": "09c5836f-81ef-4208-a5b4-43135d3e02a2",
         //                     "leavesQty": "0.0000",
@@ -7164,11 +7154,7 @@ module.exports = class bybit extends Exchange {
                     authFull = auth_base + body;
                 } else {
                     authFull = auth_base + queryEncoded;
-                    if (path === 'unified/v3/private/order/list') {
-                        url += '?' + this.rawencode (query);
-                    } else {
-                        url += '?' + this.urlencode (query);
-                    }
+                    url += '?' + this.rawencode (query);
                 }
                 headers['X-BAPI-SIGN'] = this.hmac (this.encode (authFull), this.encode (this.secret));
             } else {
@@ -7197,11 +7183,7 @@ module.exports = class bybit extends Exchange {
                         };
                     }
                 } else {
-                    if (path === 'contract/v3/private/order/list') {
-                        url += '?' + this.rawencode (sortedQuery);
-                    } else {
-                        url += '?' + this.urlencode (sortedQuery);
-                    }
+                    url += '?' + this.rawencode (sortedQuery);
                     url += '&sign=' + signature;
                 }
             }

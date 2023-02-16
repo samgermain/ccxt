@@ -1541,7 +1541,7 @@ module.exports = class okx extends Exchange {
          * @description fetches price tickers for multiple markets, statistical calculations with the information calculated over the past 24 hours each market
          * @param {[string]|undefined} symbols unified symbols of the markets to fetch the ticker for, all market tickers are returned if not assigned
          * @param {object} params extra parameters specific to the okx api endpoint
-         * @returns {object} an array of [ticker structures]{@link https://docs.ccxt.com/en/latest/manual.html#ticker-structure}
+         * @returns {object} a dictionary of [ticker structures]{@link https://docs.ccxt.com/en/latest/manual.html#ticker-structure}
          */
         await this.loadMarkets ();
         symbols = this.marketSymbols (symbols);
@@ -4904,8 +4904,8 @@ module.exports = class okx extends Exchange {
             if (posSide === undefined) {
                 throw new ArgumentsRequired (this.id + ' setLeverage() requires a posSide argument for isolated margin');
             }
-            if (posSide !== 'long' && posSide !== 'short') {
-                throw new BadRequest (this.id + ' setLeverage() requires the posSide argument to be either "long" or "short"');
+            if (posSide !== 'long' && posSide !== 'short' && posSide !== 'net') {
+                throw new BadRequest (this.id + ' setLeverage() requires the posSide argument to be either "long", "short" or "net"');
             }
         }
         const response = await this.privatePostAccountSetLeverage (this.extend (request, params));

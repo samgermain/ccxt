@@ -145,26 +145,26 @@ class delta extends Exchange {
                 'trading' => array(
                     'tierBased' => true,
                     'percentage' => true,
-                    'taker' => 0.15 / 100,
-                    'maker' => 0.10 / 100,
+                    'taker' => $this->parse_number('0.0015'),
+                    'maker' => $this->parse_number('0.0010'),
                     'tiers' => array(
                         'taker' => array(
-                            array( 0, 0.15 / 100 ),
-                            array( 100, 0.13 / 100 ),
-                            array( 250, 0.13 / 100 ),
-                            array( 1000, 0.1 / 100 ),
-                            array( 5000, 0.09 / 100 ),
-                            array( 10000, 0.075 / 100 ),
-                            array( 20000, 0.065 / 100 ),
+                            array( $this->parse_number('0'), $this->parse_number('0.0015') ),
+                            array( $this->parse_number('100'), $this->parse_number('0.0013') ),
+                            array( $this->parse_number('250'), $this->parse_number('0.0013') ),
+                            array( $this->parse_number('1000'), $this->parse_number('0.001') ),
+                            array( $this->parse_number('5000'), $this->parse_number('0.0009') ),
+                            array( $this->parse_number('10000'), $this->parse_number('0.00075') ),
+                            array( $this->parse_number('20000'), $this->parse_number('0.00065') ),
                         ),
                         'maker' => array(
-                            array( 0, 0.1 / 100 ),
-                            array( 100, 0.1 / 100 ),
-                            array( 250, 0.09 / 100 ),
-                            array( 1000, 0.075 / 100 ),
-                            array( 5000, 0.06 / 100 ),
-                            array( 10000, 0.05 / 100 ),
-                            array( 20000, 0.05 / 100 ),
+                            array( $this->parse_number('0'), $this->parse_number('0.001') ),
+                            array( $this->parse_number('100'), $this->parse_number('0.001') ),
+                            array( $this->parse_number('250'), $this->parse_number('0.0009') ),
+                            array( $this->parse_number('1000'), $this->parse_number('0.00075') ),
+                            array( $this->parse_number('5000'), $this->parse_number('0.0006') ),
+                            array( $this->parse_number('10000'), $this->parse_number('0.0005') ),
+                            array( $this->parse_number('20000'), $this->parse_number('0.0005') ),
                         ),
                     ),
                 ),
@@ -792,7 +792,7 @@ class delta extends Exchange {
              * fetches price $tickers for multiple markets, statistical calculations with the information calculated over the past 24 hours each market
              * @param {[string]|null} $symbols unified $symbols of the markets to fetch the $ticker for, all market $tickers are returned if not assigned
              * @param {array} $params extra parameters specific to the delta api endpoint
-             * @return {array} an array of {@link https://docs.ccxt.com/en/latest/manual.html#$ticker-structure $ticker structures}
+             * @return {array} a dictionary of {@link https://docs.ccxt.com/en/latest/manual.html#$ticker-structure $ticker structures}
              */
             Async\await($this->load_markets());
             $symbols = $this->market_symbols($symbols);
@@ -1220,7 +1220,7 @@ class delta extends Exchange {
         $marketId = $this->safe_string($position, 'product_symbol');
         $market = $this->safe_market($marketId, $market);
         $symbol = $market['symbol'];
-        $timestamp = $this->safe_integer_product($position, 'timestamp', 0.0001);
+        $timestamp = $this->safe_integer_product($position, 'timestamp', 0.001);
         $sizeString = $this->safe_string($position, 'size');
         $side = null;
         if ($sizeString !== null) {

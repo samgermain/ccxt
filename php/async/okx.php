@@ -1552,7 +1552,7 @@ class okx extends Exchange {
              * fetches price tickers for multiple markets, statistical calculations with the information calculated over the past 24 hours each $market
              * @param {[string]|null} $symbols unified $symbols of the markets to fetch the ticker for, all $market tickers are returned if not assigned
              * @param {array} $params extra parameters specific to the okx api endpoint
-             * @return {array} an array of {@link https://docs.ccxt.com/en/latest/manual.html#ticker-structure ticker structures}
+             * @return {array} a dictionary of {@link https://docs.ccxt.com/en/latest/manual.html#ticker-structure ticker structures}
              */
             Async\await($this->load_markets());
             $symbols = $this->market_symbols($symbols);
@@ -4915,8 +4915,8 @@ class okx extends Exchange {
                 if ($posSide === null) {
                     throw new ArgumentsRequired($this->id . ' setLeverage() requires a $posSide argument for isolated margin');
                 }
-                if ($posSide !== 'long' && $posSide !== 'short') {
-                    throw new BadRequest($this->id . ' setLeverage() requires the $posSide argument to be either "long" or "short"');
+                if ($posSide !== 'long' && $posSide !== 'short' && $posSide !== 'net') {
+                    throw new BadRequest($this->id . ' setLeverage() requires the $posSide argument to be either "long", "short" or "net"');
                 }
             }
             $response = Async\await($this->privatePostAccountSetLeverage (array_merge($request, $params)));

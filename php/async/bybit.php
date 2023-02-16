@@ -40,6 +40,7 @@ class bybit extends Exchange {
                 'cancelOrder' => true,
                 'createOrder' => true,
                 'createPostOnlyOrder' => true,
+                'createReduceOnlyOrder' => true,
                 'createStopLimitOrder' => true,
                 'createStopMarketOrder' => true,
                 'createStopOrder' => true,
@@ -1894,7 +1895,7 @@ class bybit extends Exchange {
              * @see https://bybit-exchange.github.io/docs/spot/v3/#t-spot_latestsymbolinfo
              * @param {[string]|null} $symbols unified $symbols of the markets to fetch the ticker for, all $market tickers are returned if not assigned
              * @param {array} $params extra parameters specific to the bybit api endpoint
-             * @return {array} an array of {@link https://docs.ccxt.com/en/latest/manual.html#ticker-structure ticker structures}
+             * @return {array} a dictionary of {@link https://docs.ccxt.com/en/latest/manual.html#ticker-structure ticker structures}
              */
             Async\await($this->load_markets());
             $market = null;
@@ -1971,25 +1972,23 @@ class bybit extends Exchange {
         return Async\async(function () use ($symbol, $timeframe, $since, $limit, $params) {
             Async\await($this->load_markets());
             $market = $this->market($symbol);
+            $duration = $this->parse_timeframe($timeframe);
             $request = array(
                 'symbol' => $market['id'],
+                'limit' => $limit,
             );
-            $duration = $this->parse_timeframe($timeframe);
-            $now = $this->seconds();
-            $sinceTimestamp = null;
-            if ($limit === null) {
-                $limit = 200; // default is 200 when requested with `$since`
-            }
-            if ($since === null) {
-                $sinceTimestamp = $now - $limit * $duration;
-            } else {
-                $sinceTimestamp = intval($since / 1000);
+            if ($since !== null) {
+                $request['startTime'] = $since;
+                if ($limit === null) {
+                    $request['endTime'] = $this->sum($since, 1000 * $duration * 1000);
+                } else {
+                    $request['endTime'] = $this->sum($since, $limit * $duration * 1000);
+                }
             }
             if ($limit !== null) {
-                $request['limit'] = $limit; // max 200, default 200
+                $request['limit'] = $limit; // max 1000, default 1000
             }
             $request['interval'] = $timeframe;
-            $request['from'] = $sinceTimestamp;
             $response = Async\await($this->publicGetSpotV3PublicQuoteKline (array_merge($request, $params)));
             //
             //     {
@@ -3260,6 +3259,7 @@ class bybit extends Exchange {
             'New' => 'open',
             'Rejected' => 'rejected', // order is triggered but failed upon being placed
             'PartiallyFilled' => 'open',
+            'PartiallyFilledCancelled' => 'canceled',
             'Filled' => 'closed',
             'PendingCancel' => 'open',
             'Cancelled' => 'canceled',
@@ -4595,28 +4595,18 @@ class bybit extends Exchange {
         return Async\async(function () use ($symbol, $since, $limit, $params) {
             Async\await($this->load_markets());
             $market = null;
-            $settle = null;
             $request = array(
                 // 'symbol' => $market['id'],
-                // 'order_id' => 'string'
-                // 'order_link_id' => 'string', // unique client order id, max 36 characters
-                // 'symbol' => $market['id'], // default BTCUSD
-                // 'order' => 'desc', // asc
-                // 'page' => 1,
-                // 'limit' => 20, // max 50
-                // 'order_status' => 'Created,New'
-                // conditional orders ---------------------------------------------
-                // 'stop_order_id' => 'string',
-                // 'stop_order_status' => 'Untriggered',
+                // 'orderId' => 'string'
+                // 'orderLinkId' => 'string', // unique client order id, max 36 characters
+                // 'orderStatus' => 'Created,New'
+                // 'orderFilter' => 'StopOrder', // 'Order' or 'StopOrder'
+                // 'limit' => 20, // Limit for $data size per page. [1, 50]. Default => 20
+                // 'cursor' => 'string', // used for pagination
             );
             if ($symbol !== null) {
                 $market = $this->market($symbol);
-                $settle = $market['settle'];
                 $request['symbol'] = $market['id'];
-            }
-            list($settle, $params) = $this->handle_option_and_params($params, 'cancelAllOrders', 'settle', $settle);
-            if ($settle !== null) {
-                $request['settleCoin'] = $settle;
             }
             $isStop = $this->safe_value($params, 'stop', false);
             $params = $this->omit($params, array( 'stop' ));
@@ -5210,7 +5200,7 @@ class bybit extends Exchange {
             //                 array(
             //                     "orderType" => "Limit",
             //                     "symbol" => "BTC-14JUL22-17500-C",
-            //                     "orderLinkId" => "188889689-yuanzhen-558998998898",
+            //                     "orderLinkId" => "188889689-yuanzhen-558998998899",
             //                     "side" => "Buy",
             //                     "orderId" => "09c5836f-81ef-4208-a5b4-43135d3e02a2",
             //                     "leavesQty" => "0.0000",
@@ -7275,11 +7265,7 @@ class bybit extends Exchange {
                     $authFull = $auth_base . $body;
                 } else {
                     $authFull = $auth_base . $queryEncoded;
-                    if ($path === 'unified/v3/private/order/list') {
-                        $url .= '?' . $this->rawencode($query);
-                    } else {
-                        $url .= '?' . $this->urlencode($query);
-                    }
+                    $url .= '?' . $this->rawencode($query);
                 }
                 $headers['X-BAPI-SIGN'] = $this->hmac($this->encode($authFull), $this->encode($this->secret));
             } else {
@@ -7308,11 +7294,7 @@ class bybit extends Exchange {
                         );
                     }
                 } else {
-                    if ($path === 'contract/v3/private/order/list') {
-                        $url .= '?' . $this->rawencode($sortedQuery);
-                    } else {
-                        $url .= '?' . $this->urlencode($sortedQuery);
-                    }
+                    $url .= '?' . $this->rawencode($sortedQuery);
                     $url .= '&sign=' . $signature;
                 }
             }
