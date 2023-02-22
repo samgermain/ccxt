@@ -1670,9 +1670,10 @@ module.exports = class krakenfutures extends Exchange {
         //    }
         //
         const datetime = this.safeString (position, 'fillTime');
+        market = this.safeMarket (this.safeString (position, 'symbol'));
         return {
             'info': position,
-            'symbol': this.safeCurrencyCode (this.safeString (position, 'symbol')),
+            'symbol': market['symbol'],
             'timestamp': this.parse8601 (datetime),
             'datetime': datetime,
             'initialMargin': undefined,
