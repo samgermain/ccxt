@@ -336,7 +336,7 @@ module.exports = class krakenfutures extends Exchange {
                 'contract': contract,
                 'linear': linear,
                 'inverse': inverse,
-                'contractSize': this.safeFloat (market, 'contractSize'),
+                'contractSize': this.safeNumber (market, 'contractSize'),
                 'maintenanceMarginRate': undefined,
                 'expiry': expiry,
                 'expiryDatetime': this.iso8601 (expiry),
@@ -344,7 +344,7 @@ module.exports = class krakenfutures extends Exchange {
                 'optionType': undefined,
                 'precision': {
                     'amount': index ? undefined : this.parseNumber ('1'),
-                    'price': this.safeFloat (market, 'tickSize'),
+                    'price': this.safeNumber (market, 'tickSize'),
                 },
                 'limits': {
                     'leverage': {
@@ -507,7 +507,7 @@ module.exports = class krakenfutures extends Exchange {
         const change = Precise.stringSub (last, open);
         const percentage = Precise.stringMul (Precise.stringDiv (change, open), '100');
         const average = Precise.stringDiv (Precise.stringAdd (open, last), '2');
-        const volume = this.safeFloat (ticker, 'vol24h');
+        const volume = this.safeNumber (ticker, 'vol24h');
         const baseVolume = (!market['index'] && market['linear']) ? volume : undefined;
         const quoteVolume = (!market['index'] && market['inverse']) ? volume : undefined;
         return {
@@ -516,10 +516,10 @@ module.exports = class krakenfutures extends Exchange {
             'datetime': this.iso8601 (timestamp),
             'high': undefined,
             'low': undefined,
-            'bid': this.safeFloat (ticker, 'bid'),
-            'bidVolume': this.safeFloat (ticker, 'bidSize'),
-            'ask': this.safeFloat (ticker, 'ask'),
-            'askVolume': this.safeFloat (ticker, 'askSize'),
+            'bid': this.safeNumber (ticker, 'bid'),
+            'bidVolume': this.safeNumber (ticker, 'bidSize'),
+            'ask': this.safeNumber (ticker, 'ask'),
+            'askVolume': this.safeNumber (ticker, 'askSize'),
             'vwap': undefined,
             'open': this.parseNumber (open),
             'close': this.parseNumber (last),
