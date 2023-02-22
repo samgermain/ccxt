@@ -1684,7 +1684,7 @@ module.exports = class krakenfutures extends Exchange {
             'notional': undefined,
             'leverage': undefined,
             'unrealizedPnl': undefined,
-            'contracts': undefined,
+            'contracts': this.safeNumber (position, 'size'),
             'contractSize': this.safeNumber (market, 'contractSize'),
             'marginRatio': undefined,
             'liquidationPrice': undefined,
