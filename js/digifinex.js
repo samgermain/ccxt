@@ -341,6 +341,9 @@ module.exports = class digifinex extends Exchange {
                     'TRC20': 'TRC20',
                     'Vechain': 'VECHAIN',
                 },
+                'fetchMarkets': {
+                    'method': 'fetchMarketsV2', // override fro 'fetchMarketsV1'
+                },
             },
             'commonCurrencies': {
                 'BHT': 'Black House Test',
@@ -526,7 +529,7 @@ module.exports = class digifinex extends Exchange {
          * @returns {[object]} an array of objects representing market data
          */
         const options = this.safeValue (this.options, 'fetchMarkets', {});
-        const method = this.safeString (options, 'method', 'fetch_markets_v2');
+        const method = this.safeString (options, 'method', 'fetchMarketsV2');
         return await this[method] (params);
     }
 
