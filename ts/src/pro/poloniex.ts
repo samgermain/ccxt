@@ -2,15 +2,14 @@
 
 //  ---------------------------------------------------------------------------
 
-const poloniexRest = require ('../poloniex.js');
-const { BadRequest } = require ('../base/errors');
-const { AuthenticationError } = require ('../base/errors');
-const { ArrayCache, ArrayCacheBySymbolById, ArrayCacheByTimestamp } = require ('./base/Cache');
-const Precise = require ('../base/Precise');
+import poloniexRest from '../poloniex.js';
+import { AuthenticationError, BadRequest } from '../base/errors';
+import { ArrayCache, ArrayCacheBySymbolById, ArrayCacheByTimestamp } from '../base/ws/Cache';
+import { Precise } from '../base/Precise';
 
 //  ---------------------------------------------------------------------------
 
-module.exports = class poloniex extends poloniexRest {
+export default class poloniex extends poloniexRest {
     describe () {
         return this.deepExtend (super.describe (), {
             'has': {
@@ -958,5 +957,4 @@ module.exports = class poloniex extends poloniexRest {
         client.lastPong = this.milliseconds ();
         return message;
     }
-};
-
+}
