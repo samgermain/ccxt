@@ -2305,6 +2305,14 @@ export default class binance extends Exchange {
          * @method
          * @name binance#fetchBalance
          * @description query for balance and get the amount of funds available for trading or funds locked in orders
+         * @see https://binance-docs.github.io/apidocs/spot/en/#account-information-user_data                   // spot
+         * @see https://binance-docs.github.io/apidocs/spot/en/#query-cross-margin-account-details-user_data    // cross margin
+         * @see https://binance-docs.github.io/apidocs/spot/en/#query-isolated-margin-account-info-user_data    // isolated margin
+         * @see https://binance-docs.github.io/apidocs/spot/en/#lending-account-user_data                       // lending
+         * @see https://binance-docs.github.io/apidocs/spot/en/#funding-wallet-user_data                        // funding
+         * @see https://binance-docs.github.io/apidocs/futures/en/#order-book   // swap
+         * @see https://binance-docs.github.io/apidocs/delivery/en/#order-book  // future
+         * @see https://binance-docs.github.io/apidocs/voptions/en/#order-book  // option
          * @param {object} params extra parameters specific to the binance api endpoint
          * @param {string|undefined} params.type 'future', 'delivery', 'savings', 'funding', or 'spot'
          * @param {string|undefined} params.marginMode 'cross' or 'isolated', for margin trading, uses this.options.defaultMarginMode if not passed, defaults to undefined/None/null
