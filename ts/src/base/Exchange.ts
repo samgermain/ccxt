@@ -4087,6 +4087,14 @@ export default class Exchange {
         const market = this.market (firstMarket);
         return market;
     }
+
+    getExchangeOrders () {
+        if (this.orders === undefined) {
+            const limit = this.safeInteger (this.options, 'ordersLimit');
+            this.orders = new ArrayCacheBySymbolById (limit);
+        }
+        return this.orders;
+    }
 }
 
 export {
