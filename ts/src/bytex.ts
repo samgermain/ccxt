@@ -1799,4 +1799,4 @@ export default class bytex extends Exchange {
             this.throwExactlyMatchedException (this.exceptions['exact'], status, feedback);
         }
     }
-};
+}
