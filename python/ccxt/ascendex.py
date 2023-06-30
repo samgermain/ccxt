@@ -7,6 +7,7 @@ from ccxt.base.exchange import Exchange
 from ccxt.abstract.ascendex import ImplicitAPI
 import hashlib
 from ccxt.base.types import OrderSide
+from ccxt.base.types import OrderType
 from typing import Optional
 from typing import List
 from ccxt.base.errors import ExchangeError
@@ -58,6 +59,9 @@ class ascendex(Exchange, ImplicitAPI):
                 'fetchDepositAddresses': False,
                 'fetchDepositAddressesByNetwork': False,
                 'fetchDeposits': True,
+                'fetchDepositsWithdrawals': True,
+                'fetchDepositWithdrawFee': 'emulated',
+                'fetchDepositWithdrawFees': True,
                 'fetchFundingHistory': False,
                 'fetchFundingRate': 'emulated',
                 'fetchFundingRateHistory': False,
@@ -209,6 +213,7 @@ class ascendex(Exchange, ImplicitAPI):
                             'futures/collateral': 1,
                             'futures/pricing-data': 1,
                             'futures/ticker': 1,
+                            'risk-limit-info': 1,
                         },
                     },
                     'private': {
@@ -275,6 +280,20 @@ class ascendex(Exchange, ImplicitAPI):
                 },
                 'transfer': {
                     'fillResponseFromRequest': True,
+                },
+                'networks': {
+                    'BSC': 'BEP20(BSC)',
+                    'ARB': 'arbitrum',
+                    'SOL': 'Solana',
+                    'AVAX': 'avalanche C chain',
+                    'OMNI': 'Omni',
+                },
+                'networksById': {
+                    'BEP20(BSC)': 'BSC',
+                    'arbitrum': 'ARB',
+                    'Solana': 'SOL',
+                    'avalanche C chain': 'AVAX',
+                    'Omni': 'OMNI',
                 },
             },
             'exceptions': {
@@ -1245,6 +1264,25 @@ class ascendex(Exchange, ImplicitAPI):
         #     }
         #
         #     {
+        #         "orderId": "a173ad938fc3U22666567717788c3b66",   # orderId
+        #         "seqNum": 18777366360,                           # sequence number
+        #         "accountId": "cshwSjbpPjSwHmxPdz2CPQVU9mnbzPpt",  # accountId
+        #         "symbol": "BTC/USDT",                            # symbol
+        #         "orderType": "Limit",                            # order type(Limit/Market/StopMarket/StopLimit)
+        #         "side": "Sell",                                  # order side(Buy/Sell)
+        #         "price": "11346.77",                             # order price
+        #         "stopPrice": "0",                                # stop price(0 by default)
+        #         "orderQty": "0.01",                              # order quantity(in base asset)
+        #         "status": "Canceled",                            # order status(Filled/Canceled/Rejected)
+        #         "createTime": 1596344995793,                     # order creation time
+        #         "lastExecTime": 1596344996053,                   # last execution time
+        #         "avgFillPrice": "11346.77",                      # average filled price
+        #         "fillQty": "0.01",                               # filled quantity(in base asset)
+        #         "fee": "-0.004992579",                           # cummulative fee. if negative, self value is the commission charged; if possitive, self value is the rebate received.
+        #         "feeAsset": "USDT"                               # fee asset
+        #     }
+        #
+        #     {
         #         "ac": "FUTURES",
         #         "accountId": "testabcdefg",
         #         "avgPx": "0",
@@ -1276,7 +1314,7 @@ class ascendex(Exchange, ImplicitAPI):
         price = self.safe_string(order, 'price')
         amount = self.safe_string(order, 'orderQty')
         average = self.safe_string(order, 'avgPx')
-        filled = self.safe_string_2(order, 'cumFilledQty', 'cumQty')
+        filled = self.safe_string_n(order, ['cumFilledQty', 'cumQty', 'fillQty'])
         id = self.safe_string(order, 'orderId')
         clientOrderId = self.safe_string(order, 'id')
         if clientOrderId is not None:
@@ -1290,7 +1328,7 @@ class ascendex(Exchange, ImplicitAPI):
             if rawTypeLower == 'stopmarket':
                 type = 'market'
         side = self.safe_string_lower(order, 'side')
-        feeCost = self.safe_number(order, 'cumFee')
+        feeCost = self.safe_number_2(order, 'cumFee', 'fee')
         fee = None
         if feeCost is not None:
             feeCurrencyId = self.safe_string(order, 'feeAsset')
@@ -1379,7 +1417,7 @@ class ascendex(Exchange, ImplicitAPI):
             }
         return result
 
-    def create_order(self, symbol: str, type, side: OrderSide, amount, price=None, params={}):
+    def create_order(self, symbol: str, type: OrderType, side: OrderSide, amount, price=None, params={}):
         """
         Create an order on the exchange
         :param str symbol: Unified CCXT market symbol
@@ -2220,7 +2258,7 @@ class ascendex(Exchange, ImplicitAPI):
 
     def fetch_transactions(self, code: Optional[str] = None, since: Optional[int] = None, limit: Optional[int] = None, params={}):
         """
-        fetch history of deposits and withdrawals
+        *DEPRECATED*, use fetchDepositsWithdrawals instead
         :param str|None code: unified currency code for the currency of the transactions, default is None
         :param int|None since: timestamp in ms of the earliest transaction, default is None
         :param int|None limit: max number of transactions to return, default is None
@@ -2733,6 +2771,67 @@ class ascendex(Exchange, ImplicitAPI):
                 'info': tier,
             })
         return tiers
+
+    def parse_deposit_withdraw_fee(self, fee, currency=None):
+        #
+        # {
+        #     "assetCode":      "USDT",
+        #     "assetName":      "Tether",
+        #     "precisionScale":  9,
+        #     "nativeScale":     4,
+        #     "blockChain": [
+        #         {
+        #             "chainName":        "Omni",
+        #             "withdrawFee":      "30.0",
+        #             "allowDeposit":      True,
+        #             "allowWithdraw":     True,
+        #             "minDepositAmt":    "0.0",
+        #             "minWithdrawal":    "50.0",
+        #             "numConfirmations":  3
+        #         },
+        #     ]
+        # }
+        #
+        blockChains = self.safe_value(fee, 'blockChain', [])
+        blockChainsLength = len(blockChains)
+        result = {
+            'info': fee,
+            'withdraw': {
+                'fee': None,
+                'percentage': None,
+            },
+            'deposit': {
+                'fee': None,
+                'percentage': None,
+            },
+            'networks': {},
+        }
+        for i in range(0, blockChainsLength):
+            blockChain = blockChains[i]
+            networkId = self.safe_string(blockChain, 'chainName')
+            currencyCode = self.safe_string(currency, 'code')
+            networkCode = self.network_id_to_code(networkId, currencyCode)
+            result['networks'][networkCode] = {
+                'deposit': {'fee': None, 'percentage': None},
+                'withdraw': {'fee': self.safe_number(blockChain, 'withdrawFee'), 'percentage': False},
+            }
+            if blockChainsLength == 1:
+                result['withdraw']['fee'] = self.safe_number(blockChain, 'withdrawFee')
+                result['withdraw']['percentage'] = False
+        return result
+
+    def fetch_deposit_withdraw_fees(self, codes: Optional[List[str]] = None, params={}):
+        """
+        fetch deposit and withdraw fees
+        see https://ascendex.github.io/ascendex-pro-api/#list-all-assets
+        :param [str]|None codes: list of unified currency codes
+        :param dict params: extra parameters specific to the ascendex api endpoint
+        :returns dict: a list of `fee structures <https://docs.ccxt.com/en/latest/manual.html#fee-structure>`
+        """
+        self.load_markets()
+        response = self.v2PublicGetAssets(params)
+        data = self.safe_value(response, 'data')
+        return self.parse_deposit_withdraw_fees(data, codes, 'assetCode')
 
     def transfer(self, code: str, amount, fromAccount, toAccount, params={}):
         """

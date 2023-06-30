@@ -6,7 +6,7 @@ import { ExchangeError, ArgumentsRequired, AuthenticationError, BadRequest, Inva
 import { Precise } from './base/Precise.js';
 import { TICK_SIZE, TRUNCATE, DECIMAL_PLACES } from './base/functions/number.js';
 import { sha256 } from './static_dependencies/noble-hashes/sha256.js';
-import { Int, OrderSide } from './base/types.js';
+import { Int, OrderSide, OrderType } from './base/types.js';
 
 // ----------------------------------------------------------------------------
 
@@ -73,7 +73,7 @@ export default class coinbase extends Exchange {
                 'fetchOpenInterestHistory': false,
                 'fetchOpenOrders': true,
                 'fetchOrder': true,
-                'fetchOrderBook': false,
+                'fetchOrderBook': true,
                 'fetchOrders': true,
                 'fetchPosition': false,
                 'fetchPositionMode': false,
@@ -187,6 +187,8 @@ export default class coinbase extends Exchange {
                             'brokerage/products/{product_id}/candles',
                             'brokerage/products/{product_id}/ticker',
                             'brokerage/transaction_summary',
+                            'brokerage/product_book',
+                            'brokerage/best_bid_ask',
                         ],
                         'post': [
                             'brokerage/orders',
@@ -1938,7 +1940,7 @@ export default class coinbase extends Exchange {
         return request;
     }
 
-    async createOrder (symbol: string, type, side: OrderSide, amount, price = undefined, params = {}) {
+    async createOrder (symbol: string, type: OrderType, side: OrderSide, amount, price = undefined, params = {}) {
         /**
          * @method
          * @name coinbase#createOrder
@@ -2404,7 +2406,7 @@ export default class coinbase extends Exchange {
             request['limit'] = limit;
         }
         if (since !== undefined) {
-            request['start_date'] = this.parse8601 (since);
+            request['start_date'] = this.iso8601 (since);
         }
         const response = await this.v3PrivateGetBrokerageOrdersHistoricalBatch (this.extend (request, params));
         //
@@ -2470,7 +2472,7 @@ export default class coinbase extends Exchange {
         }
         request['limit'] = limit;
         if (since !== undefined) {
-            request['start_date'] = this.parse8601 (since);
+            request['start_date'] = this.iso8601 (since);
         }
         const response = await this.v3PrivateGetBrokerageOrdersHistoricalBatch (this.extend (request, params));
         //
@@ -2728,6 +2730,52 @@ export default class coinbase extends Exchange {
         //
         const trades = this.safeValue (response, 'fills', []);
         return this.parseTrades (trades, market, since, limit);
+    }
+
+    async fetchOrderBook (symbol: string, limit: Int = undefined, params = {}) {
+        /**
+         * @method
+         * @name coinbase#fetchOrderBook
+         * @description fetches information on open orders with bid (buy) and ask (sell) prices, volumes and other data
+         * @see https://docs.cloud.coinbase.com/advanced-trade-api/reference/retailbrokerageapi_getproductbook
+         * @param {string} symbol unified symbol of the market to fetch the order book for
+         * @param {int|undefined} limit the maximum amount of order book entries to return
+         * @param {object} params extra parameters specific to the coinbase api endpoint
+         * @returns {object} A dictionary of [order book structures]{@link https://docs.ccxt.com/#/?id=order-book-structure} indexed by market symbols
+         */
+        await this.loadMarkets ();
+        const market = this.market (symbol);
+        const request = {
+            'product_id': market['id'],
+        };
+        if (limit !== undefined) {
+            request['limit'] = limit;
+        }
+        const response = await this.v3PrivateGetBrokerageProductBook (this.extend (request, params));
+        //
+        //     {
+        //         "pricebook": {
+        //             "product_id": "BTC-USDT",
+        //             "bids": [
+        //                 {
+        //                     "price": "30757.85",
+        //                     "size": "0.115"
+        //                 },
+        //             ],
+        //             "asks": [
+        //                 {
+        //                     "price": "30759.07",
+        //                     "size": "0.04877659"
+        //                 },
+        //             ],
+        //             "time": "2023-06-30T04:02:40.533606Z"
+        //         }
+        //     }
+        //
+        const data = this.safeValue (response, 'pricebook', {});
+        const time = this.safeString (data, 'time');
+        const timestamp = this.parse8601 (time);
+        return this.parseOrderBook (data, symbol, timestamp, 'bids', 'asks', 'price', 'size');
     }
 
     sign (path, api = [], method = 'GET', params = {}, headers = undefined, body = undefined) {

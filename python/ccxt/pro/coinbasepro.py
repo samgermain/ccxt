@@ -8,7 +8,9 @@ from ccxt.async_support.base.ws.cache import ArrayCache, ArrayCacheBySymbolById
 import hashlib
 from ccxt.async_support.base.ws.client import Client
 from typing import Optional
+from ccxt.base.errors import ExchangeError
 from ccxt.base.errors import BadSymbol
+from ccxt.base.errors import AuthenticationError
 
 
 class coinbasepro(ccxt.async_support.coinbasepro):
@@ -97,7 +99,7 @@ class coinbasepro(ccxt.async_support.coinbasepro):
         trades = await self.subscribe(name, symbol, name, params)
         if self.newUpdates:
             limit = trades.getLimit(symbol, limit)
-        return self.filter_by_since_limit(trades, since, limit, 'timestamp')
+        return self.filter_by_since_limit(trades, since, limit, 'timestamp', True)
 
     async def watch_my_trades(self, symbol: Optional[str] = None, since: Optional[int] = None, limit: Optional[int] = None, params={}):
         """
@@ -118,7 +120,7 @@ class coinbasepro(ccxt.async_support.coinbasepro):
         trades = await self.subscribe(name, symbol, messageHash, self.extend(params, authentication))
         if self.newUpdates:
             limit = trades.getLimit(symbol, limit)
-        return self.filter_by_since_limit(trades, since, limit, 'timestamp')
+        return self.filter_by_since_limit(trades, since, limit, 'timestamp', True)
 
     async def watch_orders(self, symbol: Optional[str] = None, since: Optional[int] = None, limit: Optional[int] = None, params={}):
         """
@@ -139,7 +141,7 @@ class coinbasepro(ccxt.async_support.coinbasepro):
         orders = await self.subscribe(name, symbol, messageHash, self.extend(params, authentication))
         if self.newUpdates:
             limit = orders.getLimit(symbol, limit)
-        return self.filter_by_since_limit(orders, since, limit, 'timestamp')
+        return self.filter_by_since_limit(orders, since, limit, 'timestamp', True)
 
     async def watch_order_book(self, symbol: str, limit: Optional[int] = None, params={}):
         """
@@ -222,7 +224,7 @@ class coinbasepro(ccxt.async_support.coinbasepro):
             client.resolve(tradesArray, messageHash)
         return message
 
-    def parse_ws_trade(self, trade):
+    def parse_ws_trade(self, trade, market=None):
         #
         # private trades
         # {
@@ -451,7 +453,7 @@ class coinbasepro(ccxt.async_support.coinbasepro):
                         orders.append(previousOrder)
                         client.resolve(orders, messageHash)
 
-    def parse_ws_order(self, order):
+    def parse_ws_order(self, order, market=None):
         id = self.safe_string(order, 'order_id')
         clientOrderId = self.safe_string(order, 'client_oid')
         marketId = self.safe_string(order, 'product_id')
@@ -669,6 +671,33 @@ class coinbasepro(ccxt.async_support.coinbasepro):
         #
         return message
 
+    def handle_error_message(self, client: Client, message):
+        #
+        #     {
+        #         "type": "error",
+        #         "message": "error message",
+        #         /* ..."""
+        #     }
+        #
+        # auth error
+        #
+        #     {
+        #         type: 'error',
+        #         message: 'Authentication Failed',
+        #         reason: '{"message":"Invalid API Key"}'
+        #     }
+        #
+        errMsg = self.safe_string(message, 'message')
+        reason = self.safe_string(message, 'reason')
+        try:
+            if errMsg == 'Authentication Failed':
+                raise AuthenticationError('Authentication failed: ' + reason)
+            else:
+                raise ExchangeError(self.id + ' ' + reason)
+        except Exception as error:
+            client.reject(error)
+            return True
+
     def handle_message(self, client: Client, message):
         type = self.safe_string(message, 'type')
         methods = {
@@ -680,6 +709,7 @@ class coinbasepro(ccxt.async_support.coinbasepro):
             'open': self.handle_order,
             'change': self.handle_order,
             'done': self.handle_order,
+            'error': self.handle_error_message,
         }
         length = len(client.url) - 0
         authenticated = client.url[length - 1] == '?'

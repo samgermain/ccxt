@@ -32,6 +32,7 @@ class latoken extends latoken$1 {
                 'fetchBorrowRates': false,
                 'fetchBorrowRatesPerSymbol': false,
                 'fetchCurrencies': true,
+                'fetchDepositsWithdrawals': true,
                 'fetchDepositWithdrawFees': false,
                 'fetchMarginMode': false,
                 'fetchMarkets': true,
@@ -1263,7 +1264,7 @@ class latoken extends latoken$1 {
         /**
          * @method
          * @name latoken#fetchTransactions
-         * @description fetch history of deposits and withdrawals
+         * @description *DEPRECATED* use fetchDepositsWithdrawals instead
          * @param {string|undefined} code unified currency code for the currency of the transactions, default is undefined
          * @param {int|undefined} since timestamp in ms of the earliest transaction, default is undefined
          * @param {int|undefined} limit max number of transactions to return, default is undefined
@@ -1338,13 +1339,15 @@ class latoken extends latoken$1 {
         const addressTo = this.safeString(transaction, 'recipientAddress');
         const txid = this.safeString(transaction, 'transactionHash');
         const tagTo = this.safeString(transaction, 'memo');
-        let fee = undefined;
+        const fee = {
+            'currency': undefined,
+            'cost': undefined,
+            'rate': undefined,
+        };
         const feeCost = this.safeNumber(transaction, 'transactionFee');
         if (feeCost !== undefined) {
-            fee = {
-                'cost': feeCost,
-                'currency': code,
-            };
+            fee['cost'] = feeCost;
+            fee['currency'] = code;
         }
         const type = this.parseTransactionType(this.safeString(transaction, 'type'));
         return {
@@ -1365,6 +1368,7 @@ class latoken extends latoken$1 {
             'currency': code,
             'status': status,
             'updated': undefined,
+            'comment': undefined,
             'fee': fee,
         };
     }

@@ -33,6 +33,7 @@ class coinmate extends Exchange {
                 'fetchBorrowRateHistory' => false,
                 'fetchBorrowRates' => false,
                 'fetchBorrowRatesPerSymbol' => false,
+                'fetchDepositsWithdrawals' => true,
                 'fetchFundingHistory' => false,
                 'fetchFundingRate' => false,
                 'fetchFundingRateHistory' => false,
@@ -379,7 +380,7 @@ class coinmate extends Exchange {
 
     public function fetch_transactions(?string $code = null, ?int $since = null, ?int $limit = null, $params = array ()) {
         /**
-         * fetch history of deposits and withdrawals
+         * *DEPRECATED* use fetchDepositsWithdrawals instead
          * @param {string|null} $code unified $currency $code for the $currency of the transactions, default is null
          * @param {int|null} $since timestamp in ms of the earliest transaction, default is null
          * @param {int|null} $limit max number of transactions to return, default is null
@@ -426,12 +427,12 @@ class coinmate extends Exchange {
         //         transactionId => 1862815,
         //         $timestamp => 1516803982388,
         //         amountCurrency => 'LTC',
-        //         $amount => 1,
-        //         $fee => 0,
+        //         amount => 1,
+        //         fee => 0,
         //         walletType => 'LTC',
         //         transferType => 'DEPOSIT',
         //         transferStatus => 'COMPLETED',
-        //         $txid:
+        //         txid:
         //         'ccb9255dfa874e6c28f1a64179769164025329d65e5201849c2400abd6bce245',
         //         destination => 'LQrtSKA6LnhcwRrEuiborQJnjFF56xqsFn',
         //         destinationTag => null
@@ -443,12 +444,12 @@ class coinmate extends Exchange {
         //         transactionId => 2140966,
         //         $timestamp => 1519314282976,
         //         amountCurrency => 'EUR',
-        //         $amount => 8421.7228,
-        //         $fee => 16.8772,
+        //         amount => 8421.7228,
+        //         fee => 16.8772,
         //         walletType => 'BANK_WIRE',
         //         transferType => 'WITHDRAWAL',
         //         transferStatus => 'COMPLETED',
-        //         $txid => null,
+        //         txid => null,
         //         destination => null,
         //         destinationTag => null
         //     }
@@ -460,38 +461,32 @@ class coinmate extends Exchange {
         //     }
         //
         $timestamp = $this->safe_integer($transaction, 'timestamp');
-        $amount = $this->safe_number($transaction, 'amount');
-        $fee = $this->safe_number($transaction, 'fee');
-        $txid = $this->safe_string($transaction, 'txid');
-        $address = $this->safe_string($transaction, 'destination');
-        $tag = $this->safe_string($transaction, 'destinationTag');
         $currencyId = $this->safe_string($transaction, 'amountCurrency');
         $code = $this->safe_currency_code($currencyId, $currency);
-        $type = $this->safe_string_lower($transaction, 'transferType');
-        $status = $this->parse_transaction_status($this->safe_string($transaction, 'transferStatus'));
-        $id = $this->safe_string_2($transaction, 'transactionId', 'id');
-        $network = $this->safe_string($transaction, 'walletType');
         return array(
-            'id' => $id,
+            'info' => $transaction,
+            'id' => $this->safe_string_2($transaction, 'transactionId', 'id'),
+            'txid' => $this->safe_string($transaction, 'txid'),
+            'type' => $this->safe_string_lower($transaction, 'transferType'),
+            'currency' => $code,
+            'network' => $this->safe_string($transaction, 'walletType'),
+            'amount' => $this->safe_number($transaction, 'amount'),
+            'status' => $this->parse_transaction_status($this->safe_string($transaction, 'transferStatus')),
             'timestamp' => $timestamp,
             'datetime' => $this->iso8601($timestamp),
-            'currency' => $code,
-            'amount' => $amount,
-            'type' => $type,
-            'txid' => $txid,
-            'network' => $network,
-            'address' => $address,
-            'addressTo' => null,
+            'address' => $this->safe_string($transaction, 'destination'),
             'addressFrom' => null,
-            'tag' => $tag,
-            'tagTo' => null,
+            'addressTo' => null,
+            'tag' => $this->safe_string($transaction, 'destinationTag'),
             'tagFrom' => null,
-            'status' => $status,
+            'tagTo' => null,
+            'updated' => null,
+            'comment' => null,
             'fee' => array(
-                'cost' => $fee,
+                'cost' => $this->safe_number($transaction, 'fee'),
                 'currency' => $code,
+                'rate' => null,
             ),
-            'info' => $transaction,
         );
     }
 
@@ -849,7 +844,7 @@ class coinmate extends Exchange {
         ), $market);
     }
 
-    public function create_order(string $symbol, $type, string $side, $amount, $price = null, $params = array ()) {
+    public function create_order(string $symbol, string $type, string $side, $amount, $price = null, $params = array ()) {
         /**
          * create a trade order
          * @param {string} $symbol unified $symbol of the $market to create an order in

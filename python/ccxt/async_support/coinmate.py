@@ -7,6 +7,7 @@ from ccxt.async_support.base.exchange import Exchange
 from ccxt.abstract.coinmate import ImplicitAPI
 import hashlib
 from ccxt.base.types import OrderSide
+from ccxt.base.types import OrderType
 from typing import Optional
 from ccxt.base.errors import ExchangeError
 from ccxt.base.errors import ArgumentsRequired
@@ -44,6 +45,7 @@ class coinmate(Exchange, ImplicitAPI):
                 'fetchBorrowRateHistory': False,
                 'fetchBorrowRates': False,
                 'fetchBorrowRatesPerSymbol': False,
+                'fetchDepositsWithdrawals': True,
                 'fetchFundingHistory': False,
                 'fetchFundingRate': False,
                 'fetchFundingRateHistory': False,
@@ -382,7 +384,7 @@ class coinmate(Exchange, ImplicitAPI):
 
     async def fetch_transactions(self, code: Optional[str] = None, since: Optional[int] = None, limit: Optional[int] = None, params={}):
         """
-        fetch history of deposits and withdrawals
+        *DEPRECATED* use fetchDepositsWithdrawals instead
         :param str|None code: unified currency code for the currency of the transactions, default is None
         :param int|None since: timestamp in ms of the earliest transaction, default is None
         :param int|None limit: max number of transactions to return, default is None
@@ -458,38 +460,32 @@ class coinmate(Exchange, ImplicitAPI):
         #     }
         #
         timestamp = self.safe_integer(transaction, 'timestamp')
-        amount = self.safe_number(transaction, 'amount')
-        fee = self.safe_number(transaction, 'fee')
-        txid = self.safe_string(transaction, 'txid')
-        address = self.safe_string(transaction, 'destination')
-        tag = self.safe_string(transaction, 'destinationTag')
         currencyId = self.safe_string(transaction, 'amountCurrency')
         code = self.safe_currency_code(currencyId, currency)
-        type = self.safe_string_lower(transaction, 'transferType')
-        status = self.parse_transaction_status(self.safe_string(transaction, 'transferStatus'))
-        id = self.safe_string_2(transaction, 'transactionId', 'id')
-        network = self.safe_string(transaction, 'walletType')
         return {
-            'id': id,
+            'info': transaction,
+            'id': self.safe_string_2(transaction, 'transactionId', 'id'),
+            'txid': self.safe_string(transaction, 'txid'),
+            'type': self.safe_string_lower(transaction, 'transferType'),
+            'currency': code,
+            'network': self.safe_string(transaction, 'walletType'),
+            'amount': self.safe_number(transaction, 'amount'),
+            'status': self.parse_transaction_status(self.safe_string(transaction, 'transferStatus')),
             'timestamp': timestamp,
             'datetime': self.iso8601(timestamp),
-            'currency': code,
-            'amount': amount,
-            'type': type,
-            'txid': txid,
-            'network': network,
-            'address': address,
-            'addressTo': None,
+            'address': self.safe_string(transaction, 'destination'),
             'addressFrom': None,
-            'tag': tag,
-            'tagTo': None,
+            'addressTo': None,
+            'tag': self.safe_string(transaction, 'destinationTag'),
             'tagFrom': None,
-            'status': status,
+            'tagTo': None,
+            'updated': None,
+            'comment': None,
             'fee': {
-                'cost': fee,
+                'cost': self.safe_number(transaction, 'fee'),
                 'currency': code,
+                'rate': None,
             },
-            'info': transaction,
         }
 
     async def withdraw(self, code: str, amount, address, tag=None, params={}):
@@ -827,7 +823,7 @@ class coinmate(Exchange, ImplicitAPI):
             'fee': None,
         }, market)
 
-    async def create_order(self, symbol: str, type, side: OrderSide, amount, price=None, params={}):
+    async def create_order(self, symbol: str, type: OrderType, side: OrderSide, amount, price=None, params={}):
         """
         create a trade order
         :param str symbol: unified symbol of the market to create an order in

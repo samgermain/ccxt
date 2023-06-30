@@ -47,6 +47,9 @@ export default class ascendex extends Exchange {
                 'fetchDepositAddresses': false,
                 'fetchDepositAddressesByNetwork': false,
                 'fetchDeposits': true,
+                'fetchDepositsWithdrawals': true,
+                'fetchDepositWithdrawFee': 'emulated',
+                'fetchDepositWithdrawFees': true,
                 'fetchFundingHistory': false,
                 'fetchFundingRate': 'emulated',
                 'fetchFundingRateHistory': false,
@@ -198,6 +201,7 @@ export default class ascendex extends Exchange {
                             'futures/collateral': 1,
                             'futures/pricing-data': 1,
                             'futures/ticker': 1,
+                            'risk-limit-info': 1,
                         },
                     },
                     'private': {
@@ -264,6 +268,20 @@ export default class ascendex extends Exchange {
                 },
                 'transfer': {
                     'fillResponseFromRequest': true,
+                },
+                'networks': {
+                    'BSC': 'BEP20 (BSC)',
+                    'ARB': 'arbitrum',
+                    'SOL': 'Solana',
+                    'AVAX': 'avalanche C chain',
+                    'OMNI': 'Omni',
+                },
+                'networksById': {
+                    'BEP20 (BSC)': 'BSC',
+                    'arbitrum': 'ARB',
+                    'Solana': 'SOL',
+                    'avalanche C chain': 'AVAX',
+                    'Omni': 'OMNI',
                 },
             },
             'exceptions': {
@@ -1275,6 +1293,25 @@ export default class ascendex extends Exchange {
         //     }
         //
         //     {
+        //         "orderId": "a173ad938fc3U22666567717788c3b66",   // orderId
+        //         "seqNum": 18777366360,                           // sequence number
+        //         "accountId": "cshwSjbpPjSwHmxPdz2CPQVU9mnbzPpt", // accountId
+        //         "symbol": "BTC/USDT",                            // symbol
+        //         "orderType": "Limit",                            // order type (Limit/Market/StopMarket/StopLimit)
+        //         "side": "Sell",                                  // order side (Buy/Sell)
+        //         "price": "11346.77",                             // order price
+        //         "stopPrice": "0",                                // stop price (0 by default)
+        //         "orderQty": "0.01",                              // order quantity (in base asset)
+        //         "status": "Canceled",                            // order status (Filled/Canceled/Rejected)
+        //         "createTime": 1596344995793,                     // order creation time
+        //         "lastExecTime": 1596344996053,                   // last execution time
+        //         "avgFillPrice": "11346.77",                      // average filled price
+        //         "fillQty": "0.01",                               // filled quantity (in base asset)
+        //         "fee": "-0.004992579",                           // cummulative fee. if negative, this value is the commission charged; if possitive, this value is the rebate received.
+        //         "feeAsset": "USDT"                               // fee asset
+        //     }
+        //
+        //     {
         //         "ac": "FUTURES",
         //         "accountId": "testabcdefg",
         //         "avgPx": "0",
@@ -1307,7 +1344,7 @@ export default class ascendex extends Exchange {
         const price = this.safeString(order, 'price');
         const amount = this.safeString(order, 'orderQty');
         const average = this.safeString(order, 'avgPx');
-        const filled = this.safeString2(order, 'cumFilledQty', 'cumQty');
+        const filled = this.safeStringN(order, ['cumFilledQty', 'cumQty', 'fillQty']);
         const id = this.safeString(order, 'orderId');
         let clientOrderId = this.safeString(order, 'id');
         if (clientOrderId !== undefined) {
@@ -1326,7 +1363,7 @@ export default class ascendex extends Exchange {
             }
         }
         const side = this.safeStringLower(order, 'side');
-        const feeCost = this.safeNumber(order, 'cumFee');
+        const feeCost = this.safeNumber2(order, 'cumFee', 'fee');
         let fee = undefined;
         if (feeCost !== undefined) {
             const feeCurrencyId = this.safeString(order, 'feeAsset');
@@ -2327,7 +2364,7 @@ export default class ascendex extends Exchange {
         /**
          * @method
          * @name ascendex#fetchTransactions
-         * @description fetch history of deposits and withdrawals
+         * @description *DEPRECATED*, use fetchDepositsWithdrawals instead
          * @param {string|undefined} code unified currency code for the currency of the transactions, default is undefined
          * @param {int|undefined} since timestamp in ms of the earliest transaction, default is undefined
          * @param {int|undefined} limit max number of transactions to return, default is undefined
@@ -2868,6 +2905,71 @@ export default class ascendex extends Exchange {
             });
         }
         return tiers;
+    }
+    parseDepositWithdrawFee(fee, currency = undefined) {
+        //
+        // {
+        //     "assetCode":      "USDT",
+        //     "assetName":      "Tether",
+        //     "precisionScale":  9,
+        //     "nativeScale":     4,
+        //     "blockChain": [
+        //         {
+        //             "chainName":        "Omni",
+        //             "withdrawFee":      "30.0",
+        //             "allowDeposit":      true,
+        //             "allowWithdraw":     true,
+        //             "minDepositAmt":    "0.0",
+        //             "minWithdrawal":    "50.0",
+        //             "numConfirmations":  3
+        //         },
+        //     ]
+        // }
+        //
+        const blockChains = this.safeValue(fee, 'blockChain', []);
+        const blockChainsLength = blockChains.length;
+        const result = {
+            'info': fee,
+            'withdraw': {
+                'fee': undefined,
+                'percentage': undefined,
+            },
+            'deposit': {
+                'fee': undefined,
+                'percentage': undefined,
+            },
+            'networks': {},
+        };
+        for (let i = 0; i < blockChainsLength; i++) {
+            const blockChain = blockChains[i];
+            const networkId = this.safeString(blockChain, 'chainName');
+            const currencyCode = this.safeString(currency, 'code');
+            const networkCode = this.networkIdToCode(networkId, currencyCode);
+            result['networks'][networkCode] = {
+                'deposit': { 'fee': undefined, 'percentage': undefined },
+                'withdraw': { 'fee': this.safeNumber(blockChain, 'withdrawFee'), 'percentage': false },
+            };
+            if (blockChainsLength === 1) {
+                result['withdraw']['fee'] = this.safeNumber(blockChain, 'withdrawFee');
+                result['withdraw']['percentage'] = false;
+            }
+        }
+        return result;
+    }
+    async fetchDepositWithdrawFees(codes = undefined, params = {}) {
+        /**
+         * @method
+         * @name ascendex#fetchDepositWithdrawFees
+         * @description fetch deposit and withdraw fees
+         * @see https://ascendex.github.io/ascendex-pro-api/#list-all-assets
+         * @param {[string]|undefined} codes list of unified currency codes
+         * @param {object} params extra parameters specific to the ascendex api endpoint
+         * @returns {object} a list of [fee structures]{@link https://docs.ccxt.com/en/latest/manual.html#fee-structure}
+         */
+        await this.loadMarkets();
+        const response = await this.v2PublicGetAssets(params);
+        const data = this.safeValue(response, 'data');
+        return this.parseDepositWithdrawFees(data, codes, 'assetCode');
     }
     async transfer(code, amount, fromAccount, toAccount, params = {}) {
         /**

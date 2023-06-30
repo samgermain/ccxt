@@ -103,11 +103,6 @@ class bybit extends bybit$1 {
                 'ping': this.ping,
                 'keepAlive': 20000,
             },
-            'exceptions': {
-                'ws': {
-                    'exact': {},
-                },
-            },
         });
     }
     requestId() {
@@ -341,7 +336,7 @@ class bybit extends bybit$1 {
         if (this.newUpdates) {
             limit = ohlcv.getLimit(symbol, limit);
         }
-        return this.filterBySinceLimit(ohlcv, since, limit, 0);
+        return this.filterBySinceLimit(ohlcv, since, limit, 0, true);
     }
     handleOHLCV(client, message) {
         //
@@ -393,7 +388,7 @@ class bybit extends bybit$1 {
         const messageHash = 'kline' + ':' + timeframeId + ':' + symbol;
         client.resolve(stored, messageHash);
     }
-    parseWsOHLCV(ohlcv) {
+    parseWsOHLCV(ohlcv, market = undefined) {
         //
         //     {
         //         "start": 1670363160000,
@@ -410,7 +405,7 @@ class bybit extends bybit$1 {
         //     }
         //
         return [
-            this.safeInteger(ohlcv, 'timestamp'),
+            this.safeInteger(ohlcv, 'start'),
             this.safeNumber(ohlcv, 'open'),
             this.safeNumber(ohlcv, 'high'),
             this.safeNumber(ohlcv, 'low'),
@@ -550,7 +545,7 @@ class bybit extends bybit$1 {
         if (this.newUpdates) {
             limit = trades.getLimit(symbol, limit);
         }
-        return this.filterBySinceLimit(trades, since, limit, 'timestamp');
+        return this.filterBySinceLimit(trades, since, limit, 'timestamp', true);
     }
     handleTrades(client, message) {
         //
@@ -708,7 +703,7 @@ class bybit extends bybit$1 {
         if (this.newUpdates) {
             limit = trades.getLimit(symbol, limit);
         }
-        return this.filterBySinceLimit(trades, since, limit, 'timestamp');
+        return this.filterBySinceLimit(trades, since, limit, 'timestamp', true);
     }
     handleMyTrades(client, message) {
         //

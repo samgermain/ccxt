@@ -240,7 +240,10 @@ class deribit extends deribit$1 {
         };
         const request = this.deepExtend(message, params);
         const trades = await this.watch(url, channel, request, channel, request);
-        return this.filterBySinceLimit(trades, since, limit, 'timestamp');
+        if (this.newUpdates) {
+            limit = trades.getLimit(symbol, limit);
+        }
+        return this.filterBySinceLimit(trades, since, limit, 'timestamp', true);
     }
     handleTrades(client, message) {
         //
@@ -317,7 +320,7 @@ class deribit extends deribit$1 {
         };
         const request = this.deepExtend(message, params);
         const trades = await this.watch(url, channel, request, channel, request);
-        return this.filterBySymbolSinceLimit(trades, symbol, since, limit);
+        return this.filterBySymbolSinceLimit(trades, symbol, since, limit, true);
     }
     handleMyTrades(client, message) {
         //
@@ -452,7 +455,7 @@ class deribit extends deribit$1 {
         const channel = this.safeString(params, 'channel');
         const marketId = this.safeString(data, 'instrument_name');
         const symbol = this.safeSymbol(marketId);
-        const timestamp = this.safeNumber(data, 'timestamp');
+        const timestamp = this.safeInteger(data, 'timestamp');
         let storedOrderBook = this.safeValue(this.orderbooks, symbol);
         if (storedOrderBook === undefined) {
             storedOrderBook = this.countedOrderBook();
@@ -626,7 +629,7 @@ class deribit extends deribit$1 {
         if (this.newUpdates) {
             limit = ohlcv.getLimit(market['symbol'], limit);
         }
-        return this.filterBySinceLimit(ohlcv, since, limit, 0);
+        return this.filterBySinceLimit(ohlcv, since, limit, 0, true);
     }
     handleOHLCV(client, message) {
         //

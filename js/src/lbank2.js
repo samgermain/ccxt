@@ -279,6 +279,7 @@ export default class lbank2 extends Exchange {
          * @method
          * @name lbank2#fetchMarkets
          * @description retrieves data on all markets for lbank2
+         * @see https://www.lbank.com/en-US/docs/index.html#trading-pairs
          * @param {object} params extra parameters specific to the exchange api endpoint
          * @returns {[object]} an array of objects representing market data
          */
@@ -302,24 +303,8 @@ export default class lbank2 extends Exchange {
             const quoteId = parts[1];
             const base = baseId.toUpperCase();
             const quote = quoteId.toUpperCase();
-            let symbol = base + '/' + quote;
-            const productTypes = {
-                '3l': true,
-                '5l': true,
-                '3s': true,
-                '5s': true,
-            };
+            const symbol = base + '/' + quote;
             const amountPrecision = this.parseNumber(this.parsePrecision(this.safeString(market, 'quantityAccuracy')));
-            const contractSize = amountPrecision;
-            const ending = baseId.slice(-2);
-            const isLeveragedProduct = this.safeValue(productTypes, ending, false);
-            if (isLeveragedProduct) {
-                symbol += ':' + quote;
-            }
-            let linear = undefined;
-            if (isLeveragedProduct === true) {
-                linear = true;
-            }
             result.push({
                 'id': marketId,
                 'symbol': symbol,
@@ -332,14 +317,14 @@ export default class lbank2 extends Exchange {
                 'type': 'spot',
                 'spot': true,
                 'margin': false,
-                'swap': isLeveragedProduct,
+                'swap': false,
                 'future': false,
                 'option': false,
                 'active': true,
-                'contract': isLeveragedProduct,
-                'linear': linear,
+                'contract': undefined,
+                'linear': undefined,
                 'inverse': undefined,
-                'contractSize': isLeveragedProduct ? contractSize : undefined,
+                'contractSize': undefined,
                 'expiry': undefined,
                 'expiryDatetime': undefined,
                 'strike': undefined,
@@ -576,7 +561,7 @@ export default class lbank2 extends Exchange {
         if (feeCost !== undefined) {
             fee = {
                 'cost': feeCost,
-                'currency': undefined,
+                'currency': (side === 'buy') ? market['base'] : market['quote'],
                 'rate': this.safeString(trade, 'tradeFeeRate'),
             };
         }
@@ -1308,6 +1293,7 @@ export default class lbank2 extends Exchange {
         }
         if (since !== undefined) {
             request['start_date'] = this.ymd(since, '-'); // max query 2 days ago
+            request['end_date'] = this.ymd(since + 86400000, '-'); // will cover 2 days
         }
         const response = await this.privatePostTransactionHistory(this.extend(request, params));
         //

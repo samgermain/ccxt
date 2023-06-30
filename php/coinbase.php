@@ -72,7 +72,7 @@ class coinbase extends Exchange {
                 'fetchOpenInterestHistory' => false,
                 'fetchOpenOrders' => true,
                 'fetchOrder' => true,
-                'fetchOrderBook' => false,
+                'fetchOrderBook' => true,
                 'fetchOrders' => true,
                 'fetchPosition' => false,
                 'fetchPositionMode' => false,
@@ -186,6 +186,8 @@ class coinbase extends Exchange {
                             'brokerage/products/{product_id}/candles',
                             'brokerage/products/{product_id}/ticker',
                             'brokerage/transaction_summary',
+                            'brokerage/product_book',
+                            'brokerage/best_bid_ask',
                         ),
                         'post' => array(
                             'brokerage/orders',
@@ -1911,7 +1913,7 @@ class coinbase extends Exchange {
         return $request;
     }
 
-    public function create_order(string $symbol, $type, string $side, $amount, $price = null, $params = array ()) {
+    public function create_order(string $symbol, string $type, string $side, $amount, $price = null, $params = array ()) {
         /**
          * create a trade order
          * @see https://docs.cloud.coinbase.com/advanced-trade-api/reference/retailbrokerageapi_postorder
@@ -2367,7 +2369,7 @@ class coinbase extends Exchange {
             $request['limit'] = $limit;
         }
         if ($since !== null) {
-            $request['start_date'] = $this->parse8601($since);
+            $request['start_date'] = $this->iso8601($since);
         }
         $response = $this->v3PrivateGetBrokerageOrdersHistoricalBatch (array_merge($request, $params));
         //
@@ -2433,7 +2435,7 @@ class coinbase extends Exchange {
         }
         $request['limit'] = $limit;
         if ($since !== null) {
-            $request['start_date'] = $this->parse8601($since);
+            $request['start_date'] = $this->iso8601($since);
         }
         $response = $this->v3PrivateGetBrokerageOrdersHistoricalBatch (array_merge($request, $params));
         //
@@ -2679,6 +2681,50 @@ class coinbase extends Exchange {
         //
         $trades = $this->safe_value($response, 'fills', array());
         return $this->parse_trades($trades, $market, $since, $limit);
+    }
+
+    public function fetch_order_book(string $symbol, ?int $limit = null, $params = array ()) {
+        /**
+         * fetches information on open orders with bid (buy) and ask (sell) prices, volumes and other $data
+         * @see https://docs.cloud.coinbase.com/advanced-trade-api/reference/retailbrokerageapi_getproductbook
+         * @param {string} $symbol unified $symbol of the $market to fetch the order book for
+         * @param {int|null} $limit the maximum amount of order book entries to return
+         * @param {array} $params extra parameters specific to the coinbase api endpoint
+         * @return {array} A dictionary of ~@link https://docs.ccxt.com/#/?id=order-book-structure order book structures~ indexed by $market symbols
+         */
+        $this->load_markets();
+        $market = $this->market($symbol);
+        $request = array(
+            'product_id' => $market['id'],
+        );
+        if ($limit !== null) {
+            $request['limit'] = $limit;
+        }
+        $response = $this->v3PrivateGetBrokerageProductBook (array_merge($request, $params));
+        //
+        //     {
+        //         "pricebook" => {
+        //             "product_id" => "BTC-USDT",
+        //             "bids" => array(
+        //                 array(
+        //                     "price" => "30757.85",
+        //                     "size" => "0.115"
+        //                 ),
+        //             ),
+        //             "asks" => array(
+        //                 array(
+        //                     "price" => "30759.07",
+        //                     "size" => "0.04877659"
+        //                 ),
+        //             ),
+        //             "time" => "2023-06-30T04:02:40.533606Z"
+        //         }
+        //     }
+        //
+        $data = $this->safe_value($response, 'pricebook', array());
+        $time = $this->safe_string($data, 'time');
+        $timestamp = $this->parse8601($time);
+        return $this->parse_order_book($data, $symbol, $timestamp, 'bids', 'asks', 'price', 'size');
     }
 
     public function sign($path, $api = [], $method = 'GET', $params = array (), $headers = null, $body = null) {

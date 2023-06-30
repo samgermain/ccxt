@@ -45,6 +45,9 @@ class ascendex extends Exchange {
                 'fetchDepositAddresses' => false,
                 'fetchDepositAddressesByNetwork' => false,
                 'fetchDeposits' => true,
+                'fetchDepositsWithdrawals' => true,
+                'fetchDepositWithdrawFee' => 'emulated',
+                'fetchDepositWithdrawFees' => true,
                 'fetchFundingHistory' => false,
                 'fetchFundingRate' => 'emulated',
                 'fetchFundingRateHistory' => false,
@@ -196,6 +199,7 @@ class ascendex extends Exchange {
                             'futures/collateral' => 1,
                             'futures/pricing-data' => 1,
                             'futures/ticker' => 1,
+                            'risk-limit-info' => 1,
                         ),
                     ),
                     'private' => array(
@@ -262,6 +266,20 @@ class ascendex extends Exchange {
                 ),
                 'transfer' => array(
                     'fillResponseFromRequest' => true,
+                ),
+                'networks' => array(
+                    'BSC' => 'BEP20 (BSC)',
+                    'ARB' => 'arbitrum',
+                    'SOL' => 'Solana',
+                    'AVAX' => 'avalanche C chain',
+                    'OMNI' => 'Omni',
+                ),
+                'networksById' => array(
+                    'BEP20 (BSC)' => 'BSC',
+                    'arbitrum' => 'ARB',
+                    'Solana' => 'SOL',
+                    'avalanche C chain' => 'AVAX',
+                    'Omni' => 'OMNI',
                 ),
             ),
             'exceptions' => array(
@@ -1266,6 +1284,25 @@ class ascendex extends Exchange {
         //         "execInst" =>     "NULL_VAL" // "Post" (for $postOnly orders), "reduceOnly" (for $reduceOnly orders)
         //     }
         //
+        //     {
+        //         "orderId" => "a173ad938fc3U22666567717788c3b66",   // orderId
+        //         "seqNum" => 18777366360,                           // sequence number
+        //         "accountId" => "cshwSjbpPjSwHmxPdz2CPQVU9mnbzPpt", // accountId
+        //         "symbol" => "BTC/USDT",                            // $symbol
+        //         "orderType" => "Limit",                            // $order $type (Limit/Market/StopMarket/StopLimit)
+        //         "side" => "Sell",                                  // $order $side (Buy/Sell)
+        //         "price" => "11346.77",                             // $order $price
+        //         "stopPrice" => "0",                                // stop $price (0 by default)
+        //         "orderQty" => "0.01",                              // $order quantity (in base asset)
+        //         "status" => "Canceled",                            // $order $status (Filled/Canceled/Rejected)
+        //         "createTime" => 1596344995793,                     // $order creation time
+        //         "lastExecTime" => 1596344996053,                   // last execution time
+        //         "avgFillPrice" => "11346.77",                      // $average $filled $price
+        //         "fillQty" => "0.01",                               // $filled quantity (in base asset)
+        //         "fee" => "-0.004992579",                           // cummulative $fee-> if negative, this value is the commission charged; if possitive, this value is the rebate received.
+        //         "feeAsset" => "USDT"                               // $fee asset
+        //     }
+        //
         //     array(
         //         "ac" => "FUTURES",
         //         "accountId" => "testabcdefg",
@@ -1299,7 +1336,7 @@ class ascendex extends Exchange {
         $price = $this->safe_string($order, 'price');
         $amount = $this->safe_string($order, 'orderQty');
         $average = $this->safe_string($order, 'avgPx');
-        $filled = $this->safe_string_2($order, 'cumFilledQty', 'cumQty');
+        $filled = $this->safe_string_n($order, array( 'cumFilledQty', 'cumQty', 'fillQty' ));
         $id = $this->safe_string($order, 'orderId');
         $clientOrderId = $this->safe_string($order, 'id');
         if ($clientOrderId !== null) {
@@ -1318,7 +1355,7 @@ class ascendex extends Exchange {
             }
         }
         $side = $this->safe_string_lower($order, 'side');
-        $feeCost = $this->safe_number($order, 'cumFee');
+        $feeCost = $this->safe_number_2($order, 'cumFee', 'fee');
         $fee = null;
         if ($feeCost !== null) {
             $feeCurrencyId = $this->safe_string($order, 'feeAsset');
@@ -1413,7 +1450,7 @@ class ascendex extends Exchange {
         return $result;
     }
 
-    public function create_order(string $symbol, $type, string $side, $amount, $price = null, $params = array ()) {
+    public function create_order(string $symbol, string $type, string $side, $amount, $price = null, $params = array ()) {
         /**
          * Create an $order on the exchange
          * @param {string} $symbol Unified CCXT $market $symbol
@@ -2301,7 +2338,7 @@ class ascendex extends Exchange {
 
     public function fetch_transactions(?string $code = null, ?int $since = null, ?int $limit = null, $params = array ()) {
         /**
-         * fetch history of deposits and withdrawals
+         * *DEPRECATED*, use fetchDepositsWithdrawals instead
          * @param {string|null} $code unified $currency $code for the $currency of the $transactions, default is null
          * @param {int|null} $since timestamp in ms of the earliest transaction, default is null
          * @param {int|null} $limit max number of $transactions to return, default is null
@@ -2842,6 +2879,71 @@ class ascendex extends Exchange {
             );
         }
         return $tiers;
+    }
+
+    public function parse_deposit_withdraw_fee($fee, $currency = null) {
+        //
+        // {
+        //     "assetCode" =>      "USDT",
+        //     "assetName" =>      "Tether",
+        //     "precisionScale" =>  9,
+        //     "nativeScale" =>     4,
+        //     "blockChain" => array(
+        //         array(
+        //             "chainName" =>        "Omni",
+        //             "withdrawFee" =>      "30.0",
+        //             "allowDeposit" =>      true,
+        //             "allowWithdraw" =>     true,
+        //             "minDepositAmt" =>    "0.0",
+        //             "minWithdrawal" =>    "50.0",
+        //             "numConfirmations" =>  3
+        //         ),
+        //     )
+        // }
+        //
+        $blockChains = $this->safe_value($fee, 'blockChain', array());
+        $blockChainsLength = count($blockChains);
+        $result = array(
+            'info' => $fee,
+            'withdraw' => array(
+                'fee' => null,
+                'percentage' => null,
+            ),
+            'deposit' => array(
+                'fee' => null,
+                'percentage' => null,
+            ),
+            'networks' => array(),
+        );
+        for ($i = 0; $i < $blockChainsLength; $i++) {
+            $blockChain = $blockChains[$i];
+            $networkId = $this->safe_string($blockChain, 'chainName');
+            $currencyCode = $this->safe_string($currency, 'code');
+            $networkCode = $this->network_id_to_code($networkId, $currencyCode);
+            $result['networks'][$networkCode] = array(
+                'deposit' => array( 'fee' => null, 'percentage' => null ),
+                'withdraw' => array( 'fee' => $this->safe_number($blockChain, 'withdrawFee'), 'percentage' => false ),
+            );
+            if ($blockChainsLength === 1) {
+                $result['withdraw']['fee'] = $this->safe_number($blockChain, 'withdrawFee');
+                $result['withdraw']['percentage'] = false;
+            }
+        }
+        return $result;
+    }
+
+    public function fetch_deposit_withdraw_fees(?array $codes = null, $params = array ()) {
+        /**
+         * fetch deposit and withdraw fees
+         * @see https://ascendex.github.io/ascendex-pro-api/#list-all-assets
+         * @param {[string]|null} $codes list of unified currency $codes
+         * @param {array} $params extra parameters specific to the ascendex api endpoint
+         * @return {array} a list of {@link https://docs.ccxt.com/en/latest/manual.html#fee-structure fee structures}
+         */
+        $this->load_markets();
+        $response = $this->v2PublicGetAssets ($params);
+        $data = $this->safe_value($response, 'data');
+        return $this->parse_deposit_withdraw_fees($data, $codes, 'assetCode');
     }
 
     public function transfer(string $code, $amount, $fromAccount, $toAccount, $params = array ()) {

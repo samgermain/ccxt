@@ -7,6 +7,7 @@ from ccxt.async_support.base.exchange import Exchange
 from ccxt.abstract.coinbase import ImplicitAPI
 import hashlib
 from ccxt.base.types import OrderSide
+from ccxt.base.types import OrderType
 from typing import Optional
 from typing import List
 from ccxt.base.errors import ExchangeError
@@ -88,7 +89,7 @@ class coinbase(Exchange, ImplicitAPI):
                 'fetchOpenInterestHistory': False,
                 'fetchOpenOrders': True,
                 'fetchOrder': True,
-                'fetchOrderBook': False,
+                'fetchOrderBook': True,
                 'fetchOrders': True,
                 'fetchPosition': False,
                 'fetchPositionMode': False,
@@ -202,6 +203,8 @@ class coinbase(Exchange, ImplicitAPI):
                             'brokerage/products/{product_id}/candles',
                             'brokerage/products/{product_id}/ticker',
                             'brokerage/transaction_summary',
+                            'brokerage/product_book',
+                            'brokerage/best_bid_ask',
                         ],
                         'post': [
                             'brokerage/orders',
@@ -1854,7 +1857,7 @@ class coinbase(Exchange, ImplicitAPI):
             request['limit'] = limit
         return request
 
-    async def create_order(self, symbol: str, type, side: OrderSide, amount, price=None, params={}):
+    async def create_order(self, symbol: str, type: OrderType, side: OrderSide, amount, price=None, params={}):
         """
         create a trade order
         see https://docs.cloud.coinbase.com/advanced-trade-api/reference/retailbrokerageapi_postorder
@@ -2277,7 +2280,7 @@ class coinbase(Exchange, ImplicitAPI):
         if limit is not None:
             request['limit'] = limit
         if since is not None:
-            request['start_date'] = self.parse8601(since)
+            request['start_date'] = self.iso8601(since)
         response = await self.v3PrivateGetBrokerageOrdersHistoricalBatch(self.extend(request, params))
         #
         #     {
@@ -2338,7 +2341,7 @@ class coinbase(Exchange, ImplicitAPI):
             limit = 100
         request['limit'] = limit
         if since is not None:
-            request['start_date'] = self.parse8601(since)
+            request['start_date'] = self.iso8601(since)
         response = await self.v3PrivateGetBrokerageOrdersHistoricalBatch(self.extend(request, params))
         #
         #     {
@@ -2570,6 +2573,48 @@ class coinbase(Exchange, ImplicitAPI):
         #
         trades = self.safe_value(response, 'fills', [])
         return self.parse_trades(trades, market, since, limit)
+
+    async def fetch_order_book(self, symbol: str, limit: Optional[int] = None, params={}):
+        """
+        fetches information on open orders with bid(buy) and ask(sell) prices, volumes and other data
+        see https://docs.cloud.coinbase.com/advanced-trade-api/reference/retailbrokerageapi_getproductbook
+        :param str symbol: unified symbol of the market to fetch the order book for
+        :param int|None limit: the maximum amount of order book entries to return
+        :param dict params: extra parameters specific to the coinbase api endpoint
+        :returns dict: A dictionary of `order book structures <https://docs.ccxt.com/#/?id=order-book-structure>` indexed by market symbols
+        """
+        await self.load_markets()
+        market = self.market(symbol)
+        request = {
+            'product_id': market['id'],
+        }
+        if limit is not None:
+            request['limit'] = limit
+        response = await self.v3PrivateGetBrokerageProductBook(self.extend(request, params))
+        #
+        #     {
+        #         "pricebook": {
+        #             "product_id": "BTC-USDT",
+        #             "bids": [
+        #                 {
+        #                     "price": "30757.85",
+        #                     "size": "0.115"
+        #                 },
+        #             ],
+        #             "asks": [
+        #                 {
+        #                     "price": "30759.07",
+        #                     "size": "0.04877659"
+        #                 },
+        #             ],
+        #             "time": "2023-06-30T04:02:40.533606Z"
+        #         }
+        #     }
+        #
+        data = self.safe_value(response, 'pricebook', {})
+        time = self.safe_string(data, 'time')
+        timestamp = self.parse8601(time)
+        return self.parse_order_book(data, symbol, timestamp, 'bids', 'asks', 'price', 'size')
 
     def sign(self, path, api=[], method='GET', params={}, headers=None, body=None):
         version = api[0]

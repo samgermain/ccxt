@@ -110,7 +110,7 @@ class bitfinex2 extends \ccxt\async\bitfinex2 {
             if ($this->newUpdates) {
                 $limit = $ohlcv->getLimit ($symbol, $limit);
             }
-            return $this->filter_by_since_limit($ohlcv, $since, $limit, 0);
+            return $this->filter_by_since_limit($ohlcv, $since, $limit, 0, true);
         }) ();
     }
 
@@ -211,7 +211,7 @@ class bitfinex2 extends \ccxt\async\bitfinex2 {
             if ($this->newUpdates) {
                 $limit = $trades->getLimit ($symbol, $limit);
             }
-            return $this->filter_by_since_limit($trades, $since, $limit, 'timestamp');
+            return $this->filter_by_since_limit($trades, $since, $limit, 'timestamp', true);
         }) ();
     }
 
@@ -235,7 +235,7 @@ class bitfinex2 extends \ccxt\async\bitfinex2 {
             if ($this->newUpdates) {
                 $limit = $trades->getLimit ($symbol, $limit);
             }
-            return $this->filter_by_symbol_since_limit($trades, $symbol, $since, $limit);
+            return $this->filter_by_symbol_since_limit($trades, $symbol, $since, $limit, true);
         }) ();
     }
 
@@ -275,7 +275,7 @@ class bitfinex2 extends \ccxt\async\bitfinex2 {
         //
         $name = 'myTrade';
         $data = $this->safe_value($message, 2);
-        $trade = $this->parse_ws_trade($data, false);
+        $trade = $this->parse_ws_trade($data);
         $symbol = $trade['symbol'];
         $market = $this->market($symbol);
         $messageHash = $name . ':' . $market['id'];
@@ -334,13 +334,12 @@ class bitfinex2 extends \ccxt\async\bitfinex2 {
             $stored = new ArrayCache ($tradesLimit);
             $this->trades[$symbol] = $stored;
         }
-        $isPublicTrade = true;
         $messageLength = count($message);
         if ($messageLength === 2) {
             // initial snapshot
             $trades = $this->safe_value($message, 1, array());
             for ($i = 0; $i < count($trades); $i++) {
-                $parsed = $this->parse_ws_trade($trades[$i], $isPublicTrade, $market);
+                $parsed = $this->parse_ws_trade($trades[$i], $market);
                 $stored->append ($parsed);
             }
         } else {
@@ -352,14 +351,14 @@ class bitfinex2 extends \ccxt\async\bitfinex2 {
                 return;
             }
             $trade = $this->safe_value($message, 2, array());
-            $parsed = $this->parse_ws_trade($trade, $isPublicTrade, $market);
+            $parsed = $this->parse_ws_trade($trade, $market);
             $stored->append ($parsed);
         }
         $client->resolve ($stored, $messageHash);
         return $message;
     }
 
-    public function parse_ws_trade($trade, $isPublic = false, $market = null) {
+    public function parse_ws_trade($trade, $market = null) {
         //
         //    array(
         //        1128060969, // $id
@@ -402,6 +401,8 @@ class bitfinex2 extends \ccxt\async\bitfinex2 {
         //       1655110144596
         //    )
         //
+        $numFields = count($trade);
+        $isPublic = $numFields <= 8;
         $marketId = (!$isPublic) ? $this->safe_string($trade, 1) : null;
         $market = $this->safe_market($marketId, $market);
         $createdKey = $isPublic ? 1 : 2;
@@ -673,10 +674,16 @@ class bitfinex2 extends \ccxt\async\bitfinex2 {
         $asks = $book['asks'];
         // pepperoni pizza from bitfinex
         for ($i = 0; $i < $depth; $i++) {
-            $stringArray[] = $this->number_to_string($bids[$i][0]);
-            $stringArray[] = $this->number_to_string($bids[$i][1]);
-            $stringArray[] = $this->number_to_string($asks[$i][0]);
-            $stringArray[] = $this->number_to_string(-$asks[$i][1]);
+            $bid = $this->safe_value($bids, $i);
+            $ask = $this->safe_value($asks, $i);
+            if ($bid !== null) {
+                $stringArray[] = $this->number_to_string($bids[$i][0]);
+                $stringArray[] = $this->number_to_string($bids[$i][1]);
+            }
+            if ($ask !== null) {
+                $stringArray[] = $this->number_to_string($asks[$i][0]);
+                $stringArray[] = $this->number_to_string(-$asks[$i][1]);
+            }
         }
         $payload = implode(':', $stringArray);
         $localChecksum = $this->crc32($payload, true);
@@ -993,7 +1000,7 @@ class bitfinex2 extends \ccxt\async\bitfinex2 {
             'ACTIVE' => 'open',
             'CANCELED' => 'canceled',
             'EXECUTED' => 'closed',
-            'PARTIALLY FILLED' => 'open',
+            'PARTIALLY' => 'open',
         );
         return $this->safe_string($statuses, $status, $status);
     }
@@ -1058,7 +1065,7 @@ class bitfinex2 extends \ccxt\async\bitfinex2 {
         $trimmedStatus = $this->safe_string($stateParts, 0);
         $status = $this->parse_ws_order_status($trimmedStatus);
         $price = $this->safe_string($order, 16);
-        $timestamp = $this->safe_integer($order, 4);
+        $timestamp = $this->safe_integer_2($order, 5, 4);
         $average = $this->safe_string($order, 17);
         $stopPrice = $this->omit_zero($this->safe_string($order, 18));
         return $this->safe_order(array(

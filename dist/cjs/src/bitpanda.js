@@ -15,6 +15,7 @@ class bitpanda extends bitpanda$1 {
             'countries': ['AT'],
             'rateLimit': 300,
             'version': 'v1',
+            'pro': true,
             // new metainfo interface
             'has': {
                 'CORS': undefined,
@@ -43,6 +44,7 @@ class bitpanda extends bitpanda$1 {
                 'fetchDepositAddress': true,
                 'fetchDepositAddresses': false,
                 'fetchDeposits': true,
+                'fetchDepositsWithdrawals': false,
                 'fetchFundingHistory': false,
                 'fetchFundingRate': false,
                 'fetchFundingRateHistory': false,
