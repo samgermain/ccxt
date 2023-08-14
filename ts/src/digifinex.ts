@@ -501,12 +501,9 @@ export default class digifinex extends Exchange {
          * @param {object} [params] extra parameters specific to the exchange api endpoint
          * @returns {object[]} an array of objects representing market data
          */
-        const options = this.safeValue (this.options, 'fetchMarkets', {});
-        const method = this.safeString (options, 'method', 'fetch_markets_v2');
-        if (method === 'fetch_markets_v2') {
-            return await this.fetchMarketsV2 (params);
-        }
-        return await this.fetchMarketsV1 (params);
+        const v2Markets = await this.fetchMarketsV2 (params);
+        const v1Markets = await this.fetchMarketsV1 (params);
+        return this.deepExtend (v1Markets, v2Markets);
     }
 
     async fetchMarketsV2 (params = {}) {
