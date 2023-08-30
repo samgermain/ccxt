@@ -1254,6 +1254,8 @@ export default class exmo extends Exchange {
          * @name exmo#createOrder
          * @description create a trade order
          * @see https://documenter.getpostman.com/view/10287440/SzYXWKPi#80daa469-ec59-4d0a-b229-6a311d8dd1cd
+         * @see https://documenter.getpostman.com/view/10287440/SzYXWKPi#de6f4321-eeac-468c-87f7-c4ad7062e265  // stop market
+         * @see https://documenter.getpostman.com/view/10287440/SzYXWKPi#3561b86c-9ff1-436e-8e68-ac926b7eb523  // margin
          * @param {string} symbol unified symbol of the market to create an order in
          * @param {string} type 'market' or 'limit'
          * @param {string} side 'buy' or 'sell'
@@ -1311,6 +1313,9 @@ export default class exmo extends Exchange {
          * @method
          * @name exmo#cancelOrder
          * @description cancels an open order
+         * @see https://documenter.getpostman.com/view/10287440/SzYXWKPi#1f710d4b-75bc-4b65-ad68-006f863a3f26
+         * @see https://documenter.getpostman.com/view/10287440/SzYXWKPi#a4d0aae8-28f7-41ac-94fd-c4030130453d  // stop market
+         * @see https://documenter.getpostman.com/view/10287440/SzYXWKPi#705dfec5-2b35-4667-862b-faf54eca6209  // margin
          * @param {string} id order id
          * @param {string} symbol not used by exmo cancelOrder ()
          * @param {object} [params] extra parameters specific to the exmo api endpoint
