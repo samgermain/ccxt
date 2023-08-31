@@ -1205,19 +1205,29 @@ export default class exmo extends Exchange {
          * @method
          * @name exmo#fetchMyTrades
          * @description fetch all trades made by the user
-         * @param {string} symbol unified market symbol
+         * @see https://documenter.getpostman.com/view/10287440/SzYXWKPi#b8d8d9af-4f46-46a1-939b-ad261d79f452  // spot
+         * @see https://documenter.getpostman.com/view/10287440/SzYXWKPi#f4b1aaf8-399f-403b-ab5e-4926d967a106  // margin
+         * @param {string} symbol a symbol is required but it can be a single string, or a non-empty array
          * @param {int} [since] the earliest time in ms to fetch trades for
-         * @param {int} [limit] the maximum number of trades structures to retrieve
+         * @param {int} [limit] *required for margin orders* the maximum number of trades structures to retrieve
          * @param {object} [params] extra parameters specific to the exmo api endpoint
+         *
+         * EXCHANGE SPECIFIC PARAMETERS
+         * @param {int} [params.offset] last deal offset, default = 0
          * @returns {Trade[]} a list of [trade structures]{@link https://github.com/ccxt/ccxt/wiki/Manual#trade-structure}
          */
-        // a symbol is required but it can be a single string, or a non-empty array
         if (symbol === undefined) {
             throw new ArgumentsRequired (this.id + ' fetchMyTrades() requires a symbol argument (a single symbol or an array)');
         }
         await this.loadMarkets ();
         let pair = undefined;
         let market = undefined;
+        let marginMode = undefined;
+        [ marginMode, params ] = this.handleMarginModeAndParams ('fetchMyTrades', params);
+        const isSpot = ((marginMode !== 'cross') && (marginMode !== 'isolated'));
+        if (!isSpot && (limit === undefined)) {
+            throw new ArgumentsRequired (this.id + ' fetchMyTrades() requires a limit argument for margin orders');
+        }
         if (Array.isArray (symbol)) {
             const numSymbols = symbol.length;
             if (numSymbols < 1) {
@@ -1229,13 +1239,25 @@ export default class exmo extends Exchange {
             market = this.market (symbol);
             pair = market['id'];
         }
-        const request = {
-            'pair': pair,
-        };
+        const request = {};
+        if (isSpot) {
+            request['pair'] = pair;
+        } else {
+            request['pair_name'] = pair;
+        }
         if (limit !== undefined) {
             request['limit'] = limit;
         }
-        const response = await this.privatePostUserTrades (this.extend (request, params));
+        const offset = this.safeInteger (params, 'offset');
+        if (offset === undefined) {
+            request['offset'] = 0;
+        }
+        let response = undefined;
+        if (isSpot) {
+            response = await this.privatePostUserTrades (this.extend (request, params));
+        } else {
+            response = await this.privatePostMarginTrades (this.extend (request, params));
+        }
         let result = [];
         const marketIdsInner = Object.keys (response);
         for (let i = 0; i < marketIdsInner.length; i++) {
