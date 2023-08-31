@@ -1358,11 +1358,25 @@ export default class exmo extends Exchange {
          * @param {string} id order id
          * @param {string} symbol not used by exmo cancelOrder ()
          * @param {object} [params] extra parameters specific to the exmo api endpoint
+         * @param {boolean} [params.trigger] true to cancel a trigger order
+         * @param {string} [params.marginMode] set to 'cross' or 'isolated' to cancel a margin order
          * @returns {object} An [order structure]{@link https://github.com/ccxt/ccxt/wiki/Manual#order-structure}
          */
         await this.loadMarkets ();
         const request = { 'order_id': id };
-        return await this.privatePostOrderCancel (this.extend (request, params));
+        const stop = this.safeValue2 (params, 'trigger', 'stop');
+        params = this.omit (params, [ 'trigger', 'stop' ]);
+        let marginMode = undefined;
+        [ marginMode, params ] = this.handleMarginModeAndParams ('cancelOrder', params);
+        if ((marginMode !== 'cross') && (marginMode !== 'isolated')) {  // if spot
+            if (stop) {
+                return await this.privatePostStopMarketOrderCancel (this.extend (request, params));
+            } else {
+                return await this.privatePostOrderCancel (this.extend (request, params));
+            }
+        } else {  // margin
+            return await this.privatePostMarginUserOrderCancel (this.extend (request, params));
+        }
     }
 
     async fetchOrder (id: string, symbol: string = undefined, params = {}) {
