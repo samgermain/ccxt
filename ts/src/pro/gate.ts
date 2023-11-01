@@ -5,7 +5,7 @@ import gateRest from '../gate.js';
 import { AuthenticationError, BadRequest, ArgumentsRequired, InvalidNonce } from '../base/errors.js';
 import { ArrayCache, ArrayCacheByTimestamp, ArrayCacheBySymbolById } from '../base/ws/Cache.js';
 import { sha512 } from '../static_dependencies/noble-hashes/sha512.js';
-import { Int } from '../base/types.js';
+import { Int, OrderSide, OrderType } from '../base/types.js';
 import Client from '../base/ws/Client.js';
 
 //  ---------------------------------------------------------------------------
@@ -24,6 +24,15 @@ export default class gate extends gateRest {
                 'watchOHLCV': true,
                 'watchBalance': true,
                 'watchOrders': true,
+                'createOrderWs': undefined,
+                'editOrderWs': undefined,
+                'cancelOrderWs': undefined,
+                'cancelOrdersWs': undefined,
+                'cancelAllOrdersWs': undefined,
+                'fetchOrderWs': undefined,
+                'fetchOrdersWs': undefined,
+                'fetchBalanceWs': undefined,
+                'fetchMyTradesWs': undefined,
             },
             'urls': {
                 'api': {
@@ -809,11 +818,40 @@ export default class gate extends gateRest {
         const url = this.getUrlByMarketType (type, isInverse);
         // uid required for non spot markets
         const requiresUid = (type !== 'spot');
-        const orders = await this.subscribePrivate (url, messageHash, payload, channel, query, requiresUid);
-        if (this.newUpdates) {
-            limit = orders.getLimit (symbol, limit);
-        }
-        return this.filterBySinceLimit (orders, since, limit, 'timestamp', true);
+        return await this.subscribePrivate (url, messageHash, payload, channel, query, requiresUid);
+    }
+
+    async createOrderWs (symbol: string, type: OrderType, side: OrderSide, amount: number, price: number = undefined, params = {}) {
+        /**
+         * @method
+         * @name gate#createOrderWs
+         * @see https://www.gate.io/docs/developers/apiv4/ws/en/#order-place
+         * @see https://www.gate.io/docs/developers/futures/ws/en/#order-place
+         * @description create a trade order
+         * @param {string} symbol unified symbol of the market to create an order in
+         * @param {string} type 'market' or 'limit'
+         * @param {string} side 'buy' or 'sell'
+         * @param {float} amount how much of currency you want to trade in units of base currency
+         * @param {float|undefined} [price] the price at which the order is to be fullfilled, in units of the quote currency, ignored in market orders
+         * @param {object} [params] extra parameters specific to the binance api endpoint
+         * @returns {object} an [order structure]{@link https://github.com/ccxt/ccxt/wiki/Manual#order-structure}
+         */
+        await this.loadMarkets ();
+        const market = this.market (symbol);
+        const typeId = this.getTypeByMarket (market);
+        const url = this.getUrlByMarketType (market['type'], market['inverse']);
+        const channel = typeId + '.order_place';
+        const messageHash = 'createOrder' + ':' + market['id'];
+        const reqParam = this.createOrderRequest (symbol, type, side, amount, price, params);
+        const payload = {
+            'req_id': this.nonce (),
+            'req_param': reqParam,
+            'headers': ,
+        };
+        // uid required for non spot markets
+        const requiresUid = (type !== 'spot');
+
+        return await this.subscribePrivate (url, messageHash, payload, channel, params, requiresUid);
     }
 
     handleOrder (client: Client, message) {
