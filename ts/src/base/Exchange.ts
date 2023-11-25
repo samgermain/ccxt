@@ -456,6 +456,8 @@ export default class Exchange {
                 'cancelAllOrders': undefined,
                 'cancelOrder': true,
                 'cancelOrders': undefined,
+                'closeAllPositions': undefined,
+                'closePosition': undefined,
                 'createDepositAddress': undefined,
                 'createLimitOrder': true,
                 'createMarketOrder': true,
@@ -3903,6 +3905,28 @@ export default class Exchange {
 
     async fetchFundingHistory (symbol: string = undefined, since: Int = undefined, limit: Int = undefined, params = {}): Promise<FundingHistory[]> {
         throw new NotSupported (this.id + ' fetchFundingHistory() is not supported yet');
+    }
+
+    async closePosition (symbol: string, side: OrderSide = undefined, params = {}): Promise<Order> {
+        /**
+         * @method
+         * @description Quick closes open positions for a market
+         * @param {string} symbol Unified CCXT market symbol
+         * @param {string} [side] 'buy' or 'sell', not reuired by all exchanges
+         * @param {object} [params] extra parameters specific to the exchange api
+         * @returns {object} An [order structure]{@link https://docs.ccxt.com/#/?id=order-structure}
+         */
+        throw new NotSupported (this.id + ' closePositions() is not supported yet');
+    }
+
+    async closeAllPositions (params = {}): Promise<Position[]> {
+        /**
+         * @method
+         * @description Quick closes all open positions for an account on an exchane
+         * @param {object} [params] extra parameters specific to the exchange api
+         * @returns {object} An [order structure]{@link https://docs.ccxt.com/#/?id=order-structure}
+         */
+        throw new NotSupported (this.id + ' closeAllPositions() is not supported yet');
     }
 
     parseLastPrice (price, market: Market = undefined): any {
