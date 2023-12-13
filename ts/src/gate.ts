@@ -5075,11 +5075,15 @@ export default class gate extends Exchange {
     }
 
     parseTransfer (transfer, currency: Currency = undefined) {
-        const timestamp = this.milliseconds ();
+        //
+        //    {
+        //        "tx_id":1702487792576
+        //    }
+        //
         return {
             'id': this.safeString (transfer, 'tx_id'),
-            'timestamp': timestamp,
-            'datetime': this.iso8601 (timestamp),
+            'timestamp': undefined,
+            'datetime': undefined,
             'currency': this.safeCurrencyCode (undefined, currency),
             'amount': undefined,
             'fromAccount': undefined,
