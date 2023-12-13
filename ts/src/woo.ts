@@ -89,7 +89,8 @@ export default class woo extends Exchange {
                 'fetchTransfers': true,
                 'fetchWithdrawals': true,
                 'reduceMargin': false,
-                'repayMargin': true,
+                'repayCrossMargin': true,
+                'repayIsolatedMargin': false,
                 'setLeverage': true,
                 'setMargin': false,
                 'transfer': true,
@@ -2115,15 +2116,15 @@ export default class woo extends Exchange {
         return this.parseTransaction (response, currency);
     }
 
-    async repayMargin (code: string, amount, symbol: Str = undefined, params = {}) {
+    async repayCrossMargin (code: string, amount, symbol: Str = undefined, params = {}) {
         /**
          * @method
-         * @name woo#repayMargin
+         * @name woo#repayCrossMargin
          * @description repay borrowed margin and interest
          * @see https://docs.woo.org/#repay-interest
          * @param {string} code unified currency code of the currency to repay
          * @param {float} amount the amount to repay
-         * @param {string} symbol not used by woo.repayMargin ()
+         * @param {string} symbol not used by woo.repayCrossMargin ()
          * @param {object} [params] extra parameters specific to the exchange API endpoint
          * @returns {object} a [margin loan structure]{@link https://docs.ccxt.com/#/?id=margin-loan-structure}
          */

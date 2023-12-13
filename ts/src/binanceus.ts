@@ -74,7 +74,6 @@ export default class binanceus extends binance {
                 'fetchPositionsRisk': false,
                 'fetchPremiumIndexOHLCV': false,
                 'reduceMargin': false,
-                'repayMargin': false,
                 'setLeverage': false,
                 'setMargin': false,
                 'setMarginMode': false,
