@@ -44,7 +44,6 @@ class cryptocom(Exchange, ImplicitAPI):
                 'future': True,
                 'option': True,
                 'addMargin': False,
-                'borrowMargin': False,
                 'cancelAllOrders': True,
                 'cancelOrder': True,
                 'cancelOrders': True,
@@ -109,7 +108,6 @@ class cryptocom(Exchange, ImplicitAPI):
                 'fetchVolatilityHistory': False,
                 'fetchWithdrawals': True,
                 'reduceMargin': False,
-                'repayMargin': False,
                 'setLeverage': False,
                 'setMarginMode': False,
                 'setPositionMode': False,
@@ -143,7 +141,10 @@ class cryptocom(Exchange, ImplicitAPI):
                     'derivatives': 'https://deriv-api.crypto.com/v1',
                 },
                 'www': 'https://crypto.com/',
-                'referral': 'https://crypto.com/exch/5835vstech',
+                'referral': {
+                    'url': 'https://crypto.com/exch/kdacthrnxt',
+                    'discount': 0.15,
+                },
                 'doc': [
                     'https://exchange-docs.crypto.com/exchange/v1/rest-ws/index.html',
                     'https://exchange-docs.crypto.com/spot/index.html',

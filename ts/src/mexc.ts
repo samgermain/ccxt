@@ -32,7 +32,6 @@ export default class mexc extends Exchange {
                 'future': false,
                 'option': false,
                 'addMargin': true,
-                'borrowMargin': false,
                 'cancelAllOrders': true,
                 'cancelOrder': true,
                 'cancelOrders': undefined,

@@ -32,7 +32,6 @@ export default class cryptocom extends Exchange {
                 'future': true,
                 'option': true,
                 'addMargin': false,
-                'borrowMargin': false,
                 'cancelAllOrders': true,
                 'cancelOrder': true,
                 'cancelOrders': true,
@@ -97,7 +96,6 @@ export default class cryptocom extends Exchange {
                 'fetchVolatilityHistory': false,
                 'fetchWithdrawals': true,
                 'reduceMargin': false,
-                'repayMargin': false,
                 'setLeverage': false,
                 'setMarginMode': false,
                 'setPositionMode': false,
@@ -131,7 +129,10 @@ export default class cryptocom extends Exchange {
                     'derivatives': 'https://deriv-api.crypto.com/v1',
                 },
                 'www': 'https://crypto.com/',
-                'referral': 'https://crypto.com/exch/5835vstech',
+                'referral': {
+                    'url': 'https://crypto.com/exch/kdacthrnxt',
+                    'discount': 0.15,
+                },
                 'doc': [
                     'https://exchange-docs.crypto.com/exchange/v1/rest-ws/index.html',
                     'https://exchange-docs.crypto.com/spot/index.html',

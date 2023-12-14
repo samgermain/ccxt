@@ -32,7 +32,6 @@ export default class kuna extends Exchange {
                 'future': false,
                 'option': false,
                 'addMargin': false,
-                'borrowMargin': false,
                 'cancelOrder': true,
                 'cancelOrders': true,
                 'closeAllPositions': false,

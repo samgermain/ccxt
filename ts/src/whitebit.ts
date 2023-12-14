@@ -30,7 +30,6 @@ export default class whitebit extends Exchange {
                 'swap': false,
                 'future': false,
                 'option': false,
-                'borrowMargin': false,
                 'cancelAllOrders': false,
                 'cancelOrder': true,
                 'cancelOrders': false,

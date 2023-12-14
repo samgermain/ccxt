@@ -48,7 +48,6 @@ export default class binanceus extends binance {
                 'future': undefined,
                 'option': false,
                 'addMargin': false,
-                'borrowMargin': false,
                 'closeAllPositions': false,
                 'closePosition': false,
                 'createReduceOnlyOrder': false,

@@ -29,7 +29,6 @@ export default class bitforex extends Exchange {
                 'future': false,
                 'option': false,
                 'addMargin': false,
-                'borrowMargin': false,
                 'cancelOrder': true,
                 'createOrder': true,
                 'createReduceOnlyOrder': false,
