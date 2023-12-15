@@ -76,6 +76,8 @@ export default class gate extends Exchange {
                 'future': true,
                 'option': true,
                 'addMargin': true,
+                'borrowCrossMargin': true,
+                'borrowIsolatedMargin': true,
                 'cancelAllOrders': true,
                 'cancelOrder': true,
                 'createMarketOrder': true,
@@ -140,6 +142,8 @@ export default class gate extends Exchange {
                 'fetchVolatilityHistory': false,
                 'fetchWithdrawals': true,
                 'reduceMargin': true,
+                'repayCrossMargin': true,
+                'repayIsolatedMargin': true,
                 'setLeverage': true,
                 'setMarginMode': false,
                 'setPositionMode': true,
@@ -5726,7 +5730,7 @@ export default class gate extends Exchange {
         return this.parseMarginLoan (response, currency);
     }
 
-    async repayCrossMargin (code: string, amount, symbol: Str = undefined, params = {}) {
+    async repayCrossMargin (code: string, amount, params = {}) {
         /**
          * @method
          * @name gate#repayCrossMargin
@@ -5767,37 +5771,11 @@ export default class gate extends Exchange {
         return this.parseMarginLoan (response, currency);
     }
 
-    async repayMargin (code: string, amount, symbol: Str = undefined, params = {}) {
-        /**
-         * @method
-         * @deprecated
-         * @name gate#repayMargin
-         * @description deprecated, use repayCrossMargin and repayIsolatedMargin instead
-         * @see https://www.gate.io/docs/developers/apiv4/en/#cross-margin-repayments
-         * @see https://www.gate.io/docs/apiv4/en/#repay-a-loan
-         * @param {string} code unified currency code of the currency to repay
-         * @param {float} amount the amount to repay
-         * @param {string} symbol unified market symbol, required for isolated margin
-         * @param {object} [params] extra parameters specific to the exchange API endpoint
-         * @param {string} [params.mode] 'all' or 'partial' payment mode, extra parameter required for isolated margin
-         * @param {string} [params.id] '34267567' loan id, extra parameter required for isolated margin
-         * @returns {object} a [margin loan structure]{@link https://docs.ccxt.com/#/?id=margin-loan-structure}
-         */
-        let marginMode = undefined;
-        [ marginMode, params ] = this.handleMarginModeAndParams ('repayMargin', params);
-        if (marginMode === 'cross') {
-            return await this.repayCrossMargin (code, amount, symbol, params);
-        } else {
-            return await this.repayIsolatedMargin (code, amount, symbol, params);
-        }
-    }
-
-    async borrowMargin (code: string, amount, symbol: Str = undefined, params = {}) {
+    async borrowIsolatedMargin (symbol: string, code: string, amount, params = {}) {
         /**
          * @method
          * @name gate#borrowMargin
          * @description create a loan to borrow margin
-         * @see https://www.gate.io/docs/apiv4/en/#create-a-cross-margin-borrow-loan
          * @see https://www.gate.io/docs/developers/apiv4/en/#marginuni
          * @param {string} code unified currency code of the currency to borrow
          * @param {float} amount the amount to borrow
@@ -5806,10 +5784,6 @@ export default class gate extends Exchange {
          * @param {string} [params.rate] '0.0002' or '0.002' extra parameter required for isolated margin
          * @returns {object} a [margin loan structure]{@link https://docs.ccxt.com/#/?id=margin-loan-structure}
          */
-        let marginMode = undefined;
-        [ marginMode, params ] = this.handleOptionAndParams (params, 'borrowMargin', 'marginMode');
-        this.checkRequiredArgument ('borrowMargin', marginMode, 'marginMode', [ 'cross', 'isolated' ]);
-        this.checkRequiredMarginArgument ('borrowMargin', symbol, marginMode);
         await this.loadMarkets ();
         const currency = this.currency (code);
         const request = {
@@ -5817,34 +5791,10 @@ export default class gate extends Exchange {
             'amount': this.currencyToPrecision (code, amount),
         };
         let response = undefined;
-        if ((marginMode === 'cross') && (symbol === undefined)) {
-            response = await this.privateMarginPostCrossLoans (this.extend (request, params));
-        } else if ((marginMode === 'isolated') || (symbol !== undefined)) {
-            if (symbol === undefined) {
-                throw new BadRequest (this.id + ' borrowMargin() requires a symbol argument for isolated margin');
-            }
-            const market = this.market (symbol);
-            request['currency_pair'] = market['id'];
-            request['type'] = 'borrow';
-            response = await this.privateMarginPostUniLoans (this.extend (request, params));
-        }
-        //
-        // Cross
-        //
-        //     {
-        //         "id": "17",
-        //         "create_time": 1620381696159,
-        //         "update_time": 1620381696159,
-        //         "currency": "EOS",
-        //         "amount": "110.553635",
-        //         "text": "web",
-        //         "status": 2,
-        //         "repaid": "110.506649705159",
-        //         "repaid_interest": "0.046985294841",
-        //         "unpaid_interest": "0.0000074393366667"
-        //     }
-        //
-        // Isolated
+        const market = this.market (symbol);
+        request['currency_pair'] = market['id'];
+        request['type'] = 'borrow';
+        response = await this.privateMarginPostUniLoans (this.extend (request, params));
         //
         //     {
         //         "id": "34267567",
@@ -5862,6 +5812,43 @@ export default class gate extends Exchange {
         //         "repaid": "0",
         //         "paid_interest": "0",
         //         "unpaid_interest": "0.003333333333"
+        //     }
+        //
+        return this.parseMarginLoan (response, currency);
+    }
+
+    async borrowCrossMargin (code: string, amount, params = {}) {
+        /**
+         * @method
+         * @name gate#borrowMargin
+         * @description create a loan to borrow margin
+         * @see https://www.gate.io/docs/apiv4/en/#create-a-cross-margin-borrow-loan
+         * @param {string} code unified currency code of the currency to borrow
+         * @param {float} amount the amount to borrow
+         * @param {string} symbol unified market symbol, required for isolated margin
+         * @param {object} [params] extra parameters specific to the exchange API endpoint
+         * @param {string} [params.rate] '0.0002' or '0.002' extra parameter required for isolated margin
+         * @returns {object} a [margin loan structure]{@link https://docs.ccxt.com/#/?id=margin-loan-structure}
+         */
+        await this.loadMarkets ();
+        const currency = this.currency (code);
+        const request = {
+            'currency': currency['id'].toUpperCase (),
+            'amount': this.currencyToPrecision (code, amount),
+        };
+        const response = await this.privateMarginPostCrossLoans (this.extend (request, params));
+        //
+        //     {
+        //         "id": "17",
+        //         "create_time": 1620381696159,
+        //         "update_time": 1620381696159,
+        //         "currency": "EOS",
+        //         "amount": "110.553635",
+        //         "text": "web",
+        //         "status": 2,
+        //         "repaid": "110.506649705159",
+        //         "repaid_interest": "0.046985294841",
+        //         "unpaid_interest": "0.0000074393366667"
         //     }
         //
         return this.parseMarginLoan (response, currency);
