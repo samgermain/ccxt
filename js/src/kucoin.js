@@ -493,6 +493,7 @@ export default class kucoin extends Exchange {
             'commonCurrencies': {
                 'BIFI': 'BIFIF',
                 'VAI': 'VAIOT',
+                'WAX': 'WAXP',
             },
             'options': {
                 'version': 'v1',
@@ -2486,7 +2487,7 @@ export default class kucoin extends Exchange {
                 response = await this.privateGetOrdersOrderId(this.extend(request, params));
             }
         }
-        let responseData = this.safeValue(response, 'data');
+        let responseData = this.safeValue(response, 'data', {});
         if (Array.isArray(responseData)) {
             responseData = this.safeValue(responseData, 0);
         }

@@ -509,6 +509,7 @@ class kucoin(Exchange, ImplicitAPI):
             'commonCurrencies': {
                 'BIFI': 'BIFIF',
                 'VAI': 'VAIOT',
+                'WAX': 'WAXP',
             },
             'options': {
                 'version': 'v1',
@@ -2346,7 +2347,7 @@ class kucoin(Exchange, ImplicitAPI):
                 response = await self.privateGetHfOrdersOrderId(self.extend(request, params))
             else:
                 response = await self.privateGetOrdersOrderId(self.extend(request, params))
-        responseData = self.safe_value(response, 'data')
+        responseData = self.safe_value(response, 'data', {})
         if isinstance(responseData, list):
             responseData = self.safe_value(responseData, 0)
         return self.parse_order(responseData, market)
