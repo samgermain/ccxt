@@ -2,6 +2,14 @@
 
 The ccxt library is a collection of available crypto *exchanges* or exchange classes. Each class implements the public and private API for a particular crypto exchange. All exchanges are derived from the base Exchange class and share a set of common methods. To access a particular exchange from ccxt library you need to create an instance of corresponding exchange class. Supported exchanges are updated frequently and new exchanges are added regularly.
 
+The library is supported in the following languages
+
+- Typescript
+- JavaScript
+- PHP
+- Python
+- C#
+
 The structure of the library can be outlined as follows:
 
 ```text
@@ -43,7 +51,9 @@ The structure of the library can be outlined as follows:
     +=============================================================+
 ```
 
-Full public and private HTTP REST APIs for all exchanges are implemented. WebSocket implementations in JavaScript, PHP, Python are available in [CCXT Pro](https://ccxt.pro), which is a professional addon to CCXT with support for WebSocket streams.
+Full public and private HTTP REST APIs for all exchanges are implemented. 
+
+Support for websocket streams is available using [CCXT Pro](https://ccxt.pro)
 
 - [**Exchanges**](#exchanges)
 - [**Markets**](#markets)
@@ -167,11 +177,9 @@ The CCXT library currently supports the following 92 cryptocurrency exchange mar
 | [![zaif](https://user-images.githubusercontent.com/1294454/27766927-39ca2ada-5eeb-11e7-972f-1b4199518ca6.jpg)](https://zaif.jp)                                                                               | zaif               | [Zaif](https://zaif.jp)                                                                               | [![API Version 1](https://img.shields.io/badge/1-lightgray)](https://techbureau-api-document.readthedocs.io/ja/latest/index.html)                |                                                                                                                             |                                                                              |
 | [![zonda](https://user-images.githubusercontent.com/1294454/159202310-a0e38007-5e7c-4ba9-a32f-c8263a0291fe.jpg)](https://auth.zondaglobal.com/ref/jHlbB4mIkdS1)                                               | zonda              | [Zonda](https://auth.zondaglobal.com/ref/jHlbB4mIkdS1)                                                | [![API Version *](https://img.shields.io/badge/*-lightgray)](https://docs.zondacrypto.exchange/)                                                 |                                                                                                                             |                                                                              |
 
-Besides making basic market and limit orders, some exchanges offer margin trading (leverage), various derivatives (like futures contracts and options) and also have [dark pools](https://en.wikipedia.org/wiki/Dark_pool), [OTC](https://en.wikipedia.org/wiki/Over-the-counter_(finance)) (over-the-counter trading), merchant APIs and much more.
+Besides making basic market and limit orders, some exchanges offer margin trading (leverage), various derivatives (contract trading), like swap, future and option contracts and also have [dark pools](https://en.wikipedia.org/wiki/Dark_pool), [OTC](https://en.wikipedia.org/wiki/Over-the-counter_(finance)) (over-the-counter trading), merchant APIs and much more.
 
 ## Instantiation
-
-To connect to an exchange and start trading you need to instantiate an exchange class from ccxt library.
 
 To get the full list of ids of supported exchanges programmatically:
 
@@ -199,41 +207,33 @@ An exchange can be instantiated like shown in the examples below:
 #### **Javascript**
 ```javascript
 const ccxt = require ('ccxt')
-let exchange = new ccxt.kraken () // default id
+let exchange = new ccxt.kraken () // default id, cannot call private methods as the apiKey and secret were not provided
 let kraken1 = new ccxt.kraken ({ id: 'kraken1' })
 let kraken2 = new ccxt.kraken ({ id: 'kraken2' })
-let id = 'coinbasepro'
-let coinbasepro = new ccxt[id] ();
 
-// from variable id
-const exchangeId = 'binance'
-    , exchangeClass = ccxt[exchangeId]
-    , exchange = new exchangeClass ({
-        'apiKey': 'YOUR_API_KEY',
-        'secret': 'YOUR_SECRET',
-    })
+const exchange = new ccxt['binance'] ({  // can call public and private methods
+    'apiKey': 'YOUR_API_KEY',
+    'secret': 'YOUR_SECRET',
+})
 ```
+
 #### **Python**
 ```python
 import ccxt
-exchange = ccxt.okcoin () # default id
+exchange = ccxt.okcoin () # default id, cannot call private methods as the apiKey and secret were not 
 okcoin1 = ccxt.okcoin ({ 'id': 'okcoin1' })
 okcoin2 = ccxt.okcoin ({ 'id': 'okcoin2' })
-id = 'btcchina'
-btcchina = eval ('ccxt.%s ()' % id)
-coinbasepro = getattr (ccxt, 'coinbasepro') ()
 
 # from variable id
-exchange_id = 'binance'
-exchange_class = getattr(ccxt, exchange_id)
-exchange = exchange_class({
+exchange_class = getattr(ccxt, 'binance')
+exchange = exchange_class({  # can call public and private methods
     'apiKey': 'YOUR_API_KEY',
     'secret': 'YOUR_SECRET',
 })
 ```
 #### **PHP**
 
-The ccxt library in PHP uses builtin UTC/GMT time functions, therefore you are required to set date.timezone in your php.ini or call [date_default_timezone_set()](http://php.net/manual/en/function.date-default-timezone-set.php) function before using the PHP version of the library. The recommended timezone setting is `"UTC"`.
+The ccxt library in PHP uses builtin UTC/GMT time functions; therefore, you are required to set `date.timezone` in your php.ini or call [date_default_timezone_set()](http://php.net/manual/en/function.date-default-timezone-set.php) function before using the PHP version of the library. The recommended timezone setting is `"UTC"`.
 
 ```php
 // PHP
@@ -258,13 +258,14 @@ $exchange = new $exchange_class(array(
 
 ### Overriding Exchange Properties Upon Instantiation
 
-Most of exchange properties as well as specific options can be overrided upon exchange class instantiation or afterwards, like shown below:
+Most exchange properties and specific options can be overridden upon instantiation of the exchange class or afterwards, like shown below:
 
 <!-- tabs:start -->
 
 #### **Javascript**
 ```javascript
 
+// overriding properties and specific options upon instantiation
 const exchange = new ccxt.binance ({
     'rateLimit': 10000, // unified exchange property
     'headers': {
@@ -274,12 +275,14 @@ const exchange = new ccxt.binance ({
         'adjustForTimeDifference': true, // exchange-specific option
     }
 })
+
+// overriding properties and specific options after instantiation
 exchange.options['adjustForTimeDifference'] = false
 ```
 
-
 #### **Python**
 ```python
+# overriding properties and specific options upon instantiation
 exchange = ccxt.binance ({
     'rateLimit': 10000,  # unified exchange property
     'headers': {
@@ -289,11 +292,14 @@ exchange = ccxt.binance ({
         'adjustForTimeDifference': True,  # exchange-specific option
     }
 })
+
+# overriding properties and specific options after instantiation
 exchange.options['adjustForTimeDifference'] = False
 ```
 
 #### **PHP**
 ```php
+// overriding properties and specific options upon instantiation
 $exchange_id = 'binance';
 $exchange_class = "\\ccxt\\$exchange_id";
 $exchange = new $exchange_class(array(
@@ -305,6 +311,8 @@ $exchange = new $exchange_class(array(
         'adjustForTimeDifference' => true, // exchange-specific option
     ),
 ));
+
+// overriding properties and specific options after instantiation
 $exchange->options['adjustForTimeDifference'] = false;
 ```
 <!-- tabs:end -->
@@ -348,40 +356,62 @@ var_dump($ex->call_method('fetch_ticker', ['BTC/USDT']));
 
 ### Testnets And Sandbox Environments
 
-Some exchanges also offer separate APIs for testing purposes that allows developers to trade virtual money for free and test out their ideas. Those APIs are called _"testnets", "sandboxes" or "staging environments"_ (with virtual testing assets) as opposed to _"mainnets" and "production environments"_ (with real assets). Most often a sandboxed API is a clone of a production API, so, it's literally the same API, except for the URL to the exchange server.
+Some exchanges offer separate APIs for testing purposes that allow developers to trade "fake" assets (assets the user doesn't actually own). Those APIs are called _"testnets", "sandboxes" or "staging environments"_ as opposed to _"mainnets" and "production environments"_ (with real assets).
 
-CCXT unifies that aspect and allows the user to switch to the exchange's sandbox (if supported by the underlying exchange).
-To switch to the sandbox one has to call the `exchange.setSandboxMode (true)` or `exchange.set_sandbox_mode(true)` **immediately after creating the exchange before any other call**!
+Examples are provided below on how to make calls to the exchanges sandbox. It is important that sandbox mode is set **immediately after creating the exchange before any other call**!
 
 <!-- tabs:start -->
 
 #### **Javascript**
 ```javascript
-const exchange = new ccxt.binance (config)
+const exchange = new ccxt.binance ({...})
 exchange.setSandboxMode (true) // enable sandbox mode
 ```
 
 #### **Python**
 ```python
-exchange = ccxt.binance(config)
+exchange = ccxt.binance({...})
 exchange.set_sandbox_mode(True)  # enable sandbox mode
 ```
 
 #### **PHP**
 ```php
-$exchange = new \ccxt\binance($config);
+$exchange = new \ccxt\binance({...});
 $exchange->set_sandbox_mode(true); // enable sandbox mode
 ```
 
 <!-- tabs:end -->
 
-- The `exchange.setSandboxMode (true) / exchange.set_sandbox_mode (True)` has to be your first call immediately after creating the exchange (before any other calls)
 - To obtain the [API keys](#authentication) to the sandbox the user has to register with the sandbox website of the exchange in question and create a sandbox keypair
 - **Sandbox keys are not interchangeable with production keys!**
 
 ## Exchange Structure
 
 Every exchange has a set of properties and methods, most of which you can override by passing an associative array of params to an exchange constructor. You can also make a subclass and override everything.
+
+The properties and methods of an exchange can be viewed by calling an exchanges `describe` method
+
+<!-- tabs:start -->
+
+#### **Javascript**
+```javascript
+const exchange = new ccxt.binance ({...})
+exchange.describe () // enable sandbox mode
+```
+
+#### **Python**
+```python
+exchange = ccxt.binance({...})
+exchange.describe()  # enable sandbox mode
+```
+
+#### **PHP**
+```php
+$exchange = new \ccxt\binance({...});
+$exchange->describe(); // enable sandbox mode
+```
+
+<!-- tabs:end -->
 
 Here's an overview of generic exchange properties with values added for example:
 
