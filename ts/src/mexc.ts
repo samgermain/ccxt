@@ -185,20 +185,6 @@ export default class mexc extends Exchange {
                             'capital/sub-account/universalTransfer': 1,
                             'capital/convert': 1,
                             'capital/convert/list': 1,
-                            'margin/loan': 1,
-                            'margin/allOrders': 1,
-                            'margin/myTrades': 1,
-                            'margin/openOrders': 1,
-                            'margin/maxTransferable': 1,
-                            'margin/priceIndex': 1,
-                            'margin/order': 1,
-                            'margin/isolated/account': 1,
-                            'margin/maxBorrowable': 1,
-                            'margin/repay': 1,
-                            'margin/isolated/pair': 1,
-                            'margin/forceLiquidationRec': 1,
-                            'margin/isolatedMarginData': 1,
-                            'margin/isolatedMarginTier': 1,
                             'rebate/taxQuery': 1,
                             'rebate/detail': 1,
                             'rebate/detail/kickback': 1,
@@ -1125,7 +1111,6 @@ export default class mexc extends Exchange {
             if ((status === 'ENABLED') && (isSpotTradingAllowed)) {
                 active = true;
             }
-            const isMarginTradingAllowed = this.safeValue (market, 'isMarginTradingAllowed');
             const makerCommission = this.safeNumber (market, 'makerCommission');
             const takerCommission = this.safeNumber (market, 'takerCommission');
             const maxQuoteAmount = this.safeNumber (market, 'maxQuoteAmount');
@@ -1140,7 +1125,7 @@ export default class mexc extends Exchange {
                 'settleId': undefined,
                 'type': 'spot',
                 'spot': true,
-                'margin': isMarginTradingAllowed,
+                'margin': false,
                 'swap': false,
                 'future': false,
                 'option': false,
@@ -2128,13 +2113,16 @@ export default class mexc extends Exchange {
         const market = this.market (symbol);
         const [ marginMode, query ] = this.handleMarginModeAndParams ('createOrder', params);
         if (market['spot']) {
-            return await this.createSpotOrder (market, type, side, amount, price, marginMode, query);
+            if (marginMode !== undefined) {
+                throw new BadRequest (this.id + ' does not allow spot margin trading');
+            }
+            return await this.createSpotOrder (market, type, side, amount, price, query);
         } else {
             return await this.createSwapOrder (market, type, side, amount, price, marginMode, query);
         }
     }
 
-    createSpotOrderRequest (market, type, side, amount, price = undefined, marginMode = undefined, params = {}) {
+    createSpotOrderRequest (market, type, side, amount, price = undefined, params = {}) {
         const symbol = market['symbol'];
         const orderSide = side.toUpperCase ();
         const request = {
@@ -2171,11 +2159,6 @@ export default class mexc extends Exchange {
             request['newClientOrderId'] = clientOrderId;
             params = this.omit (params, [ 'type', 'clientOrderId' ]);
         }
-        if (marginMode !== undefined) {
-            if (marginMode !== 'isolated') {
-                throw new BadRequest (this.id + ' createOrder() does not support marginMode ' + marginMode + ' for spot-margin trading');
-            }
-        }
         let postOnly = undefined;
         [ postOnly, params ] = this.handlePostOnly (type === 'market', type === 'LIMIT_MAKER', params);
         if (postOnly) {
@@ -2184,9 +2167,9 @@ export default class mexc extends Exchange {
         return this.extend (request, params);
     }
 
-    async createSpotOrder (market, type, side, amount, price = undefined, marginMode = undefined, params = {}) {
+    async createSpotOrder (market, type, side, amount, price = undefined, params = {}) {
         await this.loadMarkets ();
-        const request = this.createSpotOrderRequest (market, type, side, amount, price, marginMode, params);
+        const request = this.createSpotOrderRequest (market, type, side, amount, price, params);
         const response = await this.spotPrivatePostOrder (this.extend (request, params));
         //
         // spot
@@ -2195,16 +2178,6 @@ export default class mexc extends Exchange {
         //         "symbol": "BTCUSDT",
         //         "orderId": "123738410679123456",
         //         "orderListId": -1
-        //     }
-        //
-        // margin
-        //
-        //     {
-        //         "symbol": "BTCUSDT",
-        //         "orderId": "762634301354414080",
-        //         "clientOrderId": null,
-        //         "isIsolated": true,
-        //         "transactTime": 1661992652132
         //     }
         //
         const order = this.parseOrder (response, market);
@@ -2350,7 +2323,10 @@ export default class mexc extends Exchange {
             const orderParams = this.safeValue (rawOrder, 'params', {});
             let marginMode = undefined;
             [ marginMode, params ] = this.handleMarginModeAndParams ('createOrder', params);
-            const orderRequest = this.createSpotOrderRequest (market, type, side, amount, price, marginMode, orderParams);
+            if (marginMode !== undefined) {
+                throw new BadRequest (this.id + ' does not support spot margin trading');
+            }
+            const orderRequest = this.createSpotOrderRequest (market, type, side, amount, price, orderParams);
             ordersRequests.push (orderRequest);
         }
         const request = {
@@ -2387,7 +2363,6 @@ export default class mexc extends Exchange {
          * @description fetches information on an order made by the user
          * @param {string} symbol unified symbol of the market the order was made in
          * @param {object} [params] extra parameters specific to the exchange API endpoint
-         * @param {string} [params.marginMode] only 'isolated' is supported, for spot-margin trading
          * @returns {object} An [order structure]{@link https://docs.ccxt.com/#/?id=order-structure}
          */
         if (symbol === undefined) {
@@ -2407,15 +2382,7 @@ export default class mexc extends Exchange {
             } else {
                 request['orderId'] = id;
             }
-            const [ marginMode, query ] = this.handleMarginModeAndParams ('fetchOrder', params);
-            if (marginMode !== undefined) {
-                if (marginMode !== 'isolated') {
-                    throw new BadRequest (this.id + ' fetchOrder() does not support marginMode ' + marginMode + ' for spot-margin trading');
-                }
-                data = await this.spotPrivateGetMarginOrder (this.extend (request, query));
-            } else {
-                data = await this.spotPrivateGetOrder (this.extend (request, query));
-            }
+            data = await this.spotPrivateGetOrder (this.extend (request, params));
             //
             // spot
             //
@@ -2438,26 +2405,6 @@ export default class mexc extends Exchange {
             //         "updateTime": "1647708567000",
             //         "isWorking": true,
             //         "origQuoteOrderQty": "6"
-            //     }
-            //
-            // margin
-            //
-            //     {
-            //         "symbol": "BTCUSDT",
-            //         "orderId": "763307297891028992",
-            //         "orderListId": "-1",
-            //         "clientOrderId": null,
-            //         "price": "18000",
-            //         "origQty": "0.0014",
-            //         "executedQty": "0",
-            //         "cummulativeQuoteQty": "0",
-            //         "status": "NEW",
-            //         "type": "LIMIT",
-            //         "side": "BUY",
-            //         "isIsolated": true,
-            //         "isWorking": true,
-            //         "time": 1662153107000,
-            //         "updateTime": 1662153107000
             //     }
             //
         } else if (market['swap']) {
@@ -2509,7 +2456,6 @@ export default class mexc extends Exchange {
          * @param {int} [since] the earliest time in ms to fetch orders for
          * @param {int} [limit] the maximum number of order structures to retrieve
          * @param {object} [params] extra parameters specific to the exchange API endpoint
-         * @param {string} [params.marginMode] only 'isolated' is supported, for spot-margin trading
          * @returns {Order[]} a list of [order structures]{@link https://docs.ccxt.com/#/?id=order-structure}
          */
         await this.loadMarkets ();
@@ -2519,27 +2465,19 @@ export default class mexc extends Exchange {
             market = this.market (symbol);
             request['symbol'] = market['id'];
         }
-        const [ marketType, query ] = this.handleMarketTypeAndParams ('fetchOrders', market, params);
+        let marketType = undefined;
+        [ marketType, params ] = this.handleMarketTypeAndParams ('fetchOrders', market, params);
         if (marketType === 'spot') {
             if (symbol === undefined) {
                 throw new ArgumentsRequired (this.id + ' fetchOrders() requires a symbol argument for spot market');
             }
-            const [ marginMode, queryInner ] = this.handleMarginModeAndParams ('fetchOrders', params);
             if (since !== undefined) {
                 request['startTime'] = since;
             }
             if (limit !== undefined) {
                 request['limit'] = limit;
             }
-            let response = undefined;
-            if (marginMode !== undefined) {
-                if (marginMode !== 'isolated') {
-                    throw new BadRequest (this.id + ' fetchOrders() does not support marginMode ' + marginMode + ' for spot-margin trading');
-                }
-                response = await this.spotPrivateGetMarginAllOrders (this.extend (request, queryInner));
-            } else {
-                response = await this.spotPrivateGetAllOrders (this.extend (request, queryInner));
-            }
+            const response = await this.spotPrivateGetAllOrders (this.extend (request, params));
             //
             // spot
             //
@@ -2566,28 +2504,6 @@ export default class mexc extends Exchange {
             //         },
             //     ]
             //
-            // margin
-            //
-            //     [
-            //         {
-            //             "symbol": "BTCUSDT",
-            //             "orderId": "763307297891028992",
-            //             "orderListId": "-1",
-            //             "clientOrderId": null,
-            //             "price": "18000",
-            //             "origQty": "0.0014",
-            //             "executedQty": "0",
-            //             "cummulativeQuoteQty": "0",
-            //             "status": "NEW",
-            //             "type": "LIMIT",
-            //             "side": "BUY",
-            //             "isIsolated": true,
-            //             "isWorking": true,
-            //             "time": 1662153107000,
-            //             "updateTime": 1662153107000
-            //         }
-            //     ]
-            //
             return this.parseOrders (response, market, since, limit);
         } else {
             if (since !== undefined) {
@@ -2601,7 +2517,8 @@ export default class mexc extends Exchange {
                 request['page_size'] = limit;
             }
             let method = this.safeString (this.options, 'fetchOrders', 'contractPrivateGetOrderListHistoryOrders');
-            method = this.safeString (query, 'method', method);
+            method = this.safeString (params, 'method', method);
+            params = this.omit (params, [ 'method' ]);
             let ordersOfRegular = [];
             let ordersOfTrigger = [];
             if (method === 'contractPrivateGetOrderListHistoryOrders') {
@@ -2739,7 +2656,6 @@ export default class mexc extends Exchange {
          * @param {int} [since] the earliest time in ms to fetch open orders for
          * @param {int} [limit] the maximum number of  open orders structures to retrieve
          * @param {object} [params] extra parameters specific to the exchange API endpoint
-         * @param {string} [params.marginMode] only 'isolated' is supported, for spot-margin trading
          * @returns {Order[]} a list of [order structures]{@link https://docs.ccxt.com/#/?id=order-structure}
          */
         await this.loadMarkets ();
@@ -2755,16 +2671,7 @@ export default class mexc extends Exchange {
                 throw new ArgumentsRequired (this.id + ' fetchOpenOrders() requires a symbol argument for spot market');
             }
             request['symbol'] = market['id'];
-            const [ marginMode, query ] = this.handleMarginModeAndParams ('fetchOpenOrders', params);
-            let response = undefined;
-            if (marginMode !== undefined) {
-                if (marginMode !== 'isolated') {
-                    throw new BadRequest (this.id + ' fetchOpenOrders() does not support marginMode ' + marginMode + ' for spot-margin trading');
-                }
-                response = await this.spotPrivateGetMarginOpenOrders (this.extend (request, query));
-            } else {
-                response = await this.spotPrivateGetOpenOrders (this.extend (request, query));
-            }
+            const response = await this.spotPrivateGetOpenOrders (this.extend (request, params));
             //
             // spot
             //
@@ -2788,28 +2695,6 @@ export default class mexc extends Exchange {
             //             "updateTime": null,
             //             "isWorking": true,
             //             "origQuoteOrderQty": "9"
-            //         }
-            //     ]
-            //
-            // margin
-            //
-            //     [
-            //         {
-            //             "symbol": "BTCUSDT",
-            //             "orderId": "764547676405633024",
-            //             "orderListId": "-1",
-            //             "clientOrderId": null,
-            //             "price": "18000",
-            //             "origQty": "0.0013",
-            //             "executedQty": "0",
-            //             "cummulativeQuoteQty": "0",
-            //             "status": "NEW",
-            //             "type": "LIMIT",
-            //             "side": "BUY",
-            //             "isIsolated": true,
-            //             "isWorking": true,
-            //             "time": 1662448836000,
-            //             "updateTime": 1662448836000
             //         }
             //     ]
             //
@@ -2872,7 +2757,6 @@ export default class mexc extends Exchange {
          * @param {string} id order id
          * @param {string} symbol unified symbol of the market the order was made in
          * @param {object} [params] extra parameters specific to the exchange API endpoint
-         * @param {string} [params.marginMode] only 'isolated' is supported for spot-margin trading
          * @returns {object} An [order structure]{@link https://docs.ccxt.com/#/?id=order-structure}
          */
         await this.loadMarkets ();
@@ -2884,7 +2768,6 @@ export default class mexc extends Exchange {
         }
         let marketType = undefined;
         [ marketType, params ] = this.handleMarketTypeAndParams ('cancelOrder', market, params);
-        const [ marginMode, query ] = this.handleMarginModeAndParams ('cancelOrder', params);
         let data = undefined;
         if (marketType === 'spot') {
             if (symbol === undefined) {
@@ -2895,19 +2778,12 @@ export default class mexc extends Exchange {
             };
             const clientOrderId = this.safeString (params, 'clientOrderId');
             if (clientOrderId !== undefined) {
-                params = this.omit (query, 'clientOrderId');
+                params = this.omit (params, 'clientOrderId');
                 requestInner['origClientOrderId'] = clientOrderId;
             } else {
                 requestInner['orderId'] = id;
             }
-            if (marginMode !== undefined) {
-                if (marginMode !== 'isolated') {
-                    throw new BadRequest (this.id + ' cancelOrder() does not support marginMode ' + marginMode + ' for spot-margin trading');
-                }
-                data = await this.spotPrivateDeleteMarginOrder (this.extend (requestInner, query));
-            } else {
-                data = await this.spotPrivateDeleteOrder (this.extend (requestInner, query));
-            }
+            data = await this.spotPrivateDeleteOrder (this.extend (requestInner, params));
             //
             // spot
             //
@@ -2920,32 +2796,10 @@ export default class mexc extends Exchange {
             //         "side": "BUY"
             //     }
             //
-            // margin
-            //
-            //     [
-            //         {
-            //             "symbol": "BTCUSDT",
-            //             "orderId": "762640232574226432",
-            //             "orderListId": "-1",
-            //             "clientOrderId": null,
-            //             "price": "18000",
-            //             "origQty": "0.00147",
-            //             "executedQty": "0",
-            //             "cummulativeQuoteQty": "0",
-            //             "status": "NEW",
-            //             "type": "LIMIT",
-            //             "side": "BUY",
-            //             "isIsolated": true,
-            //             "isWorking": true,
-            //             "time": 1661994066000,
-            //             "updateTime": 1661994066000
-            //         }
-            //     ]
-            //
         } else {
             // TODO: PlanorderCancel endpoint has bug atm. waiting for fix.
             let method = this.safeString (this.options, 'cancelOrder', 'contractPrivatePostOrderCancel'); // contractPrivatePostOrderCancel, contractPrivatePostPlanorderCancel
-            method = this.safeString (query, 'method', method);
+            method = this.safeString (params, 'method', method);
             let response = undefined;
             if (method === 'contractPrivatePostOrderCancel') {
                 response = await this.contractPrivatePostOrderCancel ([ id ]); // the request cannot be changed or extended. This is the only way to send.
@@ -3027,21 +2881,12 @@ export default class mexc extends Exchange {
         const request = {};
         let marketType = undefined;
         [ marketType, params ] = this.handleMarketTypeAndParams ('cancelAllOrders', market, params);
-        const [ marginMode, query ] = this.handleMarginModeAndParams ('cancelAllOrders', params);
         if (marketType === 'spot') {
             if (symbol === undefined) {
                 throw new ArgumentsRequired (this.id + ' cancelAllOrders() requires a symbol argument on spot');
             }
             request['symbol'] = market['id'];
-            let response = undefined;
-            if (marginMode !== undefined) {
-                if (marginMode !== 'isolated') {
-                    throw new BadRequest (this.id + ' cancelAllOrders() does not support marginMode ' + marginMode + ' for spot-margin trading');
-                }
-                response = await this.spotPrivateDeleteMarginOpenOrders (this.extend (request, query));
-            } else {
-                response = await this.spotPrivateDeleteOpenOrders (this.extend (request, query));
-            }
+            const response = await this.spotPrivateDeleteOpenOrders (this.extend (request, params));
             //
             // spot
             //
@@ -3056,28 +2901,6 @@ export default class mexc extends Exchange {
             //         },
             //     ]
             //
-            // margin
-            //
-            //     [
-            //         {
-            //             "symbol": "BTCUSDT",
-            //             "orderId": "762640232574226432",
-            //             "orderListId": "-1",
-            //             "clientOrderId": null,
-            //             "price": "18000",
-            //             "origQty": "0.00147",
-            //             "executedQty": "0",
-            //             "cummulativeQuoteQty": "0",
-            //             "status": "NEW",
-            //             "type": "LIMIT",
-            //             "side": "BUY",
-            //             "isIsolated": true,
-            //             "isWorking": true,
-            //             "time": 1661994066000,
-            //             "updateTime": 1661994066000
-            //         }
-            //     ]
-            //
             return this.parseOrders (response, market);
         } else {
             if (symbol !== undefined) {
@@ -3086,12 +2909,13 @@ export default class mexc extends Exchange {
             // method can be either: contractPrivatePostOrderCancelAll or contractPrivatePostPlanorderCancelAll
             // the Planorder endpoints work not only for stop-market orders but also for stop-limit orders that are supposed to have separate endpoint
             let method = this.safeString (this.options, 'cancelAllOrders', 'contractPrivatePostOrderCancelAll');
-            method = this.safeString (query, 'method', method);
+            method = this.safeString (params, 'method', method);
+            params = this.omit (params, [ 'method' ]);
             let response = undefined;
             if (method === 'contractPrivatePostOrderCancelAll') {
-                response = await this.contractPrivatePostOrderCancelAll (this.extend (request, query));
+                response = await this.contractPrivatePostOrderCancelAll (this.extend (request, params));
             } else if (method === 'contractPrivatePostPlanorderCancelAll') {
-                response = await this.contractPrivatePostPlanorderCancelAll (this.extend (request, query));
+                response = await this.contractPrivatePostPlanorderCancelAll (this.extend (request, params));
             }
             //
             //     {
@@ -3114,16 +2938,6 @@ export default class mexc extends Exchange {
         //         "orderListId": -1
         //     }
         //
-        // margin: createOrder
-        //
-        //     {
-        //         "symbol": "BTCUSDT",
-        //         "orderId": "762634301354414080",
-        //         "clientOrderId": null,
-        //         "isIsolated": true,
-        //         "transactTime": 1661992652132
-        //     }
-        //
         // spot: cancelOrder, cancelAllOrders
         //
         //     {
@@ -3133,26 +2947,6 @@ export default class mexc extends Exchange {
         //         "origQty": "0.0002",
         //         "type": "LIMIT",
         //         "side": "BUY"
-        //     }
-        //
-        // margin: cancelOrder, cancelAllOrders
-        //
-        //     {
-        //         "symbol": "BTCUSDT",
-        //         "orderId": "762640232574226432",
-        //         "orderListId": "-1",
-        //         "clientOrderId": null,
-        //         "price": "18000",
-        //         "origQty": "0.00147",
-        //         "executedQty": "0",
-        //         "cummulativeQuoteQty": "0",
-        //         "status": "NEW",
-        //         "type": "LIMIT",
-        //         "side": "BUY",
-        //         "isIsolated": true,
-        //         "isWorking": true,
-        //         "time": 1661994066000,
-        //         "updateTime": 1661994066000
         //     }
         //
         // spot: fetchOrder, fetchOpenOrders, fetchOrders
@@ -3176,26 +2970,6 @@ export default class mexc extends Exchange {
         //         "updateTime": "1647708567000",
         //         "isWorking": true,
         //         "origQuoteOrderQty": "6"
-        //     }
-        //
-        // margin: fetchOrder, fetchOrders
-        //
-        //     {
-        //         "symbol": "BTCUSDT",
-        //         "orderId": "763307297891028992",
-        //         "orderListId": "-1",
-        //         "clientOrderId": null,
-        //         "price": "18000",
-        //         "origQty": "0.0014",
-        //         "executedQty": "0",
-        //         "cummulativeQuoteQty": "0",
-        //         "status": "NEW",
-        //         "type": "LIMIT",
-        //         "side": "BUY",
-        //         "isIsolated": true,
-        //         "isWorking": true,
-        //         "time": 1662153107000,
-        //         "updateTime": 1662153107000
         //     }
         //
         // swap: createOrder
@@ -3497,69 +3271,14 @@ export default class mexc extends Exchange {
         //         "bonus": 0
         //     }
         //
-        // margin
-        //
-        //     {
-        //         "baseAsset": {
-        //             "asset": "BTC",
-        //             "borrowEnabled": true,
-        //             "borrowed": "0",
-        //             "free": "0",
-        //             "interest": "0",
-        //             "locked": "0",
-        //             "netAsset": "0",
-        //             "netAssetOfBtc": "0",
-        //             "repayEnabled": true,
-        //             "totalAsset": "0"
-        //         }
-        //         "quoteAsset": {
-        //             "asset": "USDT",
-        //             "borrowEnabled": true,
-        //             "borrowed": "0",
-        //             "free": "10",
-        //             "interest": "0",
-        //             "locked": "0",
-        //             "netAsset": "10",
-        //             "netAssetOfBtc": "0",
-        //             "repayEnabled": true,
-        //             "totalAsset": "10"
-        //         }
-        //         "symbol": "BTCUSDT",
-        //         "isolatedCreated": true,
-        //         "enabled": true,
-        //         "marginLevel": "999",
-        //         "marginRatio": "9",
-        //         "indexPrice": "16741.137068965517241379",
-        //         "liquidatePrice": "--",
-        //         "liquidateRate": "--",
-        //         "tradeEnabled": true
-        //     }
-        //
         let wallet = undefined;
-        if (marketType === 'margin') {
-            wallet = this.safeValue (response, 'assets', []);
-        } else if (marketType === 'swap') {
+        if (marketType === 'swap') {
             wallet = this.safeValue (response, 'data', []);
         } else {
             wallet = this.safeValue (response, 'balances', []);
         }
         const result = { 'info': response };
-        if (marketType === 'margin') {
-            for (let i = 0; i < wallet.length; i++) {
-                const entry = wallet[i];
-                const marketId = this.safeString (entry, 'symbol');
-                const symbol = this.safeSymbol (marketId, undefined);
-                const base = this.safeValue (entry, 'baseAsset', {});
-                const quote = this.safeValue (entry, 'quoteAsset', {});
-                const baseCode = this.safeCurrencyCode (this.safeString (base, 'asset'));
-                const quoteCode = this.safeCurrencyCode (this.safeString (quote, 'asset'));
-                const subResult = {};
-                subResult[baseCode] = this.parseBalanceHelper (base);
-                subResult[quoteCode] = this.parseBalanceHelper (quote);
-                result[symbol] = this.safeBalance (subResult);
-            }
-            return result;
-        } else if (marketType === 'swap') {
+        if (marketType === 'swap') {
             for (let i = 0; i < wallet.length; i++) {
                 const entry = wallet[i];
                 const currencyId = this.safeString (entry, 'currency');
