@@ -31,6 +31,7 @@ export default class bitflyer extends Exchange {
                 'future': undefined, // has but not fully implemented
                 'option': false,
                 'cancelOrder': true,
+                'cancelAllOrders': undefined,  // https://lightning.bitflyer.com/docs?lang=en#cancel-all-orders
                 'createOrder': true,
                 'fetchBalance': true,
                 'fetchClosedOrders': 'emulated',

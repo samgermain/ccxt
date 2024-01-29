@@ -30,6 +30,7 @@ export default class bitforex extends Exchange {
                 'option': false,
                 'addMargin': false,
                 'cancelOrder': true,
+                'cancelAllOrders': undefined,  // https://github.com/githubdev2020/API_Doc_en/wiki/Cancle-all-orders
                 'createOrder': true,
                 'createReduceOnlyOrder': false,
                 'createStopLimitOrder': false,
