@@ -2252,6 +2252,7 @@ public partial class bybit : Exchange
         * @param {int} [since] timestamp in ms of the earliest candle to fetch
         * @param {int} [limit] the maximum amount of candles to fetch
         * @param {object} [params] extra parameters specific to the exchange API endpoint
+        * @param {int} [params.until] the latest time in ms to fetch orders for
         * @param {boolean} [params.paginate] default false, when true will automatically paginate by calling this endpoint multiple times. See in the docs all the [availble parameters](https://github.com/ccxt/ccxt/wiki/Manual#pagination-params)
         * @returns {int[][]} A list of candles ordered as timestamp, open, high, low, close, volume
         */
@@ -2286,6 +2287,9 @@ public partial class bybit : Exchange
         {
             ((IDictionary<string,object>)request)["limit"] = limit; // max 1000, default 1000
         }
+        var requestparametersVariable = this.handleUntilOption("end", request, parameters);
+        request = ((IList<object>)requestparametersVariable)[0];
+        parameters = ((IList<object>)requestparametersVariable)[1];
         ((IDictionary<string,object>)request)["interval"] = this.safeString(this.timeframes, timeframe, timeframe);
         object response = null;
         if (isTrue(getValue(market, "spot")))
@@ -3903,11 +3907,25 @@ public partial class bybit : Exchange
             {
                 object slTriggerPrice = this.safeValue2(stopLoss, "triggerPrice", "stopPrice", stopLoss);
                 ((IDictionary<string,object>)request)["stopLoss"] = this.priceToPrecision(symbol, slTriggerPrice);
+                object slLimitPrice = this.safeValue(stopLoss, "price");
+                if (isTrue(!isEqual(slLimitPrice, null)))
+                {
+                    ((IDictionary<string,object>)request)["tpslMode"] = "Partial";
+                    ((IDictionary<string,object>)request)["slOrderType"] = "Limit";
+                    ((IDictionary<string,object>)request)["slLimitPrice"] = this.priceToPrecision(symbol, slLimitPrice);
+                }
             }
             if (isTrue(isTakeProfit))
             {
                 object tpTriggerPrice = this.safeValue2(takeProfit, "triggerPrice", "stopPrice", takeProfit);
                 ((IDictionary<string,object>)request)["takeProfit"] = this.priceToPrecision(symbol, tpTriggerPrice);
+                object tpLimitPrice = this.safeValue(takeProfit, "price");
+                if (isTrue(!isEqual(tpLimitPrice, null)))
+                {
+                    ((IDictionary<string,object>)request)["tpslMode"] = "Partial";
+                    ((IDictionary<string,object>)request)["tpOrderType"] = "Limit";
+                    ((IDictionary<string,object>)request)["tpLimitPrice"] = this.priceToPrecision(symbol, tpLimitPrice);
+                }
             }
         }
         if (isTrue(getValue(market, "spot")))
@@ -5260,7 +5278,7 @@ public partial class bybit : Exchange
         };
     }
 
-    public async virtual Task<object> fetchDepositAddressesByNetwork(object code, object parameters = null)
+    public async override Task<object> fetchDepositAddressesByNetwork(object code, object parameters = null)
     {
         /**
         * @method
@@ -6386,9 +6404,6 @@ public partial class bybit : Exchange
         {
             timestamp = this.safeIntegerN(position, new List<object>() {"updatedTime", "updatedAt"});
         }
-        // default to cross of USDC margined positions
-        object tradeMode = this.safeInteger(position, "tradeMode", 0);
-        object marginMode = ((bool) isTrue(tradeMode)) ? "isolated" : "cross";
         object collateralString = this.safeString(position, "positionBalance");
         object entryPrice = this.omitZero(this.safeString2(position, "entryPrice", "avgPrice"));
         object liquidationPrice = this.omitZero(this.safeString(position, "liqPrice"));
@@ -6457,7 +6472,7 @@ public partial class bybit : Exchange
             { "markPrice", this.safeNumber(position, "markPrice") },
             { "lastPrice", null },
             { "collateral", this.parseNumber(collateralString) },
-            { "marginMode", marginMode },
+            { "marginMode", null },
             { "side", side },
             { "percentage", null },
             { "stopLossPrice", this.safeNumber2(position, "stop_loss", "stopLoss") },
@@ -6465,7 +6480,7 @@ public partial class bybit : Exchange
         });
     }
 
-    public async virtual Task<object> setMarginMode(object marginMode, object symbol = null, object parameters = null)
+    public async override Task<object> setMarginMode(object marginMode, object symbol = null, object parameters = null)
     {
         /**
         * @method
@@ -6646,7 +6661,7 @@ public partial class bybit : Exchange
         return response;
     }
 
-    public async virtual Task<object> setPositionMode(object hedged, object symbol = null, object parameters = null)
+    public async override Task<object> setPositionMode(object hedged, object symbol = null, object parameters = null)
     {
         /**
         * @method

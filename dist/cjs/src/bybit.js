@@ -2217,6 +2217,7 @@ class bybit extends bybit$1 {
          * @param {int} [since] timestamp in ms of the earliest candle to fetch
          * @param {int} [limit] the maximum amount of candles to fetch
          * @param {object} [params] extra parameters specific to the exchange API endpoint
+         * @param {int} [params.until] the latest time in ms to fetch orders for
          * @param {boolean} [params.paginate] default false, when true will automatically paginate by calling this endpoint multiple times. See in the docs all the [availble parameters](https://github.com/ccxt/ccxt/wiki/Manual#pagination-params)
          * @returns {int[][]} A list of candles ordered as timestamp, open, high, low, close, volume
          */
@@ -2230,7 +2231,7 @@ class bybit extends bybit$1 {
             return await this.fetchPaginatedCallDeterministic('fetchOHLCV', symbol, since, limit, timeframe, params, 1000);
         }
         const market = this.market(symbol);
-        const request = {
+        let request = {
             'symbol': market['id'],
         };
         if (limit === undefined) {
@@ -2242,6 +2243,7 @@ class bybit extends bybit$1 {
         if (limit !== undefined) {
             request['limit'] = limit; // max 1000, default 1000
         }
+        [request, params] = this.handleUntilOption('end', request, params);
         request['interval'] = this.safeString(this.timeframes, timeframe, timeframe);
         let response = undefined;
         if (market['spot']) {
@@ -3738,10 +3740,22 @@ class bybit extends bybit$1 {
             if (isStopLoss) {
                 const slTriggerPrice = this.safeValue2(stopLoss, 'triggerPrice', 'stopPrice', stopLoss);
                 request['stopLoss'] = this.priceToPrecision(symbol, slTriggerPrice);
+                const slLimitPrice = this.safeValue(stopLoss, 'price');
+                if (slLimitPrice !== undefined) {
+                    request['tpslMode'] = 'Partial';
+                    request['slOrderType'] = 'Limit';
+                    request['slLimitPrice'] = this.priceToPrecision(symbol, slLimitPrice);
+                }
             }
             if (isTakeProfit) {
                 const tpTriggerPrice = this.safeValue2(takeProfit, 'triggerPrice', 'stopPrice', takeProfit);
                 request['takeProfit'] = this.priceToPrecision(symbol, tpTriggerPrice);
+                const tpLimitPrice = this.safeValue(takeProfit, 'price');
+                if (tpLimitPrice !== undefined) {
+                    request['tpslMode'] = 'Partial';
+                    request['tpOrderType'] = 'Limit';
+                    request['tpLimitPrice'] = this.priceToPrecision(symbol, tpLimitPrice);
+                }
             }
         }
         if (market['spot']) {
@@ -6023,9 +6037,6 @@ class bybit extends bybit$1 {
         if (timestamp === undefined) {
             timestamp = this.safeIntegerN(position, ['updatedTime', 'updatedAt']);
         }
-        // default to cross of USDC margined positions
-        const tradeMode = this.safeInteger(position, 'tradeMode', 0);
-        const marginMode = tradeMode ? 'isolated' : 'cross';
         let collateralString = this.safeString(position, 'positionBalance');
         const entryPrice = this.omitZero(this.safeString2(position, 'entryPrice', 'avgPrice'));
         const liquidationPrice = this.omitZero(this.safeString(position, 'liqPrice'));
@@ -6089,7 +6100,7 @@ class bybit extends bybit$1 {
             'markPrice': this.safeNumber(position, 'markPrice'),
             'lastPrice': undefined,
             'collateral': this.parseNumber(collateralString),
-            'marginMode': marginMode,
+            'marginMode': undefined,
             'side': side,
             'percentage': undefined,
             'stopLossPrice': this.safeNumber2(position, 'stop_loss', 'stopLoss'),

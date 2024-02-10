@@ -1184,7 +1184,7 @@ class bybit(Exchange, ImplicitAPI):
         reconstructedDate = day + month + year
         return reconstructedDate
 
-    def create_expired_option_market(self, symbol):
+    def create_expired_option_market(self, symbol: str):
         # support expired option contracts
         quote = 'USD'
         settle = 'USDC'
@@ -2154,6 +2154,7 @@ class bybit(Exchange, ImplicitAPI):
         :param int [since]: timestamp in ms of the earliest candle to fetch
         :param int [limit]: the maximum amount of candles to fetch
         :param dict [params]: extra parameters specific to the exchange API endpoint
+        :param int [params.until]: the latest time in ms to fetch orders for
         :param boolean [params.paginate]: default False, when True will automatically paginate by calling self endpoint multiple times. See in the docs all the [availble parameters](https://github.com/ccxt/ccxt/wiki/Manual#pagination-params)
         :returns int[][]: A list of candles ordered, open, high, low, close, volume
         """
@@ -2174,6 +2175,7 @@ class bybit(Exchange, ImplicitAPI):
             request['start'] = since
         if limit is not None:
             request['limit'] = limit  # max 1000, default 1000
+        request, params = self.handle_until_option('end', request, params)
         request['interval'] = self.safe_string(self.timeframes, timeframe, timeframe)
         response = None
         if market['spot']:
@@ -3298,7 +3300,7 @@ class bybit(Exchange, ImplicitAPI):
             raise InvalidOrder(self.id + ' returned more than one order')
         return self.safe_value(result, 0)
 
-    def create_market_buy_order_with_cost(self, symbol: str, cost, params={}):
+    def create_market_buy_order_with_cost(self, symbol: str, cost: float, params={}):
         """
         :see: https://bybit-exchange.github.io/docs/v5/order/create-order
         create a market buy order by providing the symbol and cost
@@ -3313,7 +3315,7 @@ class bybit(Exchange, ImplicitAPI):
             raise NotSupported(self.id + ' createMarketBuyOrderWithCost() supports spot orders only')
         return self.create_order(symbol, 'market', 'buy', cost, 1, params)
 
-    def create_market_sell_order_with_cost(self, symbol: str, cost, params={}):
+    def create_market_sell_order_with_cost(self, symbol: str, cost: float, params={}):
         """
         :see: https://bybit-exchange.github.io/docs/v5/order/create-order
         create a market sell order by providing the symbol and cost
@@ -3525,9 +3527,19 @@ class bybit(Exchange, ImplicitAPI):
             if isStopLoss:
                 slTriggerPrice = self.safe_value_2(stopLoss, 'triggerPrice', 'stopPrice', stopLoss)
                 request['stopLoss'] = self.price_to_precision(symbol, slTriggerPrice)
+                slLimitPrice = self.safe_value(stopLoss, 'price')
+                if slLimitPrice is not None:
+                    request['tpslMode'] = 'Partial'
+                    request['slOrderType'] = 'Limit'
+                    request['slLimitPrice'] = self.price_to_precision(symbol, slLimitPrice)
             if isTakeProfit:
                 tpTriggerPrice = self.safe_value_2(takeProfit, 'triggerPrice', 'stopPrice', takeProfit)
                 request['takeProfit'] = self.price_to_precision(symbol, tpTriggerPrice)
+                tpLimitPrice = self.safe_value(takeProfit, 'price')
+                if tpLimitPrice is not None:
+                    request['tpslMode'] = 'Partial'
+                    request['tpOrderType'] = 'Limit'
+                    request['tpLimitPrice'] = self.price_to_precision(symbol, tpLimitPrice)
         if market['spot']:
             # only works for spot market
             if triggerPrice is not None:
@@ -3785,7 +3797,7 @@ class bybit(Exchange, ImplicitAPI):
         result = self.safe_value(response, 'result', {})
         return self.parse_order(result, market)
 
-    def edit_order(self, id: str, symbol, type, side, amount=None, price=None, params={}):
+    def edit_order(self, id: str, symbol: str, type: OrderType, side: OrderSide, amount: float = None, price: float = None, params={}):
         """
         edit a trade order
         :see: https://bybit-exchange.github.io/docs/v5/order/amend-order
@@ -5621,9 +5633,6 @@ class bybit(Exchange, ImplicitAPI):
         timestamp = self.parse8601(self.safe_string(position, 'updated_at'))
         if timestamp is None:
             timestamp = self.safe_integer_n(position, ['updatedTime', 'updatedAt'])
-        # default to cross of USDC margined positions
-        tradeMode = self.safe_integer(position, 'tradeMode', 0)
-        marginMode = 'isolated' if tradeMode else 'cross'
         collateralString = self.safe_string(position, 'positionBalance')
         entryPrice = self.omit_zero(self.safe_string_2(position, 'entryPrice', 'avgPrice'))
         liquidationPrice = self.omit_zero(self.safe_string(position, 'liqPrice'))
@@ -5680,14 +5689,14 @@ class bybit(Exchange, ImplicitAPI):
             'markPrice': self.safe_number(position, 'markPrice'),
             'lastPrice': None,
             'collateral': self.parse_number(collateralString),
-            'marginMode': marginMode,
+            'marginMode': None,
             'side': side,
             'percentage': None,
             'stopLossPrice': self.safe_number_2(position, 'stop_loss', 'stopLoss'),
             'takeProfitPrice': self.safe_number_2(position, 'take_profit', 'takeProfit'),
         })
 
-    def set_margin_mode(self, marginMode, symbol: Str = None, params={}):
+    def set_margin_mode(self, marginMode: str, symbol: Str = None, params={}):
         """
         set margin mode(account) or trade mode(symbol)
         :see: https://bybit-exchange.github.io/docs/v5/account/set-margin-mode
@@ -5813,7 +5822,7 @@ class bybit(Exchange, ImplicitAPI):
             response = self.privatePostV5PositionSetLeverage(self.extend(request, params))
         return response
 
-    def set_position_mode(self, hedged, symbol: Str = None, params={}):
+    def set_position_mode(self, hedged: bool, symbol: Str = None, params={}):
         """
         set hedged to True or False for a market
         :see: https://bybit-exchange.github.io/docs/v5/position/position-mode
@@ -6132,7 +6141,7 @@ class bybit(Exchange, ImplicitAPI):
             'info': info,
         }
 
-    def transfer(self, code: str, amount: float, fromAccount, toAccount, params={}) -> TransferEntry:
+    def transfer(self, code: str, amount: float, fromAccount: str, toAccount: str, params={}) -> TransferEntry:
         """
         transfer currency internally between wallets on the same account
         :see: https://bybit-exchange.github.io/docs/v5/asset/create-inter-transfer

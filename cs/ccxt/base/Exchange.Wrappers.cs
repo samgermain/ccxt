@@ -158,6 +158,26 @@ public partial class Exchange
         var res = await this.setLeverage(leverage, symbol, parameters);
         return ((Dictionary<string, object>)res);
     }
+    public async Task<Int64> FetchLeverage(string symbol, Dictionary<string, object> parameters = null)
+    {
+        var res = await this.fetchLeverage(symbol, parameters);
+        return (Int64)res;
+    }
+    public async Task<Dictionary<string, object>> SetPositionMode(bool hedged, string symbol = null, Dictionary<string, object> parameters = null)
+    {
+        var res = await this.setPositionMode(hedged, symbol, parameters);
+        return ((Dictionary<string, object>)res);
+    }
+    public async Task<Dictionary<string, object>> SetMarginMode(string marginMode, string symbol = null, Dictionary<string, object> parameters = null)
+    {
+        var res = await this.setMarginMode(marginMode, symbol, parameters);
+        return ((Dictionary<string, object>)res);
+    }
+    public async Task<Dictionary<string, object>> FetchDepositAddressesByNetwork(string code, Dictionary<string, object> parameters = null)
+    {
+        var res = await this.fetchDepositAddressesByNetwork(code, parameters);
+        return ((Dictionary<string, object>)res);
+    }
     public async Task<List<OpenInterest>> FetchOpenInterestHistory(string symbol, string timeframe = "1h", Int64? since2 = 0, Int64? limit2 = 0, Dictionary<string, object> parameters = null)
     {
         var since = since2 == 0 ? null : (object)since2;
@@ -896,6 +916,7 @@ public class  Bitteam: bitteam { public Bitteam(object args = null) : base(args)
 public class  Bitvavo: bitvavo { public Bitvavo(object args = null) : base(args) { } }
 public class  Bl3p: bl3p { public Bl3p(object args = null) : base(args) { } }
 public class  Blockchaincom: blockchaincom { public Blockchaincom(object args = null) : base(args) { } }
+public class  Blofin: blofin { public Blofin(object args = null) : base(args) { } }
 public class  Btcalpha: btcalpha { public Btcalpha(object args = null) : base(args) { } }
 public class  Btcbox: btcbox { public Btcbox(object args = null) : base(args) { } }
 public class  Btcmarkets: btcmarkets { public Btcmarkets(object args = null) : base(args) { } }

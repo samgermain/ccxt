@@ -1183,7 +1183,7 @@ export default class bybit extends Exchange {
         return reconstructedDate;
     }
 
-    createExpiredOptionMarket (symbol) {
+    createExpiredOptionMarket (symbol: string) {
         // support expired option contracts
         const quote = 'USD';
         const settle = 'USDC';
@@ -2215,6 +2215,7 @@ export default class bybit extends Exchange {
          * @param {int} [since] timestamp in ms of the earliest candle to fetch
          * @param {int} [limit] the maximum amount of candles to fetch
          * @param {object} [params] extra parameters specific to the exchange API endpoint
+         * @param {int} [params.until] the latest time in ms to fetch orders for
          * @param {boolean} [params.paginate] default false, when true will automatically paginate by calling this endpoint multiple times. See in the docs all the [availble parameters](https://github.com/ccxt/ccxt/wiki/Manual#pagination-params)
          * @returns {int[][]} A list of candles ordered as timestamp, open, high, low, close, volume
          */
@@ -2228,7 +2229,7 @@ export default class bybit extends Exchange {
             return await this.fetchPaginatedCallDeterministic ('fetchOHLCV', symbol, since, limit, timeframe, params, 1000) as OHLCV[];
         }
         const market = this.market (symbol);
-        const request = {
+        let request = {
             'symbol': market['id'],
         };
         if (limit === undefined) {
@@ -2240,6 +2241,7 @@ export default class bybit extends Exchange {
         if (limit !== undefined) {
             request['limit'] = limit; // max 1000, default 1000
         }
+        [ request, params ] = this.handleUntilOption ('end', request, params);
         request['interval'] = this.safeString (this.timeframes, timeframe, timeframe);
         let response = undefined;
         if (market['spot']) {
@@ -3452,7 +3454,7 @@ export default class bybit extends Exchange {
         return this.safeValue (result, 0) as Order;
     }
 
-    async createMarketBuyOrderWithCost (symbol: string, cost, params = {}) {
+    async createMarketBuyOrderWithCost (symbol: string, cost: number, params = {}) {
         /**
          * @method
          * @name bybit#createMarketBuyOrderWithCost
@@ -3471,7 +3473,7 @@ export default class bybit extends Exchange {
         return await this.createOrder (symbol, 'market', 'buy', cost, 1, params);
     }
 
-    async createMarketSellOrderWithCost (symbol: string, cost, params = {}) {
+    async createMarketSellOrderWithCost (symbol: string, cost: number, params = {}) {
         /**
          * @method
          * @name bybit#createMarkeSellOrderWithCost
@@ -3708,10 +3710,22 @@ export default class bybit extends Exchange {
             if (isStopLoss) {
                 const slTriggerPrice = this.safeValue2 (stopLoss, 'triggerPrice', 'stopPrice', stopLoss);
                 request['stopLoss'] = this.priceToPrecision (symbol, slTriggerPrice);
+                const slLimitPrice = this.safeValue (stopLoss, 'price');
+                if (slLimitPrice !== undefined) {
+                    request['tpslMode'] = 'Partial';
+                    request['slOrderType'] = 'Limit';
+                    request['slLimitPrice'] = this.priceToPrecision (symbol, slLimitPrice);
+                }
             }
             if (isTakeProfit) {
                 const tpTriggerPrice = this.safeValue2 (takeProfit, 'triggerPrice', 'stopPrice', takeProfit);
                 request['takeProfit'] = this.priceToPrecision (symbol, tpTriggerPrice);
+                const tpLimitPrice = this.safeValue (takeProfit, 'price');
+                if (tpLimitPrice !== undefined) {
+                    request['tpslMode'] = 'Partial';
+                    request['tpOrderType'] = 'Limit';
+                    request['tpLimitPrice'] = this.priceToPrecision (symbol, tpLimitPrice);
+                }
             }
         }
         if (market['spot']) {
@@ -4001,7 +4015,7 @@ export default class bybit extends Exchange {
         return this.parseOrder (result, market);
     }
 
-    async editOrder (id: string, symbol, type, side, amount = undefined, price = undefined, params = {}) {
+    async editOrder (id: string, symbol: string, type:OrderType, side: OrderSide, amount: number = undefined, price: number = undefined, params = {}) {
         /**
          * @method
          * @name bybit#editOrder
@@ -5994,9 +6008,6 @@ export default class bybit extends Exchange {
         if (timestamp === undefined) {
             timestamp = this.safeIntegerN (position, [ 'updatedTime', 'updatedAt' ]);
         }
-        // default to cross of USDC margined positions
-        const tradeMode = this.safeInteger (position, 'tradeMode', 0);
-        const marginMode = tradeMode ? 'isolated' : 'cross';
         let collateralString = this.safeString (position, 'positionBalance');
         const entryPrice = this.omitZero (this.safeString2 (position, 'entryPrice', 'avgPrice'));
         const liquidationPrice = this.omitZero (this.safeString (position, 'liqPrice'));
@@ -6058,7 +6069,7 @@ export default class bybit extends Exchange {
             'markPrice': this.safeNumber (position, 'markPrice'),
             'lastPrice': undefined,
             'collateral': this.parseNumber (collateralString),
-            'marginMode': marginMode,
+            'marginMode': undefined,
             'side': side,
             'percentage': undefined,
             'stopLossPrice': this.safeNumber2 (position, 'stop_loss', 'stopLoss'),
@@ -6066,7 +6077,7 @@ export default class bybit extends Exchange {
         });
     }
 
-    async setMarginMode (marginMode, symbol: Str = undefined, params = {}) {
+    async setMarginMode (marginMode: string, symbol: Str = undefined, params = {}) {
         /**
          * @method
          * @name bybit#setMarginMode
@@ -6211,7 +6222,7 @@ export default class bybit extends Exchange {
         return response;
     }
 
-    async setPositionMode (hedged, symbol: Str = undefined, params = {}) {
+    async setPositionMode (hedged: boolean, symbol: Str = undefined, params = {}) {
         /**
          * @method
          * @name bybit#setPositionMode
@@ -6563,7 +6574,7 @@ export default class bybit extends Exchange {
         };
     }
 
-    async transfer (code: string, amount: number, fromAccount, toAccount, params = {}): Promise<TransferEntry> {
+    async transfer (code: string, amount: number, fromAccount: string, toAccount:string, params = {}): Promise<TransferEntry> {
         /**
          * @method
          * @name bybit#transfer

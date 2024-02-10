@@ -1177,7 +1177,7 @@ class bybit extends Exchange {
         return $reconstructedDate;
     }
 
-    public function create_expired_option_market($symbol) {
+    public function create_expired_option_market(string $symbol) {
         // support expired option contracts
         $quote = 'USD';
         $settle = 'USDC';
@@ -2197,6 +2197,7 @@ class bybit extends Exchange {
          * @param {int} [$since] timestamp in ms of the earliest candle to fetch
          * @param {int} [$limit] the maximum amount of candles to fetch
          * @param {array} [$params] extra parameters specific to the exchange API endpoint
+         * @param {int} [$params->until] the latest time in ms to fetch orders for
          * @param {boolean} [$params->paginate] default false, when true will automatically $paginate by calling this endpoint multiple times. See in the docs all the [availble parameters](https://github.com/ccxt/ccxt/wiki/Manual#pagination-$params)
          * @return {int[][]} A list of candles ordered, open, high, low, close, volume
          */
@@ -2222,6 +2223,7 @@ class bybit extends Exchange {
         if ($limit !== null) {
             $request['limit'] = $limit; // max 1000, default 1000
         }
+        list($request, $params) = $this->handle_until_option('end', $request, $params);
         $request['interval'] = $this->safe_string($this->timeframes, $timeframe, $timeframe);
         $response = null;
         if ($market['spot']) {
@@ -3422,7 +3424,7 @@ class bybit extends Exchange {
         return $this->safe_value($result, 0);
     }
 
-    public function create_market_buy_order_with_cost(string $symbol, $cost, $params = array ()) {
+    public function create_market_buy_order_with_cost(string $symbol, float $cost, $params = array ()) {
         /**
          * @see https://bybit-exchange.github.io/docs/v5/order/create-order
          * create a $market buy order by providing the $symbol and $cost
@@ -3439,7 +3441,7 @@ class bybit extends Exchange {
         return $this->create_order($symbol, 'market', 'buy', $cost, 1, $params);
     }
 
-    public function create_market_sell_order_with_cost(string $symbol, $cost, $params = array ()) {
+    public function create_market_sell_order_with_cost(string $symbol, float $cost, $params = array ()) {
         /**
          * @see https://bybit-exchange.github.io/docs/v5/order/create-order
          * create a $market sell order by providing the $symbol and $cost
@@ -3672,10 +3674,22 @@ class bybit extends Exchange {
             if ($isStopLoss) {
                 $slTriggerPrice = $this->safe_value_2($stopLoss, 'triggerPrice', 'stopPrice', $stopLoss);
                 $request['stopLoss'] = $this->price_to_precision($symbol, $slTriggerPrice);
+                $slLimitPrice = $this->safe_value($stopLoss, 'price');
+                if ($slLimitPrice !== null) {
+                    $request['tpslMode'] = 'Partial';
+                    $request['slOrderType'] = 'Limit';
+                    $request['slLimitPrice'] = $this->price_to_precision($symbol, $slLimitPrice);
+                }
             }
             if ($isTakeProfit) {
                 $tpTriggerPrice = $this->safe_value_2($takeProfit, 'triggerPrice', 'stopPrice', $takeProfit);
                 $request['takeProfit'] = $this->price_to_precision($symbol, $tpTriggerPrice);
+                $tpLimitPrice = $this->safe_value($takeProfit, 'price');
+                if ($tpLimitPrice !== null) {
+                    $request['tpslMode'] = 'Partial';
+                    $request['tpOrderType'] = 'Limit';
+                    $request['tpLimitPrice'] = $this->price_to_precision($symbol, $tpLimitPrice);
+                }
             }
         }
         if ($market['spot']) {
@@ -3963,7 +3977,7 @@ class bybit extends Exchange {
         return $this->parse_order($result, $market);
     }
 
-    public function edit_order(string $id, $symbol, $type, $side, $amount = null, $price = null, $params = array ()) {
+    public function edit_order(string $id, string $symbol, string $type, string $side, ?float $amount = null, ?float $price = null, $params = array ()) {
         /**
          * edit a trade order
          * @see https://bybit-exchange.github.io/docs/v5/order/amend-order
@@ -5922,9 +5936,6 @@ class bybit extends Exchange {
         if ($timestamp === null) {
             $timestamp = $this->safe_integer_n($position, array( 'updatedTime', 'updatedAt' ));
         }
-        // default to cross of USDC margined positions
-        $tradeMode = $this->safe_integer($position, 'tradeMode', 0);
-        $marginMode = $tradeMode ? 'isolated' : 'cross';
         $collateralString = $this->safe_string($position, 'positionBalance');
         $entryPrice = $this->omit_zero($this->safe_string_2($position, 'entryPrice', 'avgPrice'));
         $liquidationPrice = $this->omit_zero($this->safe_string($position, 'liqPrice'));
@@ -5986,7 +5997,7 @@ class bybit extends Exchange {
             'markPrice' => $this->safe_number($position, 'markPrice'),
             'lastPrice' => null,
             'collateral' => $this->parse_number($collateralString),
-            'marginMode' => $marginMode,
+            'marginMode' => null,
             'side' => $side,
             'percentage' => null,
             'stopLossPrice' => $this->safe_number_2($position, 'stop_loss', 'stopLoss'),
@@ -5994,7 +6005,7 @@ class bybit extends Exchange {
         ));
     }
 
-    public function set_margin_mode($marginMode, ?string $symbol = null, $params = array ()) {
+    public function set_margin_mode(string $marginMode, ?string $symbol = null, $params = array ()) {
         /**
          * set margin mode (account) or trade mode ($symbol)
          * @see https://bybit-exchange.github.io/docs/v5/account/set-margin-mode
@@ -6135,7 +6146,7 @@ class bybit extends Exchange {
         return $response;
     }
 
-    public function set_position_mode($hedged, ?string $symbol = null, $params = array ()) {
+    public function set_position_mode(bool $hedged, ?string $symbol = null, $params = array ()) {
         /**
          * set $hedged to true or false for a $market
          * @see https://bybit-exchange.github.io/docs/v5/position/position-$mode
@@ -6477,7 +6488,7 @@ class bybit extends Exchange {
         );
     }
 
-    public function transfer(string $code, float $amount, $fromAccount, $toAccount, $params = array ()): TransferEntry {
+    public function transfer(string $code, float $amount, string $fromAccount, string $toAccount, $params = array ()): TransferEntry {
         /**
          * $transfer $currency internally between wallets on the same account
          * @see https://bybit-exchange.github.io/docs/v5/asset/create-inter-$transfer

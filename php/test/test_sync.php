@@ -446,7 +446,9 @@ class testMainClass extends baseMainTestClass {
             }
         }
         // credentials
-        $this->load_credentials_from_env($exchange);
+        if ($this->load_keys) {
+            $this->load_credentials_from_env($exchange);
+        }
         // skipped tests
         $skipped_file = $this->root_dir_for_skips . 'skip-tests.json';
         $skipped_settings = io_file_read($skipped_file);
@@ -1274,6 +1276,7 @@ class testMainClass extends baseMainTestClass {
         $currencies = $this->load_currencies_from_file($exchange_name);
         $exchange = init_exchange($exchange_name, array(
             'markets' => $markets,
+            'currencies' => $currencies,
             'enableRateLimit' => false,
             'rateLimit' => 1,
             'httpProxy' => 'http://fake:8080',
@@ -1442,7 +1445,7 @@ class testMainClass extends baseMainTestClass {
         //  -----------------------------------------------------------------------------
         //  --- Init of brokerId tests functions-----------------------------------------
         //  -----------------------------------------------------------------------------
-        $promises = [$this->test_binance(), $this->test_okx(), $this->test_cryptocom(), $this->test_bybit(), $this->test_kucoin(), $this->test_kucoinfutures(), $this->test_bitget(), $this->test_mexc(), $this->test_htx(), $this->test_woo(), $this->test_bitmart(), $this->test_coinex(), $this->test_bingx(), $this->test_phemex()];
+        $promises = [$this->test_binance(), $this->test_okx(), $this->test_cryptocom(), $this->test_bybit(), $this->test_kucoin(), $this->test_kucoinfutures(), $this->test_bitget(), $this->test_mexc(), $this->test_htx(), $this->test_woo(), $this->test_bitmart(), $this->test_coinex(), $this->test_bingx(), $this->test_phemex(), $this->test_blofin()];
         ($promises);
         $success_message = '[' . $this->lang . '][TEST_SUCCESS] brokerId tests passed.';
         dump('[INFO]' . $success_message);
@@ -1719,6 +1722,20 @@ class testMainClass extends baseMainTestClass {
         }
         $client_order_id = $request['clOrdID'];
         assert(str_starts_with($client_order_id, ((string) $id)), 'clOrdID does not start with id');
+        close($exchange);
+    }
+
+    public function test_blofin() {
+        $exchange = $this->init_offline_exchange('blofin');
+        $id = 'ec6dd3a7dd982d0b';
+        $request = null;
+        try {
+            $exchange->create_order('LTC/USDT:USDT', 'market', 'buy', 1);
+        } catch(\Throwable $e) {
+            $request = json_parse($exchange->last_request_body);
+        }
+        $broker_id = $request['brokerId'];
+        assert(str_starts_with($broker_id, ((string) $id)), 'brokerId does not start with id');
         close($exchange);
     }
 }

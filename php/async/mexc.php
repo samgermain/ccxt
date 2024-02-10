@@ -1059,7 +1059,7 @@ class mexc extends Exchange {
     public function fetch_markets($params = array ()) {
         return Async\async(function () use ($params) {
             /**
-             * retrieves data on all markets for mexc3
+             * retrieves data on all markets for mexc
              * @param {array} [$params] extra parameters specific to the exchange API endpoint
              * @return {array[]} an array of objects representing market data
              */
@@ -2095,7 +2095,7 @@ class mexc extends Exchange {
         }) ();
     }
 
-    public function create_market_buy_order_with_cost(string $symbol, $cost, $params = array ()) {
+    public function create_market_buy_order_with_cost(string $symbol, float $cost, $params = array ()) {
         return Async\async(function () use ($symbol, $cost, $params) {
             /**
              * create a $market buy order by providing the $symbol and $cost
@@ -4781,7 +4781,7 @@ class mexc extends Exchange {
         $marginType = ($openType === '1') ? 'isolated' : 'cross';
         $leverage = $this->safe_number($position, 'leverage');
         $liquidationPrice = $this->safe_number($position, 'liquidatePrice');
-        $timestamp = $this->safe_number($position, 'updateTime');
+        $timestamp = $this->safe_integer($position, 'updateTime');
         return $this->safe_position(array(
             'info' => $position,
             'id' => null,
@@ -4931,7 +4931,7 @@ class mexc extends Exchange {
         }) ();
     }
 
-    public function transfer(string $code, float $amount, $fromAccount, $toAccount, $params = array ()): PromiseInterface {
+    public function transfer(string $code, float $amount, string $fromAccount, string $toAccount, $params = array ()): PromiseInterface {
         return Async\async(function () use ($code, $amount, $fromAccount, $toAccount, $params) {
             /**
              * transfer $currency internally between wallets on the same account
@@ -5108,7 +5108,7 @@ class mexc extends Exchange {
         }) ();
     }
 
-    public function set_position_mode($hedged, ?string $symbol = null, $params = array ()) {
+    public function set_position_mode(bool $hedged, ?string $symbol = null, $params = array ()) {
         return Async\async(function () use ($hedged, $symbol, $params) {
             $request = array(
                 'positionMode' => $hedged ? 1 : 2, // 1 Hedge, 2 One-way, before changing position mode make sure that there are no active orders, planned orders, or open positions, the risk limit level will be reset to 1
@@ -5142,7 +5142,7 @@ class mexc extends Exchange {
         }) ();
     }
 
-    public function fetch_transaction_fees($codes = null, $params = array ()) {
+    public function fetch_transaction_fees(?array $codes = null, $params = array ()) {
         return Async\async(function () use ($codes, $params) {
             /**
              * fetch deposit and withdrawal fees

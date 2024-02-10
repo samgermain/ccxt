@@ -300,7 +300,9 @@ export default class testMainClass extends baseMainTestClass {
             }
         }
         // credentials
-        this.loadCredentialsFromEnv(exchange);
+        if (this.loadKeys) {
+            this.loadCredentialsFromEnv(exchange);
+        }
         // skipped tests
         const skippedFile = this.rootDirForSkips + 'skip-tests.json';
         const skippedSettings = ioFileRead(skippedFile);
@@ -1236,7 +1238,7 @@ export default class testMainClass extends baseMainTestClass {
     initOfflineExchange(exchangeName) {
         const markets = this.loadMarketsFromFile(exchangeName);
         const currencies = this.loadCurrenciesFromFile(exchangeName);
-        const exchange = initExchange(exchangeName, { 'markets': markets, 'enableRateLimit': false, 'rateLimit': 1, 'httpProxy': 'http://fake:8080', 'httpsProxy': 'http://fake:8080', 'apiKey': 'key', 'secret': 'secretsecret', 'password': 'password', 'walletAddress': 'wallet', 'uid': 'uid', 'token': 'token', 'accounts': [{ 'id': 'myAccount', 'code': 'USDT' }, { 'id': 'myAccount', 'code': 'USDC' }], 'options': { 'enableUnifiedAccount': true, 'enableUnifiedMargin': false, 'accessToken': 'token', 'expires': 999999999999999, 'leverageBrackets': {} } });
+        const exchange = initExchange(exchangeName, { 'markets': markets, 'currencies': currencies, 'enableRateLimit': false, 'rateLimit': 1, 'httpProxy': 'http://fake:8080', 'httpsProxy': 'http://fake:8080', 'apiKey': 'key', 'secret': 'secretsecret', 'password': 'password', 'walletAddress': 'wallet', 'uid': 'uid', 'token': 'token', 'accounts': [{ 'id': 'myAccount', 'code': 'USDT' }, { 'id': 'myAccount', 'code': 'USDC' }], 'options': { 'enableUnifiedAccount': true, 'enableUnifiedMargin': false, 'accessToken': 'token', 'expires': 999999999999999, 'leverageBrackets': {} } });
         exchange.currencies = currencies; // not working in python if assigned  in the config dict
         return exchange;
     }
@@ -1390,6 +1392,7 @@ export default class testMainClass extends baseMainTestClass {
             this.testCoinex(),
             this.testBingx(),
             this.testPhemex(),
+            this.testBlofin()
         ];
         await Promise.all(promises);
         const successMessage = '[' + this.lang + '][TEST_SUCCESS] brokerId tests passed.';
@@ -1671,6 +1674,20 @@ export default class testMainClass extends baseMainTestClass {
         }
         const clientOrderId = request['clOrdID'];
         assert(clientOrderId.startsWith(id.toString()), 'clOrdID does not start with id');
+        await close(exchange);
+    }
+    async testBlofin() {
+        const exchange = this.initOfflineExchange('blofin');
+        const id = 'ec6dd3a7dd982d0b';
+        let request = undefined;
+        try {
+            await exchange.createOrder('LTC/USDT:USDT', 'market', 'buy', 1);
+        }
+        catch (e) {
+            request = jsonParse(exchange.last_request_body);
+        }
+        const brokerId = request['brokerId'];
+        assert(brokerId.startsWith(id.toString()), 'brokerId does not start with id');
         await close(exchange);
     }
 }
