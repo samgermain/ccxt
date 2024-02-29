@@ -1110,7 +1110,7 @@ export default class okx extends Exchange {
         return this.safeString (exchangeTypes, type, type);
     }
 
-    convertExpireDate (date) {
+    convertExpireDate (date: string) {
         // parse YYMMDD to timestamp
         const year = date.slice (0, 2);
         const month = date.slice (2, 4);
@@ -1182,7 +1182,7 @@ export default class okx extends Exchange {
         } as MarketInterface;
     }
 
-    safeMarket (marketId = undefined, market = undefined, delimiter = undefined, marketType = undefined) {
+    safeMarket (marketId: Str = undefined, market: Market = undefined, delimiter: Str = undefined, marketType: MarketType = undefined) {
         const isOption = (marketId !== undefined) && ((marketId.indexOf ('-C') > -1) || (marketId.indexOf ('-P') > -1));
         if (isOption && !(marketId in this.markets_by_id)) {
             // handle expired option contracts
@@ -6979,7 +6979,7 @@ export default class okx extends Exchange {
         }, market);
     }
 
-    setSandboxMode (enable) {
+    setSandboxMode (enable: boolean) {
         super.setSandboxMode (enable);
         this.options['sandboxMode'] = enable;
         if (enable) {

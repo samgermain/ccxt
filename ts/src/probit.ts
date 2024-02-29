@@ -1204,7 +1204,7 @@ export default class probit extends Exchange {
         }, market);
     }
 
-    costToPrecision (symbol, cost) {
+    costToPrecision (symbol: string, cost: number) {
         return this.decimalToPrecision (cost, TRUNCATE, this.markets[symbol]['precision']['cost'], this.precisionMode);
     }
 

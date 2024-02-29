@@ -1598,7 +1598,8 @@ export default class htx extends Exchange {
         };
     }
 
-    costToPrecision (symbol, cost) {
+        costToPrecision (symbol: string, cost: number) {
+
         return this.decimalToPrecision (cost, TRUNCATE, this.markets[symbol]['precision']['cost'], this.precisionMode);
     }
 

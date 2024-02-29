@@ -411,7 +411,8 @@ export default class huobijp extends Exchange {
         };
     }
 
-    costToPrecision (symbol, cost) {
+        costToPrecision (symbol: string, cost: number) {
+
         return this.decimalToPrecision (cost, TRUNCATE, this.markets[symbol]['precision']['cost'], this.precisionMode);
     }
 
@@ -1610,8 +1611,7 @@ export default class huobijp extends Exchange {
         return response;
     }
 
-    currencyToPrecision (code, fee, networkCode = undefined) {
-        return this.decimalToPrecision (fee, 0, this.currencies[code]['precision'], this.precisionMode);
+    currencyToPrecision (code: string, fee: number, networkCode: Str = undefined) {        return this.decimalToPrecision (fee, 0, this.currencies[code]['precision'], this.precisionMode);
     }
 
     safeNetwork (networkId) {
