@@ -189,7 +189,7 @@ export default class bybit extends bybitRest {
         const messageHash = 'ticker:' + symbol;
         const url = this.getUrlByMarketType (symbol, false, 'watchTicker', params);
         params = this.cleanParams (params);
-        const options = this.safeValue (this.options, 'watchTicker', {});
+        const options = this.safeDict (this.options, 'watchTicker', {});
         let topic = this.safeString (options, 'name', 'tickers');
         if (!market['spot'] && topic !== 'tickers') {
             throw new BadRequest (this.id + ' watchTicker() only supports name tickers for contract markets');
@@ -215,7 +215,7 @@ export default class bybit extends bybitRest {
         const messageHashes = [];
         const url = this.getUrlByMarketType (symbols[0], false, 'watchTickers', params);
         params = this.cleanParams (params);
-        const options = this.safeValue (this.options, 'watchTickers', {});
+        const options = this.safeDict (this.options, 'watchTickers', {});
         const topic = this.safeString (options, 'name', 'tickers');
         const marketIds = this.marketIds (symbols);
         const topics = [ ];
@@ -431,7 +431,7 @@ export default class bybit extends bybitRest {
         //         "type": "snapshot"
         //     }
         //
-        const data = this.safeValue (message, 'data', {});
+        const data = this.safeDict (message, 'data', {});
         const topic = this.safeString (message, 'topic');
         const topicParts = topic.split ('.');
         const topicLength = topicParts.length;
@@ -581,7 +581,7 @@ export default class bybit extends bybitRest {
         const isSpot = client.url.indexOf ('spot') >= 0;
         const type = this.safeString (message, 'type');
         const isSnapshot = (type === 'snapshot');
-        const data = this.safeValue (message, 'data', {});
+        const data = this.safeDict (message, 'data', {});
         const marketId = this.safeString (data, 's');
         const marketType = isSpot ? 'spot' : 'contract';
         const market = this.safeMarket (marketId, undefined, undefined, marketType);
@@ -692,7 +692,7 @@ export default class bybit extends bybitRest {
         //         ]
         //     }
         //
-        const data = this.safeValue (message, 'data', {});
+        const data = this.safeDict (message, 'data', {});
         const topic = this.safeString (message, 'topic');
         const trades = data;
         const parts = topic.split ('.');
@@ -1194,7 +1194,7 @@ export default class bybit extends bybitRest {
         }
         const orders = this.orders;
         let rawOrders = this.safeValue (message, 'data', []);
-        const first = this.safeValue (rawOrders, 0, {});
+        const first = this.safeDict (rawOrders, 0, {});
         const category = this.safeString (first, 'category');
         const isSpot = category === 'spot';
         if (!isSpot) {
@@ -1575,9 +1575,9 @@ export default class bybit extends bybitRest {
             info = rawBalances;
         }
         if (topic === 'wallet') {
-            const data = this.safeValue (message, 'data', {});
+            const data = this.safeDict (message, 'data', {});
             for (let i = 0; i < data.length; i++) {
-                const result = this.safeValue (data, 0, {});
+                const result = this.safeDict (data, 0, {});
                 account = this.safeStringLower (result, 'accountType');
                 rawBalances = this.arrayConcat (rawBalances, this.safeValue (result, 'coin', []));
             }
@@ -1719,7 +1719,7 @@ export default class bybit extends bybitRest {
             const success = this.safeValue (message, 'success');
             if (success !== undefined && !success) {
                 const ret_msg = this.safeString (message, 'ret_msg');
-                const request = this.safeValue (message, 'request', {});
+                const request = this.safeDict (message, 'request', {});
                 const op = this.safeString (request, 'op');
                 if (op === 'auth') {
                     throw new AuthenticationError ('Authentication failed: ' + ret_msg);
