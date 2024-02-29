@@ -357,7 +357,7 @@ export default class woo extends Exchange {
         //     "success": true
         // }
         //
-        const data = this.safeValue (response, 'rows', []);
+        const data = this.safeList (response, 'rows', []);
         return this.parseMarkets (data);
     }
 
@@ -701,7 +701,7 @@ export default class woo extends Exchange {
         //     "success": true
         // }
         //
-        const tokenRows = this.safeValue (tokenResponse, 'rows', []);
+        const tokenRows = this.safeList (tokenResponse, 'rows', []);
         const networksByCurrencyId = this.groupBy (tokenRows, 'balance_token');
         const currencyIds = Object.keys (networksByCurrencyId);
         for (let i = 0; i < currencyIds.length; i++) {
@@ -1027,7 +1027,7 @@ export default class woo extends Exchange {
         // }
         const data = this.safeValue (response, 'data');
         if (data !== undefined) {
-            const rows = this.safeValue (data, 'rows', []);
+            const rows = this.safeList (data, 'rows', []);
             return this.parseOrder (rows[0], market);
         }
         const order = this.parseOrder (response, market);
@@ -1447,7 +1447,7 @@ export default class woo extends Exchange {
         const childOrders = this.safeValue (order, 'childOrders');
         if (childOrders !== undefined) {
             const first = this.safeValue (childOrders, 0);
-            const innerChildOrders = this.safeValue (first, 'childOrders', []);
+            const innerChildOrders = this.safeList (first, 'childOrders', []);
             const innerChildOrdersLength = innerChildOrders.length;
             if (innerChildOrdersLength > 0) {
                 const takeProfitOrder = this.safeValue (innerChildOrders, 0);
@@ -1628,7 +1628,7 @@ export default class woo extends Exchange {
             //    }
             //
         }
-        const rows = this.safeValue (response, 'rows', []);
+        const rows = this.safeList (response, 'rows', []);
         return this.parseOHLCVs (rows, market, timeframe, since, limit);
     }
 
@@ -1683,7 +1683,7 @@ export default class woo extends Exchange {
         //       }
         //     ]
         // }
-        const trades = this.safeValue (response, 'rows', []);
+        const trades = this.safeList (response, 'rows', []);
         return this.parseTrades (trades, market, since, limit, params);
     }
 
@@ -1732,7 +1732,7 @@ export default class woo extends Exchange {
         //         ...
         //     ]
         // }
-        const trades = this.safeValue (response, 'rows', []);
+        const trades = this.safeList (response, 'rows', []);
         return this.parseTrades (trades, market, since, limit, params);
     }
 
@@ -1761,7 +1761,7 @@ export default class woo extends Exchange {
         //         "success": true
         //     }
         //
-        const rows = this.safeValue (response, 'rows', []);
+        const rows = this.safeList (response, 'rows', []);
         return this.parseAccounts (rows, params);
     }
 
@@ -1825,7 +1825,7 @@ export default class woo extends Exchange {
         const result = {
             'info': response,
         };
-        const balances = this.safeValue (response, 'holding', []);
+        const balances = this.safeList (response, 'holding', []);
         for (let i = 0; i < balances.length; i++) {
             const balance = balances[i];
             const code = this.safeCurrencyCode (this.safeString (balance, 'token'));
@@ -2489,7 +2489,7 @@ export default class woo extends Exchange {
         //         "success":true
         //     }
         //
-        const result = this.safeValue (response, 'rows', []);
+        const result = this.safeList (response, 'rows', []);
         return this.parseIncomes (result, market, since, limit);
     }
 
@@ -2779,7 +2779,7 @@ export default class woo extends Exchange {
         //     }
         //
         const result = this.safeDict (response, 'data', {});
-        const positions = this.safeValue (result, 'positions', []);
+        const positions = this.safeList (result, 'positions', []);
         return this.parsePositions (positions, symbols);
     }
 

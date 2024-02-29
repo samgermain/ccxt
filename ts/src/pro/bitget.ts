@@ -279,7 +279,7 @@ export default class bitget extends bitgetRest {
         //     }
         //
         const arg = this.safeDict (message, 'arg', {});
-        const data = this.safeValue (message, 'data', []);
+        const data = this.safeList (message, 'data', []);
         const ticker = this.safeDict (data, 0, {});
         const timestamp = this.safeInteger (ticker, 'ts');
         const instType = this.safeString (arg, 'instType');
@@ -398,7 +398,7 @@ export default class bitget extends bitgetRest {
             stored = new ArrayCacheByTimestamp (limit);
             this.ohlcvs[symbol][timeframe] = stored;
         }
-        const data = this.safeValue (message, 'data', []);
+        const data = this.safeList (message, 'data', []);
         for (let i = 0; i < data.length; i++) {
             const parsed = this.parseWsOHLCV (data[i], market);
             stored.append (parsed);
@@ -541,8 +541,8 @@ export default class bitget extends bitgetRest {
                 this.orderbooks[symbol] = ob;
             }
             const storedOrderBook = this.orderbooks[symbol];
-            const asks = this.safeValue (rawOrderBook, 'asks', []);
-            const bids = this.safeValue (rawOrderBook, 'bids', []);
+            const asks = this.safeList (rawOrderBook, 'asks', []);
+            const bids = this.safeList (rawOrderBook, 'bids', []);
             this.handleDeltas (storedOrderBook['asks'], asks);
             this.handleDeltas (storedOrderBook['bids'], bids);
             storedOrderBook['timestamp'] = timestamp;
@@ -856,7 +856,7 @@ export default class bitget extends bitgetRest {
             this.positions[instType] = new ArrayCacheBySymbolBySide ();
         }
         const cache = this.positions[instType];
-        const rawPositions = this.safeValue (message, 'data', []);
+        const rawPositions = this.safeList (message, 'data', []);
         const dataLength = rawPositions.length;
         if (dataLength === 0) {
             return;
@@ -1167,7 +1167,7 @@ export default class bitget extends bitgetRest {
         } else {
             marketType = 'contract';
         }
-        const data = this.safeValue (message, 'data', []);
+        const data = this.safeList (message, 'data', []);
         if (this.orders === undefined) {
             const limit = this.safeInteger (this.options, 'ordersLimit', 1000);
             this.orders = new ArrayCacheBySymbolById (limit);
@@ -1303,7 +1303,7 @@ export default class bitget extends bitgetRest {
         const timestamp = this.safeInteger (order, 'cTime');
         const symbol = market['symbol'];
         const rawStatus = this.safeString (order, 'status');
-        const orderFee = this.safeValue (order, 'feeDetail', []);
+        const orderFee = this.safeList (order, 'feeDetail', []);
         const fee = this.safeValue (orderFee, 0);
         const feeAmount = this.safeString (fee, 'fee');
         let feeObject = undefined;
@@ -1561,7 +1561,7 @@ export default class bitget extends bitgetRest {
         //         "ts": 1701933110544
         //     }
         //
-        const data = this.safeValue (message, 'data', []);
+        const data = this.safeList (message, 'data', []);
         for (let i = 0; i < data.length; i++) {
             const rawBalance = data[i];
             const currencyId = this.safeString2 (rawBalance, 'coin', 'marginCoin');
