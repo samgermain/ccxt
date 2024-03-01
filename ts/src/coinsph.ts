@@ -1128,13 +1128,14 @@ export default class coinsph extends Exchange {
             'side': orderSide,
         };
         const options = this.safeDict (this.options, 'createOrder', {});
-        let newOrderRespType = this.safeDict (options, 'newOrderRespType', {});
+        const newOrderRespTypeDict = this.safeDict (options, 'newOrderRespType', {});
+        let newOrderRespType = undefined;
         // if limit order
         if (orderType === 'LIMIT' || orderType === 'STOP_LOSS_LIMIT' || orderType === 'TAKE_PROFIT_LIMIT' || orderType === 'LIMIT_MAKER') {
             if (price === undefined) {
                 throw new ArgumentsRequired (this.id + ' createOrder() requires a price argument for a ' + type + ' order');
             }
-            newOrderRespType = this.safeString (newOrderRespType, 'limit', 'FULL');
+            newOrderRespType = this.safeString (newOrderRespTypeDict, 'limit', 'FULL');
             request['price'] = this.priceToPrecision (symbol, price);
             request['quantity'] = this.amountToPrecision (symbol, amount);
             if (orderType !== 'LIMIT_MAKER') {
@@ -1142,7 +1143,7 @@ export default class coinsph extends Exchange {
             }
         // if market order
         } else if (orderType === 'MARKET' || orderType === 'STOP_LOSS' || orderType === 'TAKE_PROFIT') {
-            newOrderRespType = this.safeString (newOrderRespType, 'market', 'FULL');
+            newOrderRespType = this.safeString (newOrderRespTypeDict, 'market', 'FULL');
             if (orderSide === 'SELL') {
                 request['quantity'] = this.amountToPrecision (symbol, amount);
             } else if (orderSide === 'BUY') {

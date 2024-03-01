@@ -2284,7 +2284,8 @@ export default class deribit extends Exchange {
         //     }
         //
         const result = this.safeDict (response, 'result', {});
-        return this.parseTrades (result, undefined, since, limit);
+        const trades = this.safeList (result, 'trades', []);
+        return this.parseTrades (trades, undefined, since, limit);
     }
 
     async fetchMyTrades (symbol: Str = undefined, since: Int = undefined, limit: Int = undefined, params = {}) {
