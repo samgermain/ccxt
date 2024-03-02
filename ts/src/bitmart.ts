@@ -1893,7 +1893,33 @@ export default class bitmart extends Exchange {
             'orderId': id,
         };
         const response = await this.privatePostSpotV4QueryOrderTrades (this.extend (request, params));
-        const data = this.safeValue (response, 'data', {});
+        //
+        //    {
+        //        "code" : 1000,
+        //        "message" : "success",
+        //        "data" : [
+        //            {
+        //                "tradeId": "122177405911172002",
+        //                "orderId": "118100034543076010",
+        //                "clientOrderId": "118100034543076010",
+        //                "symbol": "BTC_USDT",
+        //                "side": "buy",
+        //                "orderMode": "spot",
+        //                "type": "limit",
+        //                "price": "39999.00",
+        //                "size": "0.10000",
+        //                "notional": "3999.90000000",
+        //                "fee": "9.99975000",
+        //                "feeCoinName": "USDT",
+        //                "tradeRole": "taker",
+        //                "createTime": 1681701559210,
+        //                "updateTime": 1681701559210
+        //            }
+        //        ],
+        //        "trace" : "5e1c9f98d761443ea559c7af71ca57fa.62.16818934219090007"
+        //    }
+        //
+        const data = this.safeList (response, 'data', []);
         return this.parseTrades (data, undefined, since, limit);
     }
 
