@@ -29,6 +29,9 @@ class bitrue extends Exchange {
                 'option' => false,
                 'cancelAllOrders' => true,
                 'cancelOrder' => true,
+                'createMarketBuyOrderWithCost' => true,
+                'createMarketOrderWithCost' => false,
+                'createMarketSellOrderWithCost' => false,
                 'createOrder' => true,
                 'createStopLimitOrder' => true,
                 'createStopMarketOrder' => true,
@@ -46,6 +49,7 @@ class bitrue extends Exchange {
                 'fetchDepositsWithdrawals' => false,
                 'fetchDepositWithdrawFee' => 'emulated',
                 'fetchDepositWithdrawFees' => true,
+                'fetchFundingRate' => false,
                 'fetchIsolatedBorrowRate' => false,
                 'fetchIsolatedBorrowRates' => false,
                 'fetchMarginMode' => false,
@@ -1511,16 +1515,8 @@ class bitrue extends Exchange {
             $first = $this->safe_string($symbols, 0);
             $market = $this->market($first);
             if ($market['swap']) {
-                $request['contractName'] = $market['id'];
-                if ($market['linear']) {
-                    $response = $this->fapiV1PublicGetTicker (array_merge($request, $params));
-                } elseif ($market['inverse']) {
-                    $response = $this->dapiV1PublicGetTicker (array_merge($request, $params));
-                }
-                $response['symbol'] = $market['id'];
-                $data = array( $response );
+                throw new NotSupported($this->id . ' fetchTickers does not support swap markets, please use fetchTicker instead');
             } elseif ($market['spot']) {
-                $request['symbol'] = $market['id'];
                 $response = $this->spotV1PublicGetTicker24hr (array_merge($request, $params));
                 $data = $response;
             } else {
@@ -1529,7 +1525,7 @@ class bitrue extends Exchange {
         } else {
             list($type, $params) = $this->handle_market_type_and_params('fetchTickers', null, $params);
             if ($type !== 'spot') {
-                throw new NotSupported($this->id . ' fetchTickers only support spot when $symbols is not set');
+                throw new NotSupported($this->id . ' fetchTickers only support spot when $symbols are not proved');
             }
             $response = $this->spotV1PublicGetTicker24hr (array_merge($request, $params));
             $data = $response;
@@ -1854,7 +1850,26 @@ class bitrue extends Exchange {
         ), $market);
     }
 
-    public function create_order(string $symbol, string $type, string $side, $amount, $price = null, $params = array ()) {
+    public function create_market_buy_order_with_cost(string $symbol, float $cost, $params = array ()) {
+        /**
+         * create a $market buy order by providing the $symbol and $cost
+         * @see https://www.bitrue.com/api-docs#new-order-trade-hmac-sha256
+         * @see https://www.bitrue.com/api_docs_includes_file/delivery.html#new-order-trade-hmac-sha256
+         * @param {string} $symbol unified $symbol of the $market to create an order in
+         * @param {float} $cost how much you want to trade in units of the quote currency
+         * @param {array} [$params] extra parameters specific to the exchange API endpoint
+         * @return {array} an ~@link https://docs.ccxt.com/#/?id=order-structure order structure~
+         */
+        $this->load_markets();
+        $market = $this->market($symbol);
+        if (!$market['swap']) {
+            throw new NotSupported($this->id . ' createMarketBuyOrderWithCost() supports swap orders only');
+        }
+        $params['createMarketBuyOrderRequiresPrice'] = false;
+        return $this->create_order($symbol, 'market', 'buy', $cost, null, $params);
+    }
+
+    public function create_order(string $symbol, string $type, string $side, float $amount, ?float $price = null, $params = array ()) {
         /**
          * create a trade order
          * @see https://github.com/Bitrue-exchange/Spot-official-api-docs#recent-trades-list
@@ -1875,6 +1890,7 @@ class bitrue extends Exchange {
          * EXCHANGE SPECIFIC PARAMETERS
          * @param {decimal} [$params->icebergQty]
          * @param {long} [$params->recvWindow]
+         * @param {float} [$params->cost] *swap $market buy only* the quote quantity that can be used alternative for the $amount
          * @return {array} an ~@link https://docs.ccxt.com/#/?id=order-structure order structure~
          */
         $this->load_markets();
@@ -1909,7 +1925,9 @@ class bitrue extends Exchange {
                 $request['type'] = 'IOC';
             }
             $request['contractName'] = $market['id'];
-            if ($isMarket && ($side === 'buy') && ($this->options['createMarketBuyOrderRequiresPrice'])) {
+            $createMarketBuyOrderRequiresPrice = true;
+            list($createMarketBuyOrderRequiresPrice, $params) = $this->handle_option_and_params($params, 'createOrder', 'createMarketBuyOrderRequiresPrice', true);
+            if ($isMarket && ($side === 'buy') && $createMarketBuyOrderRequiresPrice) {
                 $cost = $this->safe_string($params, 'cost');
                 $params = $this->omit($params, 'cost');
                 if ($price === null && $cost === null) {
@@ -1918,9 +1936,9 @@ class bitrue extends Exchange {
                     $amountString = $this->number_to_string($amount);
                     $priceString = $this->number_to_string($price);
                     $quoteAmount = Precise::string_mul($amountString, $priceString);
-                    $amount = ($cost !== null) ? $cost : $quoteAmount;
-                    $request['amount'] = $this->cost_to_precision($symbol, $amount);
-                    $request['volume'] = $this->cost_to_precision($symbol, $amount);
+                    $requestAmount = ($cost !== null) ? $cost : $quoteAmount;
+                    $request['amount'] = $this->cost_to_precision($symbol, $requestAmount);
+                    $request['volume'] = $this->cost_to_precision($symbol, $requestAmount);
                 }
             } else {
                 $request['amount'] = $this->parse_to_numeric($amount);
@@ -2518,20 +2536,29 @@ class bitrue extends Exchange {
         }
         $response = $this->spotV1PrivateGetWithdrawHistory (array_merge($request, $params));
         //
-        //     {
-        //         "code" => 200,
-        //         "msg" => "succ",
-        //         "data" => {
-        //             "msg" => null,
-        //             "amount" => 1000,
-        //             "fee" => 1,
-        //             "ctime" => null,
-        //             "coin" => "usdt_erc20",
-        //             "addressTo" => "0x2edfae3878d7b6db70ce4abed177ab2636f60c83"
-        //         }
-        //     }
+        //    {
+        //        "code" => 200,
+        //        "msg" => "succ",
+        //        "data" => array(
+        //            {
+        //                "id" => 183745,
+        //                "symbol" => "usdt_erc20",
+        //                "amount" => "8.4000000000000000",
+        //                "fee" => "1.6000000000000000",
+        //                "payAmount" => "0.0000000000000000",
+        //                "createdAt" => 1595336441000,
+        //                "updatedAt" => 1595336576000,
+        //                "addressFrom" => "",
+        //                "addressTo" => "0x2edfae3878d7b6db70ce4abed177ab2636f60c83",
+        //                "txid" => "",
+        //                "confirmations" => 0,
+        //                "status" => 6,
+        //                "tagType" => null
+        //            }
+        //        )
+        //    }
         //
-        $data = $this->safe_value($response, 'data', array());
+        $data = $this->safe_list($response, 'data', array());
         return $this->parse_transactions($data, $currency);
     }
 
@@ -2678,7 +2705,7 @@ class bitrue extends Exchange {
         );
     }
 
-    public function withdraw(string $code, $amount, $address, $tag = null, $params = array ()) {
+    public function withdraw(string $code, float $amount, $address, $tag = null, $params = array ()) {
         /**
          * make a withdrawal
          * @see https://github.com/Bitrue-exchange/Spot-official-api-docs#withdraw-commit--withdraw_data
@@ -2693,28 +2720,20 @@ class bitrue extends Exchange {
         $this->check_address($address);
         $this->load_markets();
         $currency = $this->currency($code);
-        $chainName = $this->safe_string_2($params, 'network', 'chainName');
-        if ($chainName === null) {
-            $networks = $this->safe_value($currency, 'networks', array());
-            $optionsNetworks = $this->safe_value($this->options, 'networks', array());
-            $network = $this->safe_string_upper($params, 'network'); // this line allows the user to specify either ERC20 or ETH
-            $network = $this->safe_string($optionsNetworks, $network, $network);
-            $networkEntry = $this->safe_value($networks, $network, array());
-            $chainName = $this->safe_string($networkEntry, 'id'); // handle ERC20>ETH alias
-            if ($chainName === null) {
-                throw new ArgumentsRequired($this->id . ' withdraw() requires a $network parameter or a $chainName parameter');
-            }
-            $params = $this->omit($params, 'network');
-        }
         $request = array(
-            'coin' => strtoupper($currency['id']),
+            'coin' => $currency['id'],
             'amount' => $amount,
             'addressTo' => $address,
-            'chainName' => $chainName, // 'ERC20', 'TRC20', 'SOL'
+            // 'chainName' => chainName, // 'ERC20', 'TRC20', 'SOL'
             // 'addressMark' => '', // mark of $address
             // 'addrType' => '', // type of $address
             // 'tag' => $tag,
         );
+        $networkCode = null;
+        list($networkCode, $params) = $this->handle_network_code_and_params($params);
+        if ($networkCode !== null) {
+            $request['chainName'] = $this->network_code_to_id($networkCode);
+        }
         if ($tag !== null) {
             $request['tag'] = $tag;
         }
@@ -2883,11 +2902,11 @@ class bitrue extends Exchange {
         //         )]
         //     }
         //
-        $data = $this->safe_value($response, 'data', array());
+        $data = $this->safe_list($response, 'data', array());
         return $this->parse_transfers($data, $currency, $since, $limit);
     }
 
-    public function transfer(string $code, $amount, $fromAccount, $toAccount, $params = array ()) {
+    public function transfer(string $code, float $amount, string $fromAccount, string $toAccount, $params = array ()): TransferEntry {
         /**
          * transfer $currency internally between wallets on the same account
          * @see https://www.bitrue.com/api-docs#new-future-account-transfer-user_data-hmac-sha256
@@ -2921,7 +2940,7 @@ class bitrue extends Exchange {
         return $this->parse_transfer($data, $currency);
     }
 
-    public function set_leverage($leverage, ?string $symbol = null, $params = array ()) {
+    public function set_leverage(?int $leverage, ?string $symbol = null, $params = array ()) {
         /**
          * set the level of $leverage for a $market
          * @see https://www.bitrue.com/api-docs#change-initial-$leverage-trade-hmac-sha256
@@ -2966,7 +2985,7 @@ class bitrue extends Exchange {
         );
     }
 
-    public function set_margin(string $symbol, $amount, $params = array ()) {
+    public function set_margin(string $symbol, float $amount, $params = array ()) {
         /**
          * Either adds or reduces margin in an isolated position in order to set the margin to a specific value
          * @see https://www.bitrue.com/api-docs#modify-isolated-position-margin-trade-hmac-sha256
@@ -3096,7 +3115,7 @@ class bitrue extends Exchange {
         }
         // check $success value for wapi endpoints
         // $response in format array('msg' => 'The coin does not exist.', 'success' => true/false)
-        $success = $this->safe_value($response, 'success', true);
+        $success = $this->safe_bool($response, 'success', true);
         if (!$success) {
             $messageInner = $this->safe_string($response, 'msg');
             $parsedMessage = null;
