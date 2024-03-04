@@ -887,11 +887,12 @@ export default class whitebit extends whitebitRest {
         if (!this.handleErrorMessage (client, message)) {
             return;
         }
-        const id = this.safeInteger (message, 'id');
-        if (id === 0) {
+        const result = this.safeString (message, 'result');
+        if (result === 'pong') {
             this.handlePong (client, message);
             return;
         }
+        const id = this.safeInteger (message, 'id');
         if (id !== undefined) {
             this.handleSubscriptionStatus (client, message, id);
             return;
