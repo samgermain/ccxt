@@ -2722,7 +2722,7 @@ public partial class hitbtc : Exchange
             object parsedNetwork = this.safeString(networks, network);
             if (isTrue(!isEqual(parsedNetwork, null)))
             {
-                ((IDictionary<string,object>)request)["currency"] = parsedNetwork;
+                ((IDictionary<string,object>)request)["network_code"] = parsedNetwork;
             }
             parameters = this.omit(parameters, "network");
         }
@@ -3498,7 +3498,20 @@ public partial class hitbtc : Exchange
         //         ]
         //     }
         //
-        return this.safeNumber(response, "leverage");
+        return this.parseLeverage(response, market);
+    }
+
+    public override object parseLeverage(object leverage, object market = null)
+    {
+        object marketId = this.safeString(leverage, "symbol");
+        object leverageValue = this.safeInteger(leverage, "leverage");
+        return new Dictionary<string, object>() {
+            { "info", leverage },
+            { "symbol", this.safeSymbol(marketId, market) },
+            { "marginMode", this.safeStringLower(leverage, "type") },
+            { "longLeverage", leverageValue },
+            { "shortLeverage", leverageValue },
+        };
     }
 
     public async override Task<object> setLeverage(object leverage, object symbol = null, object parameters = null)

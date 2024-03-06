@@ -42,11 +42,11 @@ use React\EventLoop\Loop;
 
 use Exception;
 
-$version = '4.2.57';
+$version = '4.2.60';
 
 class Exchange extends \ccxt\Exchange {
 
-    const VERSION = '4.2.57';
+    const VERSION = '4.2.60';
 
     public $browser;
     public $marketsLoading = null;
@@ -923,7 +923,14 @@ class Exchange extends \ccxt\Exchange {
     }
 
     public function fetch_leverage(string $symbol, $params = array ()) {
-        throw new NotSupported($this->id . ' fetchLeverage() is not supported yet');
+        return Async\async(function () use ($symbol, $params) {
+            if ($this->has['fetchLeverages']) {
+                $leverages = Async\await($this->fetchLeverages (array( $symbol ), $params));
+                return $this->safe_dict($leverages, $symbol);
+            } else {
+                throw new NotSupported($this->id . ' fetchLeverage() is not supported yet');
+            }
+        }) ();
     }
 
     public function fetch_leverages(?array $symbols = null, $params = array ()) {
@@ -2942,6 +2949,8 @@ class Exchange extends \ccxt\Exchange {
         if ($value !== null) {
             $params = $this->omit ($params, array( $optionName, $defaultOptionName ));
         } else {
+            // handle routed methods like "watchTrades > watchTradesForSymbols" (or "watchTicker > watchTickers")
+            list($methodName, $params) = $this->handleParamString ($params, 'callerMethodName', $methodName);
             // check if exchange has properties for this method
             $exchangeWideMethodOptions = $this->safe_value($this->options, $methodName);
             if ($exchangeWideMethodOptions !== null) {
@@ -4792,5 +4801,22 @@ class Exchange extends \ccxt\Exchange {
 
     public function parse_margin_mode($marginMode, ?array $market = null) {
         throw new NotSupported($this->id . ' parseMarginMode () is not supported yet');
+    }
+
+    public function parse_leverages(mixed $response, ?array $symbols = null, ?string $symbolKey = null, ?string $marketType = null) {
+        $leverageStructures = array();
+        for ($i = 0; $i < count($response); $i++) {
+            $info = $response[$i];
+            $marketId = $this->safe_string($info, $symbolKey);
+            $market = $this->safe_market($marketId, null, null, $marketType);
+            if (($symbols === null) || $this->in_array($market['symbol'], $symbols)) {
+                $leverageStructures[$market['symbol']] = $this->parse_leverage($info, $market);
+            }
+        }
+        return $leverageStructures;
+    }
+
+    public function parse_leverage($leverage, ?array $market = null) {
+        throw new NotSupported($this->id . ' parseLeverage() is not supported yet');
     }
 }
