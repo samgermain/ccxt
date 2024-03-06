@@ -563,9 +563,9 @@ export default class coinex extends coinexRest {
         }
         const url = this.urls['api']['ws'][type];
         const messageHash = 'ohlcv';
-        const watchOHLCVWarning = this.safeValue (this.options, 'watchOHLCVWarning', true);
-        const client = this.safeDict (this.clients, url, {});
-        const clientSub = this.safeDict (client, 'subscriptions', {});
+        const watchOHLCVWarning = this.safeBool (this.options, 'watchOHLCVWarning', true);
+        const client = this.safeValue (this.clients, url, {});
+        const clientSub = this.safeValue (client, 'subscriptions', {});
         const existingSubscription = this.safeValue (clientSub, messageHash);
         const subSymbol = this.safeString (existingSubscription, 'symbol');
         const subTimeframe = this.safeString (existingSubscription, 'timeframe');
