@@ -145,7 +145,7 @@ public partial class wavesexchange : Exchange
                     { "id", "EMAMLxDnv3xiz8RXg8Btj33jcEw3wLczL3JKYYmuubpc" },
                     { "numericId", null },
                     { "code", "WX" },
-                    { "precision", this.parseNumber("8") },
+                    { "precision", this.parseToInt("8") },
                 }) },
             } },
             { "precisionMode", DECIMAL_PLACES },
@@ -1338,7 +1338,7 @@ public partial class wavesexchange : Exchange
             { "amountAsset", amountAsset },
             { "priceAsset", priceAsset },
         };
-        object sandboxMode = this.safeValue(this.options, "sandboxMode", false);
+        object sandboxMode = this.safeBool(this.options, "sandboxMode", false);
         object chainId = ((bool) isTrue((sandboxMode))) ? 84 : 87;
         object body = new Dictionary<string, object>() {
             { "senderPublicKey", this.apiKey },

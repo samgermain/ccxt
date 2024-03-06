@@ -1670,7 +1670,7 @@ public partial class probit : Exchange
         //         ]
         //     }
         //
-        object data = this.safeValue(response, "data", new Dictionary<string, object>() {});
+        object data = this.safeList(response, "data", new List<object>() {});
         return this.parseTransactions(data, currency, since, limit);
     }
 
@@ -1708,13 +1708,13 @@ public partial class probit : Exchange
         object currencyId = this.safeString(transaction, "currency_id");
         object code = this.safeCurrencyCode(currencyId);
         object status = this.parseTransactionStatus(this.safeString(transaction, "status"));
-        object feeCost = this.safeNumber(transaction, "fee");
+        object feeCostString = this.safeString(transaction, "fee");
         object fee = null;
-        if (isTrue(isTrue(!isEqual(feeCost, null)) && isTrue(!isEqual(feeCost, 0))))
+        if (isTrue(isTrue(!isEqual(feeCostString, null)) && isTrue(!isEqual(feeCostString, "0"))))
         {
             fee = new Dictionary<string, object>() {
                 { "currency", code },
-                { "cost", feeCost },
+                { "cost", this.parseNumber(feeCostString) },
             };
         }
         return new Dictionary<string, object>() {

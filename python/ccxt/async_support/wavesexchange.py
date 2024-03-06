@@ -325,7 +325,7 @@ class wavesexchange(Exchange, ImplicitAPI):
                 },
             },
             'currencies': {
-                'WX': self.safe_currency_structure({'id': 'EMAMLxDnv3xiz8RXg8Btj33jcEw3wLczL3JKYYmuubpc', 'numericId': None, 'code': 'WX', 'precision': self.parse_number('8')}),
+                'WX': self.safe_currency_structure({'id': 'EMAMLxDnv3xiz8RXg8Btj33jcEw3wLczL3JKYYmuubpc', 'numericId': None, 'code': 'WX', 'precision': self.parse_to_int('8')}),
             },
             'precisionMode': DECIMAL_PLACES,
             'options': {
@@ -1308,7 +1308,7 @@ class wavesexchange(Exchange, ImplicitAPI):
             'amountAsset': amountAsset,
             'priceAsset': priceAsset,
         }
-        sandboxMode = self.safe_value(self.options, 'sandboxMode', False)
+        sandboxMode = self.safe_bool(self.options, 'sandboxMode', False)
         chainId = 84 if (sandboxMode) else 87
         body = {
             'senderPublicKey': self.apiKey,

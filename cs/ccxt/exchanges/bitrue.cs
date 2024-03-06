@@ -2634,20 +2634,29 @@ public partial class bitrue : Exchange
         }
         object response = await this.spotV1PrivateGetWithdrawHistory(this.extend(request, parameters));
         //
-        //     {
-        //         "code": 200,
-        //         "msg": "succ",
-        //         "data": {
-        //             "msg": null,
-        //             "amount": 1000,
-        //             "fee": 1,
-        //             "ctime": null,
-        //             "coin": "usdt_erc20",
-        //             "addressTo": "0x2edfae3878d7b6db70ce4abed177ab2636f60c83"
-        //         }
-        //     }
+        //    {
+        //        "code": 200,
+        //        "msg": "succ",
+        //        "data": [
+        //            {
+        //                "id": 183745,
+        //                "symbol": "usdt_erc20",
+        //                "amount": "8.4000000000000000",
+        //                "fee": "1.6000000000000000",
+        //                "payAmount": "0.0000000000000000",
+        //                "createdAt": 1595336441000,
+        //                "updatedAt": 1595336576000,
+        //                "addressFrom": "",
+        //                "addressTo": "0x2edfae3878d7b6db70ce4abed177ab2636f60c83",
+        //                "txid": "",
+        //                "confirmations": 0,
+        //                "status": 6,
+        //                "tagType": null
+        //            }
+        //        ]
+        //    }
         //
-        object data = this.safeValue(response, "data", new Dictionary<string, object>() {});
+        object data = this.safeList(response, "data", new List<object>() {});
         return this.parseTransactions(data, currency);
     }
 
@@ -2826,27 +2835,19 @@ public partial class bitrue : Exchange
         this.checkAddress(address);
         await this.loadMarkets();
         object currency = this.currency(code);
-        object chainName = this.safeString2(parameters, "network", "chainName");
-        if (isTrue(isEqual(chainName, null)))
-        {
-            object networks = this.safeValue(currency, "networks", new Dictionary<string, object>() {});
-            object optionsNetworks = this.safeValue(this.options, "networks", new Dictionary<string, object>() {});
-            object network = this.safeStringUpper(parameters, "network"); // this line allows the user to specify either ERC20 or ETH
-            network = this.safeString(optionsNetworks, network, network);
-            object networkEntry = this.safeValue(networks, network, new Dictionary<string, object>() {});
-            chainName = this.safeString(networkEntry, "id"); // handle ERC20>ETH alias
-            if (isTrue(isEqual(chainName, null)))
-            {
-                throw new ArgumentsRequired ((string)add(this.id, " withdraw() requires a network parameter or a chainName parameter")) ;
-            }
-            parameters = this.omit(parameters, "network");
-        }
         object request = new Dictionary<string, object>() {
-            { "coin", ((string)getValue(currency, "id")).ToUpper() },
+            { "coin", getValue(currency, "id") },
             { "amount", amount },
             { "addressTo", address },
-            { "chainName", chainName },
         };
+        object networkCode = null;
+        var networkCodeparametersVariable = this.handleNetworkCodeAndParams(parameters);
+        networkCode = ((IList<object>)networkCodeparametersVariable)[0];
+        parameters = ((IList<object>)networkCodeparametersVariable)[1];
+        if (isTrue(!isEqual(networkCode, null)))
+        {
+            ((IDictionary<string,object>)request)["chainName"] = this.networkCodeToId(networkCode);
+        }
         if (isTrue(!isEqual(tag, null)))
         {
             ((IDictionary<string,object>)request)["tag"] = tag;
@@ -3041,7 +3042,7 @@ public partial class bitrue : Exchange
         //         }]
         //     }
         //
-        object data = this.safeValue(response, "data", new Dictionary<string, object>() {});
+        object data = this.safeList(response, "data", new List<object>() {});
         return this.parseTransfers(data, currency, since, limit);
     }
 
@@ -3138,7 +3139,7 @@ public partial class bitrue : Exchange
         };
     }
 
-    public async virtual Task<object> setMargin(object symbol, object amount, object parameters = null)
+    public async override Task<object> setMargin(object symbol, object amount, object parameters = null)
     {
         /**
         * @method

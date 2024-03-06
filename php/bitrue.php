@@ -1850,7 +1850,7 @@ class bitrue extends Exchange {
         ), $market);
     }
 
-    public function create_market_buy_order_with_cost(string $symbol, $cost, $params = array ()) {
+    public function create_market_buy_order_with_cost(string $symbol, float $cost, $params = array ()) {
         /**
          * create a $market buy order by providing the $symbol and $cost
          * @see https://www.bitrue.com/api-docs#new-order-trade-hmac-sha256
@@ -2536,20 +2536,29 @@ class bitrue extends Exchange {
         }
         $response = $this->spotV1PrivateGetWithdrawHistory (array_merge($request, $params));
         //
-        //     {
-        //         "code" => 200,
-        //         "msg" => "succ",
-        //         "data" => {
-        //             "msg" => null,
-        //             "amount" => 1000,
-        //             "fee" => 1,
-        //             "ctime" => null,
-        //             "coin" => "usdt_erc20",
-        //             "addressTo" => "0x2edfae3878d7b6db70ce4abed177ab2636f60c83"
-        //         }
-        //     }
+        //    {
+        //        "code" => 200,
+        //        "msg" => "succ",
+        //        "data" => array(
+        //            {
+        //                "id" => 183745,
+        //                "symbol" => "usdt_erc20",
+        //                "amount" => "8.4000000000000000",
+        //                "fee" => "1.6000000000000000",
+        //                "payAmount" => "0.0000000000000000",
+        //                "createdAt" => 1595336441000,
+        //                "updatedAt" => 1595336576000,
+        //                "addressFrom" => "",
+        //                "addressTo" => "0x2edfae3878d7b6db70ce4abed177ab2636f60c83",
+        //                "txid" => "",
+        //                "confirmations" => 0,
+        //                "status" => 6,
+        //                "tagType" => null
+        //            }
+        //        )
+        //    }
         //
-        $data = $this->safe_value($response, 'data', array());
+        $data = $this->safe_list($response, 'data', array());
         return $this->parse_transactions($data, $currency);
     }
 
@@ -2711,28 +2720,20 @@ class bitrue extends Exchange {
         $this->check_address($address);
         $this->load_markets();
         $currency = $this->currency($code);
-        $chainName = $this->safe_string_2($params, 'network', 'chainName');
-        if ($chainName === null) {
-            $networks = $this->safe_value($currency, 'networks', array());
-            $optionsNetworks = $this->safe_value($this->options, 'networks', array());
-            $network = $this->safe_string_upper($params, 'network'); // this line allows the user to specify either ERC20 or ETH
-            $network = $this->safe_string($optionsNetworks, $network, $network);
-            $networkEntry = $this->safe_value($networks, $network, array());
-            $chainName = $this->safe_string($networkEntry, 'id'); // handle ERC20>ETH alias
-            if ($chainName === null) {
-                throw new ArgumentsRequired($this->id . ' withdraw() requires a $network parameter or a $chainName parameter');
-            }
-            $params = $this->omit($params, 'network');
-        }
         $request = array(
-            'coin' => strtoupper($currency['id']),
+            'coin' => $currency['id'],
             'amount' => $amount,
             'addressTo' => $address,
-            'chainName' => $chainName, // 'ERC20', 'TRC20', 'SOL'
+            // 'chainName' => chainName, // 'ERC20', 'TRC20', 'SOL'
             // 'addressMark' => '', // mark of $address
             // 'addrType' => '', // type of $address
             // 'tag' => $tag,
         );
+        $networkCode = null;
+        list($networkCode, $params) = $this->handle_network_code_and_params($params);
+        if ($networkCode !== null) {
+            $request['chainName'] = $this->network_code_to_id($networkCode);
+        }
         if ($tag !== null) {
             $request['tag'] = $tag;
         }
@@ -2901,11 +2902,11 @@ class bitrue extends Exchange {
         //         )]
         //     }
         //
-        $data = $this->safe_value($response, 'data', array());
+        $data = $this->safe_list($response, 'data', array());
         return $this->parse_transfers($data, $currency, $since, $limit);
     }
 
-    public function transfer(string $code, float $amount, $fromAccount, $toAccount, $params = array ()): TransferEntry {
+    public function transfer(string $code, float $amount, string $fromAccount, string $toAccount, $params = array ()): TransferEntry {
         /**
          * transfer $currency internally between wallets on the same account
          * @see https://www.bitrue.com/api-docs#new-future-account-transfer-user_data-hmac-sha256
@@ -2984,7 +2985,7 @@ class bitrue extends Exchange {
         );
     }
 
-    public function set_margin(string $symbol, $amount, $params = array ()) {
+    public function set_margin(string $symbol, float $amount, $params = array ()) {
         /**
          * Either adds or reduces margin in an isolated position in order to set the margin to a specific value
          * @see https://www.bitrue.com/api-docs#modify-isolated-position-margin-trade-hmac-sha256

@@ -1287,7 +1287,7 @@ export default class lbank extends Exchange {
         return result;
     }
 
-    async createMarketBuyOrderWithCost (symbol: string, cost, params = {}) {
+    async createMarketBuyOrderWithCost (symbol: string, cost: number, params = {}) {
         /**
          * @method
          * @name lbank#createMarketBuyOrderWithCost
@@ -2309,7 +2309,7 @@ export default class lbank extends Exchange {
         return this.parseTransactions (withdraws, currency, since, limit);
     }
 
-    async fetchTransactionFees (codes = undefined, params = {}) {
+    async fetchTransactionFees (codes: string[] = undefined, params = {}) {
         /**
          * @method
          * @name lbank#fetchTransactionFees
@@ -2711,7 +2711,7 @@ export default class lbank extends Exchange {
             const uppercaseHash = hash.toUpperCase ();
             let sign = undefined;
             if (signatureMethod === 'RSA') {
-                const cacheSecretAsPem = this.safeValue (this.options, 'cacheSecretAsPem', true);
+                const cacheSecretAsPem = this.safeBool (this.options, 'cacheSecretAsPem', true);
                 let pem = undefined;
                 if (cacheSecretAsPem) {
                     pem = this.safeValue (this.options, 'pem');

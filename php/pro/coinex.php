@@ -400,14 +400,17 @@ class coinex extends \ccxt\async\coinex {
         $keys = is_array($this->ohlcvs) ? array_keys($this->ohlcvs) : array();
         $keysLength = count($keys);
         if ($keysLength === 0) {
+            $this->ohlcvs['unknown'] = array();
             $limit = $this->safe_integer($this->options, 'OHLCVLimit', 1000);
-            $this->ohlcvs = new ArrayCacheByTimestamp ($limit);
+            $stored = new ArrayCacheByTimestamp ($limit);
+            $this->ohlcvs['unknown']['unknown'] = $stored;
         }
+        $ohlcv = $this->ohlcvs['unknown']['unknown'];
         for ($i = 0; $i < count($ohlcvs); $i++) {
             $candle = $ohlcvs[$i];
-            $this->ohlcvs.append ($candle);
+            $ohlcv->append ($candle);
         }
-        $client->resolve ($this->ohlcvs, $messageHash);
+        $client->resolve ($ohlcv, $messageHash);
     }
 
     public function watch_ticker(string $symbol, $params = array ()): PromiseInterface {
@@ -560,7 +563,7 @@ class coinex extends \ccxt\async\coinex {
             }
             $url = $this->urls['api']['ws'][$type];
             $messageHash = 'ohlcv';
-            $watchOHLCVWarning = $this->safe_value($this->options, 'watchOHLCVWarning', true);
+            $watchOHLCVWarning = $this->safe_bool($this->options, 'watchOHLCVWarning', true);
             $client = $this->safe_value($this->clients, $url, array());
             $clientSub = $this->safe_value($client, 'subscriptions', array());
             $existingSubscription = $this->safe_value($clientSub, $messageHash);
@@ -592,7 +595,7 @@ class coinex extends \ccxt\async\coinex {
         }) ();
     }
 
-    public function fetch_ohlcv_ws($symbol, $timeframe = '1m', $since = null, $limit = null, $params = array ()): PromiseInterface {
+    public function fetch_ohlcv_ws(string $symbol, $timeframe = '1m', ?int $since = null, ?int $limit = null, $params = array ()): PromiseInterface {
         return Async\async(function () use ($symbol, $timeframe, $since, $limit, $params) {
             /**
              * @see https://viabtc.github.io/coinex_api_en_doc/spot/#docsspot004_websocket005_kline_query

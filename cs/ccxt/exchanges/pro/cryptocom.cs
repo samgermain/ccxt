@@ -626,7 +626,7 @@ public partial class cryptocom : ccxt.cryptocom
         var client = this.client(url);
         this.setPositionsCache(client as WebSocketClient, symbols);
         object fetchPositionsSnapshot = this.handleOption("watchPositions", "fetchPositionsSnapshot", true);
-        object awaitPositionsSnapshot = this.safeValue("watchPositions", "awaitPositionsSnapshot", true);
+        object awaitPositionsSnapshot = this.safeBool("watchPositions", "awaitPositionsSnapshot", true);
         if (isTrue(isTrue(isTrue(fetchPositionsSnapshot) && isTrue(awaitPositionsSnapshot)) && isTrue(isEqual(this.positions, null))))
         {
             object snapshot = await client.future("fetchPositionsSnapshot");
@@ -1053,7 +1053,7 @@ public partial class cryptocom : ccxt.cryptocom
             // channel might be user.trade.BTC_USDT
             this.handleTrades(client as WebSocketClient, result);
         }
-        if (isTrue(isTrue((!isEqual(channel, null))) && isTrue(((string)channel).StartsWith("user.order"))))
+        if (isTrue(isTrue((!isEqual(channel, null))) && isTrue(((string)channel).StartsWith(((string)"user.order")))))
         {
             // channel might be user.order.BTC_USDT
             this.handleOrders(client as WebSocketClient, result);

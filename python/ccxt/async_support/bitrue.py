@@ -1801,7 +1801,7 @@ class bitrue(Exchange, ImplicitAPI):
             'trades': fills,
         }, market)
 
-    async def create_market_buy_order_with_cost(self, symbol: str, cost, params={}):
+    async def create_market_buy_order_with_cost(self, symbol: str, cost: float, params={}):
         """
         create a market buy order by providing the symbol and cost
         :see: https://www.bitrue.com/api-docs#new-order-trade-hmac-sha256
@@ -2436,20 +2436,29 @@ class bitrue(Exchange, ImplicitAPI):
             request['limit'] = limit
         response = await self.spotV1PrivateGetWithdrawHistory(self.extend(request, params))
         #
-        #     {
-        #         "code": 200,
-        #         "msg": "succ",
-        #         "data": {
-        #             "msg": null,
-        #             "amount": 1000,
-        #             "fee": 1,
-        #             "ctime": null,
-        #             "coin": "usdt_erc20",
-        #             "addressTo": "0x2edfae3878d7b6db70ce4abed177ab2636f60c83"
-        #         }
-        #     }
+        #    {
+        #        "code": 200,
+        #        "msg": "succ",
+        #        "data": [
+        #            {
+        #                "id": 183745,
+        #                "symbol": "usdt_erc20",
+        #                "amount": "8.4000000000000000",
+        #                "fee": "1.6000000000000000",
+        #                "payAmount": "0.0000000000000000",
+        #                "createdAt": 1595336441000,
+        #                "updatedAt": 1595336576000,
+        #                "addressFrom": "",
+        #                "addressTo": "0x2edfae3878d7b6db70ce4abed177ab2636f60c83",
+        #                "txid": "",
+        #                "confirmations": 0,
+        #                "status": 6,
+        #                "tagType": null
+        #            }
+        #        ]
+        #    }
         #
-        data = self.safe_value(response, 'data', {})
+        data = self.safe_list(response, 'data', [])
         return self.parse_transactions(data, currency)
 
     def parse_transaction_status_by_type(self, status, type=None):
@@ -2602,26 +2611,19 @@ class bitrue(Exchange, ImplicitAPI):
         self.check_address(address)
         await self.load_markets()
         currency = self.currency(code)
-        chainName = self.safe_string_2(params, 'network', 'chainName')
-        if chainName is None:
-            networks = self.safe_value(currency, 'networks', {})
-            optionsNetworks = self.safe_value(self.options, 'networks', {})
-            network = self.safe_string_upper(params, 'network')  # self line allows the user to specify either ERC20 or ETH
-            network = self.safe_string(optionsNetworks, network, network)
-            networkEntry = self.safe_value(networks, network, {})
-            chainName = self.safe_string(networkEntry, 'id')  # handle ERC20>ETH alias
-            if chainName is None:
-                raise ArgumentsRequired(self.id + ' withdraw() requires a network parameter or a chainName parameter')
-            params = self.omit(params, 'network')
         request = {
-            'coin': currency['id'].upper(),
+            'coin': currency['id'],
             'amount': amount,
             'addressTo': address,
-            'chainName': chainName,  # 'ERC20', 'TRC20', 'SOL'
+            # 'chainName': chainName,  # 'ERC20', 'TRC20', 'SOL'
             # 'addressMark': '',  # mark of address
             # 'addrType': '',  # type of address
             # 'tag': tag,
         }
+        networkCode = None
+        networkCode, params = self.handle_network_code_and_params(params)
+        if networkCode is not None:
+            request['chainName'] = self.network_code_to_id(networkCode)
         if tag is not None:
             request['tag'] = tag
         response = await self.spotV1PrivatePostWithdrawCommit(self.extend(request, params))
@@ -2776,10 +2778,10 @@ class bitrue(Exchange, ImplicitAPI):
         #         }]
         #     }
         #
-        data = self.safe_value(response, 'data', {})
+        data = self.safe_list(response, 'data', [])
         return self.parse_transfers(data, currency, since, limit)
 
-    async def transfer(self, code: str, amount: float, fromAccount, toAccount, params={}) -> TransferEntry:
+    async def transfer(self, code: str, amount: float, fromAccount: str, toAccount: str, params={}) -> TransferEntry:
         """
         transfer currency internally between wallets on the same account
         :see: https://www.bitrue.com/api-docs#new-future-account-transfer-user_data-hmac-sha256
@@ -2851,7 +2853,7 @@ class bitrue(Exchange, ImplicitAPI):
             'status': None,
         }
 
-    async def set_margin(self, symbol: str, amount, params={}):
+    async def set_margin(self, symbol: str, amount: float, params={}):
         """
         Either adds or reduces margin in an isolated position in order to set the margin to a specific value
         :see: https://www.bitrue.com/api-docs#modify-isolated-position-margin-trade-hmac-sha256
