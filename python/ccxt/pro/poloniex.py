@@ -6,12 +6,12 @@
 import ccxt.async_support
 from ccxt.async_support.base.ws.cache import ArrayCache, ArrayCacheBySymbolById, ArrayCacheByTimestamp
 import hashlib
-from ccxt.base.types import Balances, Int, Order, OrderBook, OrderSide, OrderType, Str, Strings, Ticker, Trade
+from ccxt.base.types import Balances, Int, Order, OrderBook, OrderSide, OrderType, Str, Strings, Ticker, Tickers, Trade
 from ccxt.async_support.base.ws.client import Client
 from typing import List
 from ccxt.base.errors import ExchangeError
-from ccxt.base.errors import ArgumentsRequired
 from ccxt.base.errors import BadRequest
+from ccxt.base.errors import InvalidOrder
 from ccxt.base.errors import AuthenticationError
 from ccxt.base.precise import Precise
 
@@ -174,7 +174,7 @@ class poloniex(ccxt.async_support.poloniex):
         :returns dict: data from the websocket stream
         """
         url = self.urls['api']['ws']['private']
-        messageHash = self.nonce()
+        messageHash = str(self.nonce())
         subscribe = {
             'id': messageHash,
             'event': name,
@@ -194,6 +194,7 @@ class poloniex(ccxt.async_support.poloniex):
         :param dict [params]: extra parameters specific to the poloniex api endpoint
         :param str [params.timeInForce]: GTC(default), IOC, FOK
         :param str [params.clientOrderId]: Maximum 64-character length.*
+        :param float [params.cost]: *spot market buy only* the quote quantity that can be used alternative for the amount
          *
          * EXCHANGE SPECIFIC PARAMETERS
         :param str [params.amount]: quote units for the order
@@ -216,21 +217,24 @@ class poloniex(ccxt.async_support.poloniex):
             'type': type.upper(),
         }
         if (uppercaseType == 'MARKET') and (uppercaseSide == 'BUY'):
-            quoteAmount = self.safe_string(params, 'amount')
-            if (quoteAmount is None) and (self.options['createMarketBuyOrderRequiresPrice']):
-                cost = self.safe_number(params, 'cost')
-                params = self.omit(params, 'cost')
-                if price is None and cost is None:
-                    raise ArgumentsRequired(self.id + ' createOrder() requires the price argument with market buy orders to calculate total order cost(amount to spend), where cost = amount * price. Supply a price argument to createOrder() call if you want the cost to be calculated for you from price and amount, or, alternatively, add .options["createMarketBuyOrderRequiresPrice"] = False to supply the cost in the amount argument(the exchange-specific behaviour)')
+            quoteAmount = None
+            createMarketBuyOrderRequiresPrice = True
+            createMarketBuyOrderRequiresPrice, params = self.handle_option_and_params(params, 'createOrder', 'createMarketBuyOrderRequiresPrice', True)
+            cost = self.safe_number(params, 'cost')
+            params = self.omit(params, 'cost')
+            if cost is not None:
+                quoteAmount = self.cost_to_precision(symbol, cost)
+            elif createMarketBuyOrderRequiresPrice:
+                if price is None:
+                    raise InvalidOrder(self.id + ' createOrder() requires the price argument for market buy orders to calculate the total cost to spend(amount * price), alternatively set the createMarketBuyOrderRequiresPrice option or param to False and pass the cost to spend(quote quantity) in the amount argument')
                 else:
                     amountString = self.number_to_string(amount)
                     priceString = self.number_to_string(price)
-                    quote = Precise.string_mul(amountString, priceString)
-                    amount = cost if (cost is not None) else self.parse_number(quote)
-                    quoteAmount = self.cost_to_precision(symbol, amount)
+                    costRequest = Precise.string_mul(amountString, priceString)
+                    quoteAmount = self.cost_to_precision(symbol, costRequest)
             else:
                 quoteAmount = self.cost_to_precision(symbol, amount)
-            request['amount'] = self.amount_to_precision(market['symbol'], quoteAmount)
+            request['amount'] = quoteAmount
         else:
             request['quantity'] = self.amount_to_precision(market['symbol'], amount)
             if price is not None:
@@ -337,7 +341,7 @@ class poloniex(ccxt.async_support.poloniex):
         tickers = await self.watch_tickers([symbol], params)
         return self.safe_value(tickers, symbol)
 
-    async def watch_tickers(self, symbols=None, params={}):
+    async def watch_tickers(self, symbols: Strings = None, params={}) -> Tickers:
         """
         watches a price ticker, a statistical calculation with the information calculated over the past 24 hours for a specific market
         :see: https://docs.poloniex.com/#public-channels-market-data-ticker
@@ -494,7 +498,8 @@ class poloniex(ccxt.async_support.poloniex):
         marketId = self.safe_string(data, 'symbol')
         symbol = self.safe_symbol(marketId)
         market = self.safe_market(symbol)
-        timeframe = self.find_timeframe(channel)
+        timeframes = self.safe_value(self.options, 'timeframes', {})
+        timeframe = self.find_timeframe(channel, timeframes)
         messageHash = channel + '::' + symbol
         parsed = self.parse_ws_ohlcv(data, market)
         self.ohlcvs[symbol] = self.safe_value(self.ohlcvs, symbol, {})
@@ -875,7 +880,7 @@ class poloniex(ccxt.async_support.poloniex):
         #    }
         #
         data = self.safe_value(message, 'data', [])
-        newTickers = []
+        newTickers = {}
         for i in range(0, len(data)):
             item = data[i]
             marketId = self.safe_string(item, 'symbol')
@@ -883,7 +888,7 @@ class poloniex(ccxt.async_support.poloniex):
                 ticker = self.parse_ticker(item)
                 symbol = ticker['symbol']
                 self.tickers[symbol] = ticker
-                newTickers.append(ticker)
+                newTickers[symbol] = ticker
         messageHashes = self.find_message_hashes(client, 'ticker::')
         for i in range(0, len(messageHashes)):
             messageHash = messageHashes[i]
@@ -969,13 +974,15 @@ class poloniex(ccxt.async_support.poloniex):
                         bid = self.safe_value(bids, j)
                         price = self.safe_number(bid, 0)
                         amount = self.safe_number(bid, 1)
-                        orderbook['bids'].store(price, amount)
+                        bidsSide = orderbook['bids']
+                        bidsSide.store(price, amount)
                 if asks is not None:
                     for j in range(0, len(asks)):
                         ask = self.safe_value(asks, j)
                         price = self.safe_number(ask, 0)
                         amount = self.safe_number(ask, 1)
-                        orderbook['asks'].store(price, amount)
+                        asksSide = orderbook['asks']
+                        asksSide.store(price, amount)
                 orderbook['symbol'] = symbol
                 orderbook['timestamp'] = timestamp
                 orderbook['datetime'] = self.iso8601(timestamp)
@@ -1099,12 +1106,12 @@ class poloniex(ccxt.async_support.poloniex):
             if orderId == '0':
                 self.handle_error_message(client, item)
             else:
-                return self.handle_order_request(client, message)
+                self.handle_order_request(client, message)
         else:
             data = self.safe_value(message, 'data', [])
             dataLength = len(data)
             if dataLength > 0:
-                return method(client, message)
+                method(client, message)
 
     def handle_error_message(self, client: Client, message):
         #

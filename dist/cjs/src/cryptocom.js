@@ -96,6 +96,8 @@ class cryptocom extends cryptocom$1 {
                 'fetchVolatilityHistory': false,
                 'fetchWithdrawals': true,
                 'reduceMargin': false,
+                'repayCrossMargin': false,
+                'repayIsolatedMargin': false,
                 'setLeverage': false,
                 'setMarginMode': false,
                 'setPositionMode': false,
@@ -768,6 +770,7 @@ class cryptocom extends cryptocom$1 {
         //                     "p": "26386.00",
         //                     "q": "0.00453",
         //                     "t": 1686944282062,
+        //                     "tn" : 1704476468851524373,
         //                     "d": "4611686018455979970",
         //                     "i": "BTC_USD"
         //                 },
@@ -1051,7 +1054,7 @@ class cryptocom extends cryptocom$1 {
                 request['time_in_force'] = timeInForce;
             }
         }
-        const postOnly = this.safeValue(params, 'postOnly', false);
+        const postOnly = this.safeBool(params, 'postOnly', false);
         if ((postOnly) || (timeInForce === 'PO')) {
             request['exec_inst'] = ['POST_ONLY'];
             request['time_in_force'] = 'GOOD_TILL_CANCEL';
@@ -1064,10 +1067,10 @@ class cryptocom extends cryptocom$1 {
         const isTakeProfitTrigger = (takeProfitPrice !== undefined);
         if (isTrigger) {
             request['ref_price'] = this.priceToPrecision(symbol, triggerPrice);
-            price = price.toString();
+            const priceString = this.numberToString(price);
             if ((uppercaseType === 'LIMIT') || (uppercaseType === 'STOP_LIMIT') || (uppercaseType === 'TAKE_PROFIT_LIMIT')) {
                 if (side === 'buy') {
-                    if (Precise["default"].stringLt(price, triggerPrice)) {
+                    if (Precise["default"].stringLt(priceString, triggerPrice)) {
                         request['type'] = 'TAKE_PROFIT_LIMIT';
                     }
                     else {
@@ -1075,7 +1078,7 @@ class cryptocom extends cryptocom$1 {
                     }
                 }
                 else {
-                    if (Precise["default"].stringLt(price, triggerPrice)) {
+                    if (Precise["default"].stringLt(priceString, triggerPrice)) {
                         request['type'] = 'STOP_LIMIT';
                     }
                     else {
@@ -1085,7 +1088,7 @@ class cryptocom extends cryptocom$1 {
             }
             else {
                 if (side === 'buy') {
-                    if (Precise["default"].stringLt(price, triggerPrice)) {
+                    if (Precise["default"].stringLt(priceString, triggerPrice)) {
                         request['type'] = 'TAKE_PROFIT';
                     }
                     else {
@@ -1093,7 +1096,7 @@ class cryptocom extends cryptocom$1 {
                     }
                 }
                 else {
-                    if (Precise["default"].stringLt(price, triggerPrice)) {
+                    if (Precise["default"].stringLt(priceString, triggerPrice)) {
                         request['type'] = 'STOP_LOSS';
                     }
                     else {
@@ -1272,7 +1275,7 @@ class cryptocom extends cryptocom$1 {
                 request['time_in_force'] = timeInForce;
             }
         }
-        const postOnly = this.safeValue(params, 'postOnly', false);
+        const postOnly = this.safeBool(params, 'postOnly', false);
         if ((postOnly) || (timeInForce === 'PO')) {
             request['exec_inst'] = ['POST_ONLY'];
             request['time_in_force'] = 'GOOD_TILL_CANCEL';
@@ -1284,10 +1287,10 @@ class cryptocom extends cryptocom$1 {
         const isStopLossTrigger = (stopLossPrice !== undefined);
         const isTakeProfitTrigger = (takeProfitPrice !== undefined);
         if (isTrigger) {
-            price = price.toString();
+            const priceString = this.numberToString(price);
             if ((uppercaseType === 'LIMIT') || (uppercaseType === 'STOP_LIMIT') || (uppercaseType === 'TAKE_PROFIT_LIMIT')) {
                 if (side === 'buy') {
-                    if (Precise["default"].stringLt(price, triggerPrice)) {
+                    if (Precise["default"].stringLt(priceString, triggerPrice)) {
                         request['type'] = 'TAKE_PROFIT_LIMIT';
                     }
                     else {
@@ -1295,7 +1298,7 @@ class cryptocom extends cryptocom$1 {
                     }
                 }
                 else {
-                    if (Precise["default"].stringLt(price, triggerPrice)) {
+                    if (Precise["default"].stringLt(priceString, triggerPrice)) {
                         request['type'] = 'STOP_LIMIT';
                     }
                     else {
@@ -1305,7 +1308,7 @@ class cryptocom extends cryptocom$1 {
             }
             else {
                 if (side === 'buy') {
-                    if (Precise["default"].stringLt(price, triggerPrice)) {
+                    if (Precise["default"].stringLt(priceString, triggerPrice)) {
                         request['type'] = 'TAKE_PROFIT';
                     }
                     else {
@@ -1313,7 +1316,7 @@ class cryptocom extends cryptocom$1 {
                     }
                 }
                 else {
-                    if (Precise["default"].stringLt(price, triggerPrice)) {
+                    if (Precise["default"].stringLt(priceString, triggerPrice)) {
                         request['type'] = 'STOP_LOSS';
                     }
                     else {
@@ -1905,6 +1908,7 @@ class cryptocom extends cryptocom$1 {
         const timestamp = this.safeInteger(ticker, 't');
         const marketId = this.safeString(ticker, 'i');
         market = this.safeMarket(marketId, market, '_');
+        const quote = this.safeString(market, 'quote');
         const last = this.safeString(ticker, 'a');
         return this.safeTicker({
             'symbol': market['symbol'],
@@ -1925,7 +1929,7 @@ class cryptocom extends cryptocom$1 {
             'percentage': this.safeString(ticker, 'c'),
             'average': undefined,
             'baseVolume': this.safeString(ticker, 'v'),
-            'quoteVolume': this.safeString(ticker, 'vv'),
+            'quoteVolume': (quote === 'USD') ? this.safeString(ticker, 'vv') : undefined,
             'info': ticker,
         }, market);
     }
@@ -1937,7 +1941,8 @@ class cryptocom extends cryptocom$1 {
         //         "s": "sell",
         //         "p": "26386.00",
         //         "q": "0.00453",
-        //         "t": 1686944282062,
+        //         "tn": 1686944282062,
+        //         "tn": 1704476468851524373,
         //         "d": "4611686018455979970",
         //         "i": "BTC_USD"
         //     }
@@ -2241,7 +2246,7 @@ class cryptocom extends cryptocom$1 {
          * @returns {Array} the marginMode in lowercase
          */
         const defaultType = this.safeString(this.options, 'defaultType');
-        const isMargin = this.safeValue(params, 'margin', false);
+        const isMargin = this.safeBool(params, 'margin', false);
         params = this.omit(params, 'margin');
         let marginMode = undefined;
         [marginMode, params] = this.handleMarginModeAndParams(methodName, params);
@@ -2311,13 +2316,13 @@ class cryptocom extends cryptocom$1 {
          * @method
          * @name cryptocom#fetchDepositWithdrawFees
          * @description fetch deposit and withdraw fees
-         * @see https://exchange-docs.crypto.com/spot/index.html#private-get-currency-networks
+         * @see https://exchange-docs.crypto.com/exchange/v1/rest-ws/index.html#private-get-currency-networks
          * @param {string[]|undefined} codes list of unified currency codes
          * @param {object} [params] extra parameters specific to the exchange API endpoint
          * @returns {object} a list of [fee structures]{@link https://docs.ccxt.com/#/?id=fee-structure}
          */
         await this.loadMarkets();
-        const response = await this.v2PrivatePostPrivateGetCurrencyNetworks(params);
+        const response = await this.v1PrivatePostPrivateGetCurrencyNetworks(params);
         const data = this.safeValue(response, 'result');
         const currencyMap = this.safeValue(data, 'currency_map');
         return this.parseDepositWithdrawFees(currencyMap, codes, 'full_name');
