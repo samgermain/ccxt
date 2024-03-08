@@ -1477,7 +1477,7 @@ export default class bitget extends Exchange {
         return [ productType, params ];
     }
 
-    async fetchTime (params = {}) {
+    async fetchTime (params: object = {}): Promise<Int> {
         /**
          * @method
          * @name bitget#fetchTime

@@ -1334,7 +1334,7 @@ export default class digifinex extends Exchange {
         }, market);
     }
 
-    async fetchTime (params = {}) {
+    async fetchTime (params: object = {}): Promise<Int> {
         /**
          * @method
          * @name digifinex#fetchTime

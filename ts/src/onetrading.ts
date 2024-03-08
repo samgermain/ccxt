@@ -301,7 +301,7 @@ export default class onetrading extends Exchange {
         });
     }
 
-    async fetchTime (params = {}) {
+    async fetchTime (params: object = {}): Promise<Int> {
         /**
          * @method
          * @name onetrading#fetchTime

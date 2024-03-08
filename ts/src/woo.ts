@@ -365,7 +365,7 @@ export default class woo extends Exchange {
         };
     }
 
-    async fetchTime (params = {}) {
+    async fetchTime (params: object = {}): Promise<Int> {
         /**
          * @method
          * @name woo#fetchTime

@@ -1580,7 +1580,7 @@ export default class idex extends Exchange {
         };
     }
 
-    async fetchTime (params = {}) {
+    async fetchTime (params: object = {}): Promise<Int> {
         /**
          * @method
          * @name idex#fetchTime

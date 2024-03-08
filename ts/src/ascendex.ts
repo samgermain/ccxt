@@ -693,7 +693,7 @@ export default class ascendex extends Exchange {
         return result;
     }
 
-    async fetchTime (params = {}) {
+    async fetchTime (params: object = {}): Promise<Int> {
         /**
          * @method
          * @name ascendex#fetchTime

@@ -266,7 +266,7 @@ export default class timex extends Exchange {
         });
     }
 
-    async fetchTime (params = {}) {
+    async fetchTime (params: object = {}): Promise<Int> {
         /**
          * @method
          * @name timex#fetchTime

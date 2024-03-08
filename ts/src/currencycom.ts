@@ -302,7 +302,7 @@ export default class currencycom extends Exchange {
         return this.milliseconds () - this.options['timeDifference'];
     }
 
-    async fetchTime (params = {}) {
+    async fetchTime (params: object = {}): Promise<Int> {
         /**
          * @method
          * @name currencycom#fetchTime

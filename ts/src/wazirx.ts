@@ -568,7 +568,7 @@ export default class wazirx extends Exchange {
         };
     }
 
-    async fetchTime (params = {}) {
+    async fetchTime (params: object = {}): Promise<Int> {
         /**
          * @method
          * @name wazirx#fetchTime

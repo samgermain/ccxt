@@ -208,7 +208,7 @@ export default class indodax extends Exchange {
         return this.milliseconds () - this.options['timeDifference'];
     }
 
-    async fetchTime (params = {}) {
+    async fetchTime (params: object = {}): Promise<Int> {
         /**
          * @method
          * @name indodax#fetchTime

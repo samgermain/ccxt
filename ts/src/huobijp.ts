@@ -332,7 +332,7 @@ export default class huobijp extends Exchange {
         });
     }
 
-    async fetchTime (params = {}) {
+    async fetchTime (params: object = {}): Promise<Int> {
         /**
          * @method
          * @name huobijp#fetchTime

@@ -1273,7 +1273,7 @@ export default class bybit extends Exchange {
         return [ subType, params ];
     }
 
-    async fetchTime (params = {}) {
+    async fetchTime (params: object = {}): Promise<Int> {
         /**
          * @method
          * @name bybit#fetchTime

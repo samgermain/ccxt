@@ -1248,7 +1248,7 @@ export default class okx extends Exchange {
         return update;
     }
 
-    async fetchTime (params = {}) {
+    async fetchTime (params: object = {}): Promise<Int> {
         /**
          * @method
          * @name okx#fetchTime

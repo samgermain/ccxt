@@ -305,7 +305,7 @@ export default class coinlist extends Exchange {
         return 1;
     }
 
-    async fetchTime (params = {}) {
+    async fetchTime (params: object = {}): Promise<Int> {
         /**
          * @method
          * @name coinlist#fetchTime

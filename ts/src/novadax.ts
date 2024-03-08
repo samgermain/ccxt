@@ -210,7 +210,7 @@ export default class novadax extends Exchange {
         });
     }
 
-    async fetchTime (params = {}) {
+    async fetchTime (params: object = {}): Promise<Int> {
         /**
          * @method
          * @name novadax#fetchTime

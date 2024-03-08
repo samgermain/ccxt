@@ -570,7 +570,7 @@ export default class poloniex extends Exchange {
         };
     }
 
-    async fetchTime (params = {}) {
+    async fetchTime (params: object = {}): Promise<Int> {
         /**
          * @method
          * @name poloniex#fetchTime

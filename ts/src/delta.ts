@@ -330,7 +330,7 @@ export default class delta extends Exchange {
         return super.safeMarket (marketId, market, delimiter, marketType);
     }
 
-    async fetchTime (params = {}) {
+    async fetchTime (params: object = {}): Promise<Int> {
         /**
          * @method
          * @name delta#fetchTime

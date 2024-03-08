@@ -878,7 +878,7 @@ export default class kucoin extends Exchange {
         return this.milliseconds ();
     }
 
-    async fetchTime (params = {}) {
+    async fetchTime (params: object = {}): Promise<Int> {
         /**
          * @method
          * @name kucoin#fetchTime

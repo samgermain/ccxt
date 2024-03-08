@@ -2432,7 +2432,7 @@ export default class kraken extends Exchange {
         return this.parseTransactionsByType ('deposit', response['result'], code, since, limit);
     }
 
-    async fetchTime (params = {}) {
+    async fetchTime (params: object = {}): Promise<Int> {
         /**
          * @method
          * @name kraken#fetchTime

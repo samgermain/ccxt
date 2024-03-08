@@ -1165,7 +1165,7 @@ export default class whitebit extends Exchange {
         };
     }
 
-    async fetchTime (params = {}) {
+    async fetchTime (params: object = {}): Promise<Int> {
         /**
          * @method
          * @name whitebit#fetchTime

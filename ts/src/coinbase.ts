@@ -357,7 +357,7 @@ export default class coinbase extends Exchange {
         });
     }
 
-    async fetchTime (params = {}) {
+    async fetchTime (params: object = {}): Promise<Int> {
         /**
          * @method
          * @name coinbase#fetchTime

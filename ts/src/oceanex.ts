@@ -556,7 +556,7 @@ export default class oceanex extends Exchange {
         }, market);
     }
 
-    async fetchTime (params = {}) {
+    async fetchTime (params: object = {}): Promise<Int> {
         /**
          * @method
          * @name oceanex#fetchTime

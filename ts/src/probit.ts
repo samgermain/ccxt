@@ -896,7 +896,7 @@ export default class probit extends Exchange {
         }, market);
     }
 
-    async fetchTime (params = {}) {
+    async fetchTime (params: object = {}): Promise<Int> {
         /**
          * @method
          * @name probit#fetchTime

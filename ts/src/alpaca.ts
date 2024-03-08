@@ -265,7 +265,7 @@ export default class alpaca extends Exchange {
         });
     }
 
-    async fetchTime (params = {}) {
+    async fetchTime (params: object = {}): Promise<Int> {
         /**
          * @method
          * @name alpaca#fetchTime

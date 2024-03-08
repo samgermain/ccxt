@@ -298,7 +298,7 @@ export default class bitvavo extends Exchange {
         return this.decimalToPrecision (price, TRUNCATE, 8, DECIMAL_PLACES);
     }
 
-    async fetchTime (params = {}) {
+    async fetchTime (params: object = {}): Promise<Int> {
         /**
          * @method
          * @name bitvavo#fetchTime

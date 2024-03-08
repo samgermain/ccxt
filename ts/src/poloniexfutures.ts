@@ -688,7 +688,7 @@ export default class poloniexfutures extends Exchange {
         return this.parseTrades (trades, market, since, limit);
     }
 
-    async fetchTime (params = {}) {
+    async fetchTime (params: object = {}): Promise<Int> {
         /**
          * @method
          * @name poloniexfutures#fetchTime

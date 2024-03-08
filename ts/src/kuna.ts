@@ -402,7 +402,7 @@ export default class kuna extends Exchange {
         });
     }
 
-    async fetchTime (params = {}) {
+    async fetchTime (params: object = {}): Promise<Int> {
         /**
          * @method
          * @name kuna#fetchTime

@@ -677,7 +677,7 @@ export default class bitmart extends Exchange {
         });
     }
 
-    async fetchTime (params = {}) {
+    async fetchTime (params: object = {}): Promise<Int> {
         /**
          * @method
          * @name bitmart#fetchTime

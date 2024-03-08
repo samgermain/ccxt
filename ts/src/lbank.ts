@@ -298,7 +298,7 @@ export default class lbank extends Exchange {
         });
     }
 
-    async fetchTime (params = {}) {
+    async fetchTime (params: object = {}): Promise<Int> {
         /**
          * @method
          * @name lbank#fetchTime

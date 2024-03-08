@@ -968,7 +968,7 @@ export default class mexc extends Exchange {
         };
     }
 
-    async fetchTime (params = {}) {
+    async fetchTime (params: object = {}): Promise<Int> {
         /**
          * @method
          * @name mexc#fetchTime

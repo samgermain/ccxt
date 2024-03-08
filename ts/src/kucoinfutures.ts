@@ -527,7 +527,7 @@ export default class kucoinfutures extends kucoin {
         return result;
     }
 
-    async fetchTime (params = {}) {
+    async fetchTime (params: object = {}): Promise<Int> {
         /**
          * @method
          * @name kucoinfutures#fetchTime

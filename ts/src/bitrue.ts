@@ -495,7 +495,7 @@ export default class bitrue extends Exchange {
         };
     }
 
-    async fetchTime (params = {}) {
+    async fetchTime (params: object = {}): Promise<Int> {
         /**
          * @method
          * @name bitrue#fetchTime
