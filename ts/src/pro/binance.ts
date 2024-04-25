@@ -34,6 +34,14 @@ export default class binance extends binanceRest {
                 'watchTrades': true,
                 'watchTradesForSymbols': true,
                 'createOrderWs': true,
+                'createLimitBuyOrderWs': true,
+                'createLimitOrderWs': true,
+                'createLimitSellOrderWs': true,
+                'createMarketBuyOrderWs': true,
+                'createMarketBuyOrderWithCostWs': true,
+                'createMarketOrderWithCostWs': true,
+                'createMarketSellOrderWs': true,
+                'createMarketSellOrderWithCostWs': true,
                 'editOrderWs': true,
                 'cancelOrderWs': true,
                 'cancelOrdersWs': false,
@@ -51,6 +59,7 @@ export default class binance extends binanceRest {
                 'fetchPositionForSymbolWs': true,
                 'fetchPositionsWs': true,
                 'fetchTickerWs': true,
+                'fetchTickersWs': true,
                 'fetchTradesWs': true,
                 'fetchTradingFeesWs': false,
                 'fetchWithdrawalsWs': false,
@@ -321,7 +330,7 @@ export default class binance extends binanceRest {
         const requestId = this.requestId (url);
         const messageHash = requestId.toString ();
         let returnRateLimits = false;
-        [ returnRateLimits, params ] = this.handleOptionAndParams (params, 'createOrderWs', 'returnRateLimits', false);
+        [ returnRateLimits, params ] = this.handleOptionAndParams (params, 'fetchOrderBookWs', 'returnRateLimits', false);
         payload['returnRateLimits'] = returnRateLimits;
         params = this.omit (params, 'test');
         const message = {
