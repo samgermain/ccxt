@@ -33,7 +33,7 @@ install:
   - composer install
 matrix:
   fast_finish: true
-build: off
+build: false
 clone_depth: 1
 test_script:
   - refreshenv
