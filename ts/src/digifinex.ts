@@ -1952,7 +1952,11 @@ export default class digifinex extends Exchange {
         if (numCanceledOrders < 1) {
             throw new OrderNotFound (this.id + ' cancelOrders() error');
         }
-        return response;
+        const orderId = this.safeString (canceledOrders, 0);
+        return this.safeOrder ({
+            'info': response,
+            'id': orderId,
+        });
     }
 
     parseOrderStatus (status: Str) {
