@@ -51,7 +51,7 @@ export interface MarketInterface {
     numericId?: Num;
     uppercaseId?: Str;
     lowercaseId?: Str;
-    symbol: Str;
+    symbol: string;
     base: Str;
     quote: Str;
     baseId: Str;
