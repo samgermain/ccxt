@@ -644,6 +644,7 @@ class kucoin(Exchange, ImplicitAPI):
                 'KALT': 'ALT',  # ALTLAYER
             },
             'options': {
+                'hf': False,
                 'version': 'v1',
                 'symbolSeparator': '-',
                 'fetchMyTradesMethod': 'private_get_fills',
@@ -1228,8 +1229,7 @@ class kucoin(Exchange, ImplicitAPI):
             self.options['hfMigrated'] = (status == 2)
 
     def handle_hf_and_params(self, params={}):
-        self.load_migration_status()
-        migrated: Bool = self.safe_bool(self.options, 'hfMigrated')
+        migrated: Bool = self.safe_bool_2(self.options, 'hfMigrated', 'hf', False)
         loadedHf: Bool = None
         if migrated is not None:
             if migrated:
@@ -3601,7 +3601,7 @@ class kucoin(Exchange, ImplicitAPI):
         params = self.omit(params, 'type')
         hf = None
         hf, params = self.handle_hf_and_params(params)
-        if hf:
+        if hf and (type != 'main'):
             type = 'trade_hf'
         marginMode, query = self.handle_margin_mode_and_params('fetchBalance', params)
         response = None

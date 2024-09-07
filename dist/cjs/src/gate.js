@@ -981,8 +981,9 @@ class gate extends gate$1 {
         return this.arrayConcat(markets, optionMarkets);
     }
     async fetchSpotMarkets(params = {}) {
-        const marginResponse = await this.publicMarginGetCurrencyPairs(params);
-        const spotMarketsResponse = await this.publicSpotGetCurrencyPairs(params);
+        const marginPromise = this.publicMarginGetCurrencyPairs(params);
+        const spotMarketsPromise = this.publicSpotGetCurrencyPairs(params);
+        const [marginResponse, spotMarketsResponse] = await Promise.all([marginPromise, spotMarketsPromise]);
         const marginMarkets = this.indexBy(marginResponse, 'id');
         //
         //  Spot
@@ -4016,7 +4017,7 @@ class gate extends gate$1 {
                     request['settle'] = market['settleId']; // filled in prepareRequest above
                 }
                 if (isMarketOrder) {
-                    request['price'] = price; // set to 0 for market orders
+                    request['price'] = '0'; // set to 0 for market orders
                 }
                 else {
                     request['price'] = (price === 0) ? '0' : this.priceToPrecision(symbol, price);

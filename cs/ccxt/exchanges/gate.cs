@@ -909,8 +909,11 @@ public partial class gate : Exchange
     public async virtual Task<object> fetchSpotMarkets(object parameters = null)
     {
         parameters ??= new Dictionary<string, object>();
-        object marginResponse = await this.publicMarginGetCurrencyPairs(parameters);
-        object spotMarketsResponse = await this.publicSpotGetCurrencyPairs(parameters);
+        object marginPromise = this.publicMarginGetCurrencyPairs(parameters);
+        object spotMarketsPromise = this.publicSpotGetCurrencyPairs(parameters);
+        var marginResponsespotMarketsResponseVariable = await promiseAll(new List<object>() {marginPromise, spotMarketsPromise});
+        var marginResponse = ((IList<object>) marginResponsespotMarketsResponseVariable)[0];
+        var spotMarketsResponse = ((IList<object>) marginResponsespotMarketsResponseVariable)[1];
         object marginMarkets = this.indexBy(marginResponse, "id");
         //
         //  Spot
@@ -4256,7 +4259,7 @@ public partial class gate : Exchange
                 }
                 if (isTrue(isMarketOrder))
                 {
-                    ((IDictionary<string,object>)request)["price"] = price; // set to 0 for market orders
+                    ((IDictionary<string,object>)request)["price"] = "0"; // set to 0 for market orders
                 } else
                 {
                     ((IDictionary<string,object>)request)["price"] = ((bool) isTrue((isEqual(price, 0)))) ? "0" : this.priceToPrecision(symbol, price);

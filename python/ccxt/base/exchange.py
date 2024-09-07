@@ -4,7 +4,7 @@
 
 # -----------------------------------------------------------------------------
 
-__version__ = '4.3.93'
+__version__ = '4.3.97'
 
 # -----------------------------------------------------------------------------
 
@@ -1930,7 +1930,6 @@ class Exchange(object):
                 'fetchOrdersWs': None,
                 'fetchOrderTrades': None,
                 'fetchOrderWs': None,
-                'fetchPermissions': None,
                 'fetchPosition': None,
                 'fetchPositionHistory': None,
                 'fetchPositionsHistory': None,
@@ -3691,7 +3690,7 @@ class Exchange(object):
             if currencyCode is None:
                 currencies = list(self.currencies.values())
                 for i in range(0, len(currencies)):
-                    currency = [i]
+                    currency = currencies[i]
                     networks = self.safe_dict(currency, 'networks')
                     network = self.safe_dict(networks, networkCode)
                     networkId = self.safe_string(network, 'id')
@@ -3809,12 +3808,12 @@ class Exchange(object):
             'nonce': None,
         }
 
-    def parse_ohlcvs(self, ohlcvs: List[object], market: Any = None, timeframe: str = '1m', since: Int = None, limit: Int = None):
+    def parse_ohlcvs(self, ohlcvs: List[object], market: Any = None, timeframe: str = '1m', since: Int = None, limit: Int = None, tail: Bool = False):
         results = []
         for i in range(0, len(ohlcvs)):
             results.append(self.parse_ohlcv(ohlcvs[i], market))
         sorted = self.sort_by(results, 0)
-        return self.filter_by_since_limit(sorted, since, limit, 0)
+        return self.filter_by_since_limit(sorted, since, limit, 0, tail)
 
     def parse_leverage_tiers(self, response: Any, symbols: List[str] = None, marketIdKey=None):
         # marketIdKey should only be None when response is a dictionary
@@ -4137,9 +4136,6 @@ class Exchange(object):
     def edit_order_ws(self, id: str, symbol: str, type: OrderType, side: OrderSide, amount: Num = None, price: Num = None, params={}):
         self.cancel_order_ws(id, symbol)
         return self.create_order_ws(symbol, type, side, amount, price, params)
-
-    def fetch_permissions(self, params={}):
-        raise NotSupported(self.id + ' fetchPermissions() is not supported yet')
 
     def fetch_position(self, symbol: str, params={}):
         raise NotSupported(self.id + ' fetchPosition() is not supported yet')
