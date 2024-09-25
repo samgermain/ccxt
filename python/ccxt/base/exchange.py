@@ -4,7 +4,7 @@
 
 # -----------------------------------------------------------------------------
 
-__version__ = '4.3.97'
+__version__ = '4.4.7'
 
 # -----------------------------------------------------------------------------
 
@@ -24,6 +24,7 @@ from ccxt.base.errors import RateLimitExceeded
 from ccxt.base.errors import BadRequest
 from ccxt.base.errors import BadResponse
 from ccxt.base.errors import InvalidProxySettings
+from ccxt.base.errors import UnsubscribeError
 
 # -----------------------------------------------------------------------------
 
@@ -139,6 +140,8 @@ class Exchange(object):
     aiohttp_trust_env = False
     requests_trust_env = False
     session = None  # Session () by default
+    tcp_connector = None  # aiohttp.TCPConnector
+    aiohttp_socks_connector = None
     socks_proxy_sessions = None
     verify = True  # SSL verification
     validateServerSsl = True
@@ -1731,6 +1734,9 @@ class Exchange(object):
     def create_safe_dictionary(self):
         return {}
 
+    def rand_number(self, size):
+        return int(''.join([str(random.randint(0, 9)) for _ in range(size)]))
+
     # ########################################################################
     # ########################################################################
     # ########################################################################
@@ -2673,6 +2679,7 @@ class Exchange(object):
                 'ETH': {'ERC20': 'ETH'},
                 'TRX': {'TRC20': 'TRX'},
                 'CRO': {'CRC20': 'CRONOS'},
+                'BRC20': {'BRC20': 'BTC'},
             },
         }
 
@@ -2797,6 +2804,10 @@ class Exchange(object):
                     'min': None,
                     'max': None,
                 },
+            },
+            'marginModes': {
+                'cross': None,
+                'isolated': None,
             },
             'created': None,
             'info': None,
@@ -5939,8 +5950,17 @@ class Exchange(object):
                 if responseLength == 0:
                     break
                 result = self.array_concat(result, response)
-                last = self.safe_value(response, responseLength - 1)
-                cursorValue = self.safe_value(last['info'], cursorReceived)
+                last = self.safe_dict(response, responseLength - 1)
+                # cursorValue = self.safe_value(last['info'], cursorReceived)
+                cursorValue = None  # search for the cursor
+                for j in range(0, responseLength):
+                    index = responseLength - j - 1
+                    entry = self.safe_dict(response, index)
+                    info = self.safe_dict(entry, 'info')
+                    cursor = self.safe_value(info, cursorReceived)
+                    if cursor is not None:
+                        cursorValue = cursor
+                        break
                 if cursorValue is None:
                     break
                 lastTimestamp = self.safe_integer(last, 'timestamp')
@@ -6261,3 +6281,50 @@ class Exchange(object):
         :returns dict: a `transfer structure <https://docs.ccxt.com/#/?id=transfer-structure>`
         """
         raise NotSupported(self.id + ' fetchTransfers() is not supported yet')
+
+    def clean_unsubscription(self, client, subHash: str, unsubHash: str):
+        if unsubHash in client.subscriptions:
+            del client.subscriptions[unsubHash]
+        if subHash in client.subscriptions:
+            del client.subscriptions[subHash]
+        if subHash in client.futures:
+            error = UnsubscribeError(self.id + ' ' + subHash)
+            client.reject(error, subHash)
+        client.resolve(True, unsubHash)
+
+    def clean_cache(self, subscription: dict):
+        topic = self.safe_string(subscription, 'topic')
+        symbols = self.safe_list(subscription, 'symbols', [])
+        symbolsLength = len(symbols)
+        if topic == 'ohlcv':
+            symbolsAndTimeFrames = self.safe_list(subscription, 'symbolsAndTimeframes', [])
+            for i in range(0, len(symbolsAndTimeFrames)):
+                symbolAndTimeFrame = symbolsAndTimeFrames[i]
+                symbol = self.safe_string(symbolAndTimeFrame, 0)
+                timeframe = self.safe_string(symbolAndTimeFrame, 1)
+                if timeframe in self.ohlcvs[symbol]:
+                    del self.ohlcvs[symbol][timeframe]
+        elif symbolsLength > 0:
+            for i in range(0, len(symbols)):
+                symbol = symbols[i]
+                if topic == 'trades':
+                    del self.trades[symbol]
+                elif topic == 'orderbook':
+                    del self.orderbooks[symbol]
+                elif topic == 'ticker':
+                    del self.tickers[symbol]
+        else:
+            if topic == 'myTrades':
+                # don't reset self.myTrades directly here
+                # because in c# we need to use a different object
+                keys = list(self.myTrades.keys())
+                for i in range(0, len(keys)):
+                    del self.myTrades[keys[i]]
+            elif topic == 'orders':
+                orderSymbols = list(self.orders.keys())
+                for i in range(0, len(orderSymbols)):
+                    del self.orders[orderSymbols[i]]
+            elif topic == 'ticker':
+                tickerSymbols = list(self.tickers.keys())
+                for i in range(0, len(tickerSymbols)):
+                    del self.tickers[tickerSymbols[i]]

@@ -16,7 +16,6 @@ from ccxt.base.errors import ArgumentsRequired
 from ccxt.base.errors import BadRequest
 from ccxt.base.errors import InvalidNonce
 from ccxt.base.errors import ChecksumError
-from ccxt.base.errors import UnsubscribeError
 
 
 class okx(ccxt.async_support.okx):
@@ -1341,8 +1340,10 @@ class okx(ccxt.async_support.okx):
                     },
                 ],
             }
-            message = self.extend(request, params)
-            self.watch(url, messageHash, message, messageHash)
+            # Only add params['access'] to prevent sending custom parameters, such.
+            if 'access' in params:
+                request['access'] = params['access']
+            self.watch(url, messageHash, request, messageHash)
         return await future
 
     async def watch_balance(self, params={}) -> Balances:
@@ -1500,7 +1501,7 @@ class okx(ccxt.async_support.okx):
                 'channel': 'positions',
                 'instType': 'ANY',
             }
-            args = [arg]
+            args = [self.extend(arg, params)]
             nonSymbolRequest: dict = {
                 'op': 'subscribe',
                 'args': args,
@@ -1814,6 +1815,12 @@ class okx(ccxt.async_support.okx):
             symbolMessageHash = messageHash + '::' + tradeSymbols[i]
             client.resolve(self.orders, symbolMessageHash)
 
+    def request_id(self):
+        ts = str(self.milliseconds())
+        randomNumber = self.rand_number(4)
+        randomPart = str(randomNumber)
+        return ts + randomPart
+
     async def create_order_ws(self, symbol: str, type: OrderType, side: OrderSide, amount: float, price: Num = None, params={}) -> Order:
         """
         :see: https://www.okx.com/docs-v5/en/#websocket-api-trade-place-order
@@ -1830,7 +1837,7 @@ class okx(ccxt.async_support.okx):
         await self.load_markets()
         await self.authenticate()
         url = self.get_url('private', 'private')
-        messageHash = str(self.milliseconds())
+        messageHash = self.request_id()
         op = None
         op, params = self.handle_option_and_params(params, 'createOrderWs', 'op', 'batch-orders')
         args = self.create_order_request(symbol, type, side, amount, price, params)
@@ -1895,7 +1902,7 @@ class okx(ccxt.async_support.okx):
         await self.load_markets()
         await self.authenticate()
         url = self.get_url('private', 'private')
-        messageHash = str(self.milliseconds())
+        messageHash = self.request_id()
         op = None
         op, params = self.handle_option_and_params(params, 'editOrderWs', 'op', 'amend-order')
         args = self.edit_order_request(id, symbol, type, side, amount, price, params)
@@ -1921,7 +1928,7 @@ class okx(ccxt.async_support.okx):
         await self.load_markets()
         await self.authenticate()
         url = self.get_url('private', 'private')
-        messageHash = str(self.milliseconds())
+        messageHash = self.request_id()
         clientOrderId = self.safe_string_2(params, 'clOrdId', 'clientOrderId')
         params = self.omit(params, ['clientOrderId', 'clOrdId'])
         arg: dict = {
@@ -1955,7 +1962,7 @@ class okx(ccxt.async_support.okx):
         await self.load_markets()
         await self.authenticate()
         url = self.get_url('private', 'private')
-        messageHash = str(self.milliseconds())
+        messageHash = self.request_id()
         args = []
         for i in range(0, idsLength):
             arg: dict = {
@@ -1986,7 +1993,7 @@ class okx(ccxt.async_support.okx):
         if market['type'] != 'option':
             raise BadRequest(self.id + 'cancelAllOrdersWs is only applicable to Option in Portfolio Margin mode, and MMP privilege is required.')
         url = self.get_url('private', 'private')
-        messageHash = str(self.milliseconds())
+        messageHash = self.request_id()
         request: dict = {
             'id': messageHash,
             'op': 'mass-cancel',
@@ -2162,54 +2169,32 @@ class okx(ccxt.async_support.okx):
     def handle_un_subscription_trades(self, client: Client, symbol: str):
         subMessageHash = 'trades:' + symbol
         messageHash = 'unsubscribe:trades:' + symbol
-        if subMessageHash in client.subscriptions:
-            del client.subscriptions[subMessageHash]
-        if messageHash in client.subscriptions:
-            del client.subscriptions[messageHash]
-        del self.trades[symbol]
-        error = UnsubscribeError(self.id + ' ' + subMessageHash)
-        client.reject(error, subMessageHash)
-        client.resolve(True, messageHash)
+        self.clean_unsubscription(client, subMessageHash, messageHash)
+        if symbol in self.trades:
+            del self.trades[symbol]
 
     def handle_unsubscription_order_book(self, client: Client, symbol: str, channel: str):
         subMessageHash = channel + ':' + symbol
         messageHash = 'unsubscribe:orderbook:' + symbol
-        if subMessageHash in client.subscriptions:
-            del client.subscriptions[subMessageHash]
-        if messageHash in client.subscriptions:
-            del client.subscriptions[messageHash]
-        del self.orderbooks[symbol]
-        error = UnsubscribeError(self.id + ' ' + subMessageHash)
-        client.reject(error, subMessageHash)
-        client.resolve(True, messageHash)
+        self.clean_unsubscription(client, subMessageHash, messageHash)
+        if symbol in self.orderbooks:
+            del self.orderbooks[symbol]
 
     def handle_unsubscription_ohlcv(self, client: Client, symbol: str, channel: str):
         tf = channel.replace('candle', '')
         timeframe = self.find_timeframe(tf)
         subMessageHash = 'multi:' + channel + ':' + symbol
         messageHash = 'unsubscribe:' + subMessageHash
-        if subMessageHash in client.subscriptions:
-            del client.subscriptions[subMessageHash]
-        if messageHash in client.subscriptions:
-            del client.subscriptions[messageHash]
+        self.clean_unsubscription(client, subMessageHash, messageHash)
         if timeframe in self.ohlcvs[symbol]:
             del self.ohlcvs[symbol][timeframe]
-        error = UnsubscribeError(self.id + ' ' + subMessageHash)
-        client.reject(error, subMessageHash)
-        client.resolve(True, messageHash)
 
     def handle_unsubscription_ticker(self, client: Client, symbol: str, channel):
         subMessageHash = channel + '::' + symbol
         messageHash = 'unsubscribe:ticker:' + symbol
-        if subMessageHash in client.subscriptions:
-            del client.subscriptions[subMessageHash]
-        if messageHash in client.subscriptions:
-            del client.subscriptions[messageHash]
+        self.clean_unsubscription(client, subMessageHash, messageHash)
         if symbol in self.tickers:
             del self.tickers[symbol]
-        error = UnsubscribeError(self.id + ' ' + subMessageHash)
-        client.reject(error, subMessageHash)
-        client.resolve(True, messageHash)
 
     def handle_unsubscription(self, client: Client, message):
         #

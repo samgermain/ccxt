@@ -1319,6 +1319,9 @@ public partial class Exchange
                 { "CRO", new Dictionary<string, object>() {
                     { "CRC20", "CRONOS" },
                 } },
+                { "BRC20", new Dictionary<string, object>() {
+                    { "BRC20", "BTC" },
+                } },
             } },
         };
     }
@@ -1464,6 +1467,10 @@ public partial class Exchange
                     { "min", null },
                     { "max", null },
                 } },
+            } },
+            { "marginModes", new Dictionary<string, object>() {
+                { "cross", null },
+                { "isolated", null },
             } },
             { "created", null },
             { "info", null },
@@ -6429,8 +6436,21 @@ public partial class Exchange
                     break;
                 }
                 result = this.arrayConcat(result, response);
-                object last = this.safeValue(response, subtract(responseLength, 1));
-                cursorValue = this.safeValue(getValue(last, "info"), cursorReceived);
+                object last = this.safeDict(response, subtract(responseLength, 1));
+                // cursorValue = this.safeValue (last['info'], cursorReceived);
+                cursorValue = null; // search for the cursor
+                for (object j = 0; isLessThan(j, responseLength); postFixIncrement(ref j))
+                {
+                    object index = subtract(subtract(responseLength, j), 1);
+                    object entry = this.safeDict(response, index);
+                    object info = this.safeDict(entry, "info");
+                    object cursor = this.safeValue(info, cursorReceived);
+                    if (isTrue(!isEqual(cursor, null)))
+                    {
+                        cursorValue = cursor;
+                        break;
+                    }
+                }
                 if (isTrue(isEqual(cursorValue, null)))
                 {
                     break;
@@ -6885,6 +6905,87 @@ public partial class Exchange
     {
         parameters ??= new Dictionary<string, object>();
         throw new NotSupported ((string)add(this.id, " fetchTransfers () is not supported yet")) ;
+    }
+
+    public virtual void cleanUnsubscription(WebSocketClient client, object subHash, object unsubHash)
+    {
+        if (isTrue(inOp(client.subscriptions, unsubHash)))
+        {
+
+        }
+        if (isTrue(inOp(client.subscriptions, subHash)))
+        {
+
+        }
+        if (isTrue(inOp(client.futures, subHash)))
+        {
+            var error = new UnsubscribeError(add(add(this.id, " "), subHash));
+            client.reject(error, subHash);
+        }
+        // client.resolve(true, unsubHash);
+    }
+
+    public virtual void cleanCache(object subscription)
+    {
+        object topic = this.safeString(subscription, "topic");
+        object symbols = this.safeList(subscription, "symbols", new List<object>() {});
+        object symbolsLength = getArrayLength(symbols);
+        if (isTrue(isEqual(topic, "ohlcv")))
+        {
+            object symbolsAndTimeFrames = this.safeList(subscription, "symbolsAndTimeframes", new List<object>() {});
+            for (object i = 0; isLessThan(i, getArrayLength(symbolsAndTimeFrames)); postFixIncrement(ref i))
+            {
+                object symbolAndTimeFrame = getValue(symbolsAndTimeFrames, i);
+                object symbol = this.safeString(symbolAndTimeFrame, 0);
+                object timeframe = this.safeString(symbolAndTimeFrame, 1);
+                if (isTrue(inOp(getValue(this.ohlcvs, symbol), timeframe)))
+                {
+
+                }
+            }
+        } else if (isTrue(isGreaterThan(symbolsLength, 0)))
+        {
+            for (object i = 0; isLessThan(i, getArrayLength(symbols)); postFixIncrement(ref i))
+            {
+                object symbol = getValue(symbols, i);
+                if (isTrue(isEqual(topic, "trades")))
+                {
+
+                } else if (isTrue(isEqual(topic, "orderbook")))
+                {
+
+                } else if (isTrue(isEqual(topic, "ticker")))
+                {
+
+                }
+            }
+        } else
+        {
+            if (isTrue(isEqual(topic, "myTrades")))
+            {
+                // don't reset this.myTrades directly here
+                // because in c# we need to use a different object
+                object keys = new List<object>(((IDictionary<string,object>)this.myTrades).Keys);
+                for (object i = 0; isLessThan(i, getArrayLength(keys)); postFixIncrement(ref i))
+                {
+
+                }
+            } else if (isTrue(isEqual(topic, "orders")))
+            {
+                object orderSymbols = new List<object>(((IDictionary<string,object>)this.orders).Keys);
+                for (object i = 0; isLessThan(i, getArrayLength(orderSymbols)); postFixIncrement(ref i))
+                {
+
+                }
+            } else if (isTrue(isEqual(topic, "ticker")))
+            {
+                object tickerSymbols = new List<object>(((IDictionary<string,object>)this.tickers).Keys);
+                for (object i = 0; isLessThan(i, getArrayLength(tickerSymbols)); postFixIncrement(ref i))
+                {
+
+                }
+            }
+        }
     }
 }
 
