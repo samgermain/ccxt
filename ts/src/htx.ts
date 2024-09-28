@@ -2387,6 +2387,10 @@ export default class htx extends Exchange {
          * @method
          * @name htx#fetchOrderBook
          * @description fetches information on open orders with bid (buy) and ask (sell) prices, volumes and other data
+         * @see https://huobiapi.github.io/docs/spot/v1/en/#get-market-depth
+         * @see https://huobiapi.github.io/docs/usdt_swap/v1/en/#general-get-market-depth
+         * @see https://huobiapi.github.io/docs/dm/v1/en/#get-market-depth
+         * @see https://huobiapi.github.io/docs/coin_margined_swap/v1/en/#get-market-depth
          * @param {string} symbol unified symbol of the market to fetch the order book for
          * @param {int} [limit] the maximum amount of order book entries to return
          * @param {object} [params] extra parameters specific to the exchange API endpoint
