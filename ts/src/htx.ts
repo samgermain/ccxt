@@ -8114,49 +8114,193 @@ export default class htx extends Exchange {
          * @method
          * @name htx#fetchMarketLeverageTiers
          * @description retrieve information on the maximum leverage, and maintenance margin for trades of varying trade sizes for a single market
+         * @see https://huobiapi.github.io/docs/usdt_swap/v1/en/#cross-query-information-on-tiered-adjustment-factor
+         * @see https://huobiapi.github.io/docs/usdt_swap/v1/en/#isolated-query-information-on-tiered-adjustment-factor
+         * @see https://huobiapi.github.io/docs/coin_margined_swap/v1/en/#query-information-on-tiered-adjustment-factor
+         * @see https://huobiapi.github.io/docs/dm/v1/en/#query-information-on-tiered-adjustment-factor
          * @param {string} symbol unified market symbol
          * @param {object} [params] extra parameters specific to the exchange API endpoint
          * @returns {object} a [leverage tiers structure]{@link https://docs.ccxt.com/#/?id=leverage-tiers-structure}
          */
         await this.loadMarkets ();
-        const request: Dict = {};
-        if (symbol !== undefined) {
-            const market = this.market (symbol);
-            if (!market['contract']) {
-                throw new BadRequest (this.id + ' fetchMarketLeverageTiers() symbol supports contract markets only');
-            }
-            request['contract_code'] = market['id'];
+        const market = this.market (symbol);
+        if (!market['contract']) {
+            throw new BadRequest (this.id + ' fetchMarketLeverageTiers() symbol supports contract markets only');
         }
-        const response = await this.contractPublicGetLinearSwapApiV1SwapAdjustfactor (this.extend (request, params));
-        //
-        //    {
-        //        "status": "ok",
-        //        "data": [
-        //            {
-        //                "symbol": "MANA",
-        //                "contract_code": "MANA-USDT",
-        //                "margin_mode": "isolated",
-        //                "trade_partition": "USDT",
-        //                "list": [
-        //                    {
-        //                        "lever_rate": 75,
-        //                        "ladders": [
-        //                            {
-        //                                "ladder": 0,
-        //                                "min_size": 0,
-        //                                "max_size": 999,
-        //                                "adjust_factor": 0.7
-        //                            },
-        //                            ...
-        //                        ]
-        //                    }
-        //                    ...
-        //                ]
-        //            },
-        //            ...
-        //        ]
-        //    }
-        //
+        const request: Dict = {
+            'contract_code': market['id'],
+        };
+        let response = undefined;
+        if (market['inverse']) {
+            if (market['swap']) {
+                response = await this.contractPublicGetSwapApiV1SwapAdjustfactor (this.extend (request, params));
+                //
+                //    {
+                //        status: 'ok',
+                //        data: [
+                //          {
+                //            symbol: 'BTC',
+                //            contract_code: 'BTC-USD',
+                //            list: [
+                //              {
+                //                lever_rate: '200',
+                //                ladders: [
+                //                  {
+                //                    ladder: '0',
+                //                    min_size: '0',
+                //                    max_size: '1999',
+                //                    adjust_factor: '0.600000000000000000'
+                //                  },
+                //                  {
+                //                    ladder: '1',
+                //                    min_size: '2000',
+                //                    max_size: '9999',
+                //                    adjust_factor: '0.650000000000000000'
+                //                  },
+                //                  {
+                //                    ladder: '2',
+                //                    min_size: '10000',
+                //                    max_size: null,
+                //                    adjust_factor: '0.750000000000000000'
+                //                  }
+                //                ]
+                //              },
+                //              ...
+                //            ]
+                //          }
+                //        ],
+                //        ts: '1727727496887'
+                //    }
+                //
+            } else if (market['future']) {
+                response = await this.contractPublicGetApiV1ContractAdjustfactor (this.extend (request, params));
+                //
+                //    {
+                //        status: 'ok',
+                //        data: [
+                //          {
+                //            symbol: 'LOOKS',
+                //            list: [
+                //              {
+                //                lever_rate: '75',
+                //                ladders: [
+                //                  {
+                //                    ladder: '0',
+                //                    min_size: '0',
+                //                    max_size: null,
+                //                    adjust_factor: '0.800000000000000000'
+                //                  }
+                //                ]
+                //              },
+                //              ...
+                //            ]
+                //          },
+                //          ...
+                //        ],
+                //        ts: '1727727905808'
+                //    }
+                //
+            } else {
+                throw new BadRequest (this.id + ' fetchMarketLeverageTiers market type must be swap or future');
+            }
+        } else {
+            if (market['future']) {
+                throw new BadRequest (this.id + ' fetchMarketLeverageTiers does not support linear future markets');
+            }
+            let marginMode = undefined;
+            [ marginMode, params ] = this.handleMarginModeAndParams ('fetchMarketLeverageTiers', params);
+            if (marginMode === undefined) {
+                throw new ArgumentsRequired (this.id + ' fetchMarketLeverageTiers requires an extra parameter params["marginMode"] for linear markets');
+            }
+            if (marginMode === 'cross') {
+                response = await this.contractPublicGetLinearSwapApiV1SwapCrossAdjustfactor (this.extend (request, params));
+                //
+                //    {
+                //        status: 'ok',
+                //        data: [
+                //          {
+                //            symbol: 'BTC',
+                //            contract_code: 'BTC-USDT',
+                //            margin_mode: 'cross',
+                //            list: [
+                //              {
+                //                lever_rate: '200',
+                //                ladders: [
+                //                  {
+                //                    ladder: '0',
+                //                    min_size: '0',
+                //                    max_size: '3999',
+                //                    adjust_factor: '0.600000000000000000'
+                //                  },
+                //                  {
+                //                    ladder: '1',
+                //                    min_size: '4000',
+                //                    max_size: '39999',
+                //                    adjust_factor: '0.650000000000000000'
+                //                  },
+                //                  {
+                //                    ladder: '2',
+                //                    min_size: '40000',
+                //                    max_size: null,
+                //                    adjust_factor: '0.700000000000000000'
+                //                  }
+                //                ]
+                //              },
+                //              ...
+                //            ],
+                //            business_type: 'swap',
+                //            pair: 'BTC-USDT',
+                //            contract_type: 'swap',
+                //            trade_partition: 'USDT'
+                //          }
+                //        ],
+                //        ts: '1727727337860'
+                //    }
+                //
+            } else {
+                response = await this.contractPublicGetLinearSwapApiV1SwapAdjustfactor (this.extend (request, params));
+                //
+                //    {
+                //        status: 'ok',
+                //        data: [
+                //          {
+                //            symbol: 'BTC',
+                //            contract_code: 'BTC-USDT',
+                //            margin_mode: 'isolated',
+                //            trade_partition: 'USDT',
+                //            list: [
+                //              {
+                //                lever_rate: '200',
+                //                ladders: [
+                //                  {
+                //                    ladder: '0',
+                //                    min_size: '0',
+                //                    max_size: '3999',
+                //                    adjust_factor: '0.600000000000000000'
+                //                  },
+                //                  {
+                //                    ladder: '1',
+                //                    min_size: '4000',
+                //                    max_size: '39999',
+                //                    adjust_factor: '0.650000000000000000'
+                //                  },
+                //                  {
+                //                    ladder: '2',
+                //                    min_size: '40000',
+                //                    max_size: null,
+                //                    adjust_factor: '0.700000000000000000'
+                //                  }
+                //                ]
+                //              },
+                //              ...
+                //            ]
+                //          }
+                //        ],
+                //        ts: '1727727419883'
+                //    }
+                //
+            }
+        }
         const data = this.safeValue (response, 'data');
         const tiers = this.parseLeverageTiers (data, [ symbol ], 'contract_code');
         return this.safeValue (tiers, symbol);

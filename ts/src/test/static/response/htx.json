@@ -650,6 +650,46 @@
                     ]
                 ]
             }
+        ],
+        "fetchMarketLeverageTiers": [
+            {
+                "description": "Inverse future",
+                "method": "fetchMarketLeverageTiers",
+                "url": "https://api.hbdm.com/api/v1/contract_adjustfactor?contract_code=ETH241227",
+                "input": [
+                  "ETH/USD:ETH-241227"
+                ]
+            },
+            {
+                "description": "Inverse swap",
+                "method": "fetchMarketLeverageTiers",
+                "url": "https://api.hbdm.com/swap-api/v1/swap_adjustfactor?contract_code=BTC-USD",
+                "input": [
+                  "BTC/USD:BTC"
+                ]
+            },
+            {
+                "description": "Isolated linear swap",
+                "method": "fetchMarketLeverageTiers",
+                "url": "https://api.hbdm.com/linear-swap-api/v1/swap_adjustfactor?contract_code=BTC-USDT",
+                "input": [
+                  "BTC/USDT:USDT",
+                  {
+                    "marginMode": "isolated"
+                  }
+                ]
+            },
+            {
+                "description": "Cross linear swap",
+                "method": "fetchMarketLeverageTiers",
+                "url": "https://api.hbdm.com/linear-swap-api/v1/swap_cross_adjustfactor?contract_code=BTC-USDT",
+                "input": [
+                  "BTC/USDT:USDT",
+                  {
+                    "marginMode": "cross"
+                  }
+                ]
+            }
         ]
     }
 }
