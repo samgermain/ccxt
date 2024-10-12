@@ -6,7 +6,7 @@ import { AuthenticationError, ExchangeNotAvailable, OnMaintenance, AccountSuspen
 import { Precise } from './base/Precise.js';
 import { TICK_SIZE, TRUNCATE } from './base/functions/number.js';
 import { sha256 } from './static_dependencies/noble-hashes/sha256.js';
-import type { Int, OrderSide, Balances, OrderType, OHLCV, Order, Str, Trade, Transaction, Ticker, OrderBook, Tickers, Strings, Currency, Market, TransferEntry, Num, TradingFeeInterface, Currencies, IsolatedBorrowRates, IsolatedBorrowRate, Dict, OrderRequest, int } from './base/types.js';
+import type { Int, OrderSide, Balances, OrderType, OHLCV, Order, Str, Trade, Transaction, Ticker, OrderBook, Tickers, Strings, Currency, Market, TransferEntry, Num, TradingFeeInterface, Currencies, IsolatedBorrowRates, IsolatedBorrowRate, Dict, OrderRequest, int, FundingRate, DepositAddress } from './base/types.js';
 
 //  ---------------------------------------------------------------------------
 
@@ -1309,6 +1309,7 @@ export default class bitmart extends Exchange {
             'average': average,
             'baseVolume': baseVolume,
             'quoteVolume': quoteVolume,
+            'indexPrice': this.safeString (ticker, 'index_price'),
             'info': ticker,
         }, market);
     }
@@ -3415,7 +3416,7 @@ export default class bitmart extends Exchange {
         return this.parseOrder (data, market);
     }
 
-    async fetchDepositAddress (code: string, params = {}) {
+    async fetchDepositAddress (code: string, params = {}): Promise<DepositAddress> {
         /**
          * @method
          * @name bitmart#fetchDepositAddress
@@ -3459,7 +3460,7 @@ export default class bitmart extends Exchange {
         return this.parseDepositAddress (data, currency);
     }
 
-    parseDepositAddress (depositAddress, currency = undefined) {
+    parseDepositAddress (depositAddress, currency = undefined): DepositAddress {
         //
         //    {
         //        currency: 'ETH',
@@ -3487,10 +3488,10 @@ export default class bitmart extends Exchange {
         return {
             'info': depositAddress,
             'currency': this.safeString (currency, 'code'),
+            'network': network,
             'address': address,
             'tag': this.safeString (depositAddress, 'address_memo'),
-            'network': network,
-        };
+        } as DepositAddress;
     }
 
     async withdraw (code: string, amount: number, address: string, tag = undefined, params = {}) {
@@ -4432,7 +4433,7 @@ export default class bitmart extends Exchange {
         return await this.privatePostContractPrivateSubmitLeverage (this.extend (request, params));
     }
 
-    async fetchFundingRate (symbol: string, params = {}) {
+    async fetchFundingRate (symbol: string, params = {}): Promise<FundingRate> {
         /**
          * @method
          * @name bitmart#fetchFundingRate
@@ -4468,7 +4469,7 @@ export default class bitmart extends Exchange {
         return this.parseFundingRate (data, market);
     }
 
-    parseFundingRate (contract, market: Market = undefined) {
+    parseFundingRate (contract, market: Market = undefined): FundingRate {
         //
         //     {
         //         "timestamp": 1695184410697,
@@ -4497,7 +4498,8 @@ export default class bitmart extends Exchange {
             'previousFundingRate': this.safeNumber (contract, 'rate_value'),
             'previousFundingTimestamp': undefined,
             'previousFundingDatetime': undefined,
-        };
+            'interval': undefined,
+        } as FundingRate;
     }
 
     async fetchPosition (symbol: string, params = {}) {

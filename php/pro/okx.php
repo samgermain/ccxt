@@ -22,6 +22,8 @@ class okx extends \ccxt\async\okx {
             'has' => array(
                 'ws' => true,
                 'watchTicker' => true,
+                'watchMarkPrice' => true,
+                'watchMarkPrices' => true,
                 'watchTickers' => true,
                 'watchBidsAsks' => true,
                 'watchOrderBook' => true,
@@ -448,6 +450,48 @@ class okx extends \ccxt\async\okx {
             $symbols = $this->market_symbols($symbols, null, false);
             $channel = null;
             list($channel, $params) = $this->handle_option_and_params($params, 'watchTickers', 'channel', 'tickers');
+            $newTickers = Async\await($this->subscribe_multiple('public', $channel, $symbols, $params));
+            if ($this->newUpdates) {
+                return $newTickers;
+            }
+            return $this->filter_by_array($this->tickers, 'symbol', $symbols);
+        }) ();
+    }
+
+    public function watch_mark_price(string $symbol, $params = array ()): PromiseInterface {
+        return Async\async(function () use ($symbol, $params) {
+            /**
+             * @see https://www.okx.com/docs-v5/en/#public-data-websocket-mark-price-$channel
+             * watches a mark price
+             * @param {string} $symbol unified $symbol of the $market to fetch the $ticker for
+             * @param {array} [$params] extra parameters specific to the exchange API endpoint
+             * @param {string} [$params->channel] the $channel to subscribe to, tickers by default. Can be tickers, sprd-tickers, index-tickers, block-tickers
+             * @return {array} a ~@link https://docs.ccxt.com/#/?id=$ticker-structure $ticker structure~
+             */
+            $channel = null;
+            list($channel, $params) = $this->handle_option_and_params($params, 'watchMarkPrice', 'channel', 'mark-price');
+            $params['channel'] = $channel;
+            $market = $this->market($symbol);
+            $symbol = $market['symbol'];
+            $ticker = Async\await($this->watch_mark_prices(array( $symbol ), $params));
+            return $ticker[$symbol];
+        }) ();
+    }
+
+    public function watch_mark_prices(?array $symbols = null, $params = array ()): PromiseInterface {
+        return Async\async(function () use ($symbols, $params) {
+            /**
+             * @see https://www.okx.com/docs-v5/en/#public-data-websocket-mark-price-$channel
+             * watches mark prices
+             * @param {string[]} [$symbols] unified symbol of the market to fetch the ticker for
+             * @param {array} [$params] extra parameters specific to the exchange API endpoint
+             * @param {string} [$params->channel] the $channel to subscribe to, tickers by default. Can be tickers, sprd-tickers, index-tickers, block-tickers
+             * @return {array} a ~@link https://docs.ccxt.com/#/?id=ticker-structure ticker structure~
+             */
+            Async\await($this->load_markets());
+            $symbols = $this->market_symbols($symbols, null, false);
+            $channel = null;
+            list($channel, $params) = $this->handle_option_and_params($params, 'watchMarkPrices', 'channel', 'mark-price');
             $newTickers = Async\await($this->subscribe_multiple('public', $channel, $symbols, $params));
             if ($this->newUpdates) {
                 return $newTickers;
@@ -2002,7 +2046,7 @@ class okx extends \ccxt\async\okx {
         $tradeSymbols = is_array($symbols) ? array_keys($symbols) : array();
         for ($i = 0; $i < count($tradeSymbols); $i++) {
             $symbolMessageHash = $messageHash . '::' . $tradeSymbols[$i];
-            $client->resolve ($this->orders, $symbolMessageHash);
+            $client->resolve ($this->myTrades, $symbolMessageHash);
         }
     }
 
@@ -2278,10 +2322,25 @@ class okx extends \ccxt\async\okx {
         try {
             if ($errorCode && $errorCode !== '0') {
                 $feedback = $this->id . ' ' . $this->json($message);
-                $this->throw_exactly_matched_exception($this->exceptions['exact'], $errorCode, $feedback);
+                if ($errorCode !== '1') {
+                    $this->throw_exactly_matched_exception($this->exceptions['exact'], $errorCode, $feedback);
+                }
                 $messageString = $this->safe_value($message, 'msg');
                 if ($messageString !== null) {
                     $this->throw_broadly_matched_exception($this->exceptions['broad'], $messageString, $feedback);
+                } else {
+                    $data = $this->safe_list($message, 'data', array());
+                    for ($i = 0; $i < count($data); $i++) {
+                        $d = $data[$i];
+                        $errorCode = $this->safe_string($d, 'sCode');
+                        if ($errorCode !== null) {
+                            $this->throw_exactly_matched_exception($this->exceptions['exact'], $errorCode, $feedback);
+                        }
+                        $messageString = $this->safe_value($message, 'sMsg');
+                        if ($messageString !== null) {
+                            $this->throw_broadly_matched_exception($this->exceptions['broad'], $messageString, $feedback);
+                        }
+                    }
                 }
                 throw new ExchangeError($feedback);
             }
@@ -2377,6 +2436,7 @@ class okx extends \ccxt\async\okx {
                 'books50-l2-tbt' => array($this, 'handle_order_book'), // only users who're VIP4 and above can subscribe, identity verification required before subscription
                 'books-l2-tbt' => array($this, 'handle_order_book'), // only users who're VIP5 and above can subscribe, identity verification required before subscription
                 'tickers' => array($this, 'handle_ticker'),
+                'mark-price' => array($this, 'handle_ticker'),
                 'positions' => array($this, 'handle_positions'),
                 'index-tickers' => array($this, 'handle_ticker'),
                 'sprd-tickers' => array($this, 'handle_ticker'),

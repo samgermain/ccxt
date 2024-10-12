@@ -6,7 +6,7 @@
 from ccxt.base.exchange import Exchange
 from ccxt.abstract.bitmart import ImplicitAPI
 import hashlib
-from ccxt.base.types import Balances, Currencies, Currency, Int, IsolatedBorrowRate, IsolatedBorrowRates, Market, Num, Order, OrderBook, OrderRequest, OrderSide, OrderType, Str, Strings, Ticker, Tickers, Trade, TradingFeeInterface, Transaction, TransferEntry
+from ccxt.base.types import Balances, Currencies, Currency, DepositAddress, Int, IsolatedBorrowRate, IsolatedBorrowRates, Market, Num, Order, OrderBook, OrderRequest, OrderSide, OrderType, Str, Strings, Ticker, Tickers, FundingRate, Trade, TradingFeeInterface, Transaction, TransferEntry
 from typing import List
 from ccxt.base.errors import ExchangeError
 from ccxt.base.errors import AuthenticationError
@@ -1292,6 +1292,7 @@ class bitmart(Exchange, ImplicitAPI):
             'average': average,
             'baseVolume': baseVolume,
             'quoteVolume': quoteVolume,
+            'indexPrice': self.safe_string(ticker, 'index_price'),
             'info': ticker,
         }, market)
 
@@ -3206,7 +3207,7 @@ class bitmart(Exchange, ImplicitAPI):
         data = self.safe_dict(response, 'data', {})
         return self.parse_order(data, market)
 
-    def fetch_deposit_address(self, code: str, params={}):
+    def fetch_deposit_address(self, code: str, params={}) -> DepositAddress:
         """
         fetch the deposit address for a currency associated with self account
         :see: https://developer-pro.bitmart.com/en/spot/#deposit-address-keyed
@@ -3245,7 +3246,7 @@ class bitmart(Exchange, ImplicitAPI):
         data = self.safe_dict(response, 'data', {})
         return self.parse_deposit_address(data, currency)
 
-    def parse_deposit_address(self, depositAddress, currency=None):
+    def parse_deposit_address(self, depositAddress, currency=None) -> DepositAddress:
         #
         #    {
         #        currency: 'ETH',
@@ -3271,9 +3272,9 @@ class bitmart(Exchange, ImplicitAPI):
         return {
             'info': depositAddress,
             'currency': self.safe_string(currency, 'code'),
+            'network': network,
             'address': address,
             'tag': self.safe_string(depositAddress, 'address_memo'),
-            'network': network,
         }
 
     def withdraw(self, code: str, amount: float, address: str, tag=None, params={}):
@@ -4138,7 +4139,7 @@ class bitmart(Exchange, ImplicitAPI):
         }
         return self.privatePostContractPrivateSubmitLeverage(self.extend(request, params))
 
-    def fetch_funding_rate(self, symbol: str, params={}):
+    def fetch_funding_rate(self, symbol: str, params={}) -> FundingRate:
         """
         fetch the current funding rate
         :see: https://developer-pro.bitmart.com/en/futuresv2/#get-current-funding-rate
@@ -4170,7 +4171,7 @@ class bitmart(Exchange, ImplicitAPI):
         data = self.safe_value(response, 'data', {})
         return self.parse_funding_rate(data, market)
 
-    def parse_funding_rate(self, contract, market: Market = None):
+    def parse_funding_rate(self, contract, market: Market = None) -> FundingRate:
         #
         #     {
         #         "timestamp": 1695184410697,
@@ -4199,6 +4200,7 @@ class bitmart(Exchange, ImplicitAPI):
             'previousFundingRate': self.safe_number(contract, 'rate_value'),
             'previousFundingTimestamp': None,
             'previousFundingDatetime': None,
+            'interval': None,
         }
 
     def fetch_position(self, symbol: str, params={}):

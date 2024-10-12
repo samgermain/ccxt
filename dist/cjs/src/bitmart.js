@@ -1299,6 +1299,7 @@ class bitmart extends bitmart$1 {
             'average': average,
             'baseVolume': baseVolume,
             'quoteVolume': quoteVolume,
+            'indexPrice': this.safeString(ticker, 'index_price'),
             'info': ticker,
         }, market);
     }
@@ -3507,9 +3508,9 @@ class bitmart extends bitmart$1 {
         return {
             'info': depositAddress,
             'currency': this.safeString(currency, 'code'),
+            'network': network,
             'address': address,
             'tag': this.safeString(depositAddress, 'address_memo'),
-            'network': network,
         };
     }
     async withdraw(code, amount, address, tag = undefined, params = {}) {
@@ -4496,6 +4497,7 @@ class bitmart extends bitmart$1 {
             'previousFundingRate': this.safeNumber(contract, 'rate_value'),
             'previousFundingTimestamp': undefined,
             'previousFundingDatetime': undefined,
+            'interval': undefined,
         };
     }
     async fetchPosition(symbol, params = {}) {

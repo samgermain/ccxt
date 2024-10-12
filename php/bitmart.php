@@ -1292,6 +1292,7 @@ class bitmart extends Exchange {
             'average' => $average,
             'baseVolume' => $baseVolume,
             'quoteVolume' => $quoteVolume,
+            'indexPrice' => $this->safe_string($ticker, 'index_price'),
             'info' => $ticker,
         ), $market);
     }
@@ -3356,7 +3357,7 @@ class bitmart extends Exchange {
         return $this->parse_order($data, $market);
     }
 
-    public function fetch_deposit_address(string $code, $params = array ()) {
+    public function fetch_deposit_address(string $code, $params = array ()): array {
         /**
          * fetch the deposit address for a $currency associated with this account
          * @see https://developer-pro.bitmart.com/en/spot/#deposit-address-keyed
@@ -3398,7 +3399,7 @@ class bitmart extends Exchange {
         return $this->parse_deposit_address($data, $currency);
     }
 
-    public function parse_deposit_address($depositAddress, $currency = null) {
+    public function parse_deposit_address($depositAddress, $currency = null): array {
         //
         //    {
         //        $currency => 'ETH',
@@ -3426,9 +3427,9 @@ class bitmart extends Exchange {
         return array(
             'info' => $depositAddress,
             'currency' => $this->safe_string($currency, 'code'),
+            'network' => $network,
             'address' => $address,
             'tag' => $this->safe_string($depositAddress, 'address_memo'),
-            'network' => $network,
         );
     }
 
@@ -4343,7 +4344,7 @@ class bitmart extends Exchange {
         return $this->privatePostContractPrivateSubmitLeverage ($this->extend($request, $params));
     }
 
-    public function fetch_funding_rate(string $symbol, $params = array ()) {
+    public function fetch_funding_rate(string $symbol, $params = array ()): array {
         /**
          * fetch the current funding rate
          * @see https://developer-pro.bitmart.com/en/futuresv2/#get-current-funding-rate
@@ -4377,7 +4378,7 @@ class bitmart extends Exchange {
         return $this->parse_funding_rate($data, $market);
     }
 
-    public function parse_funding_rate($contract, ?array $market = null) {
+    public function parse_funding_rate($contract, ?array $market = null): array {
         //
         //     {
         //         "timestamp" => 1695184410697,
@@ -4406,6 +4407,7 @@ class bitmart extends Exchange {
             'previousFundingRate' => $this->safe_number($contract, 'rate_value'),
             'previousFundingTimestamp' => null,
             'previousFundingDatetime' => null,
+            'interval' => null,
         );
     }
 

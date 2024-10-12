@@ -72,6 +72,8 @@ class mexc extends Exchange {
                 'fetchDepositWithdrawFee' => 'emulated',
                 'fetchDepositWithdrawFees' => true,
                 'fetchFundingHistory' => true,
+                'fetchFundingInterval' => true,
+                'fetchFundingIntervals' => false,
                 'fetchFundingRate' => true,
                 'fetchFundingRateHistory' => true,
                 'fetchFundingRates' => null,
@@ -223,6 +225,7 @@ class mexc extends Exchange {
                             'rebate/affiliate/commission/detail' => 1,
                             'mxDeduct/enable' => 1,
                             'userDataStream' => 1,
+                            'selfSymbols' => 1,
                         ),
                         'post' => array(
                             'order' => 1,
@@ -2117,6 +2120,7 @@ class mexc extends Exchange {
          * @param {float} [$params->triggerPrice] The $price at which a trigger order is triggered at
          * @param {bool} [$params->postOnly] if true, the order will only be posted if it will be a maker order
          * @param {bool} [$params->reduceOnly] *contract only* indicates if this order is to reduce the size of a position
+         * @param {bool} [$params->hedged] *swap only* true for hedged mode, false for one way mode, default is false
          *
          * EXCHANGE SPECIFIC PARAMETERS
          * @param {int} [$params->leverage] *contract only* leverage is necessary on isolated margin
@@ -2255,6 +2259,7 @@ class mexc extends Exchange {
          * @param {float} [$params->triggerPrice] The $price at which a trigger order is triggered at
          * @param {bool} [$params->postOnly] if true, the order will only be posted if it will be a maker order
          * @param {bool} [$params->reduceOnly] indicates if this order is to reduce the size of a position
+         * @param {bool} [$params->hedged] *swap only* true for $hedged mode, false for one way mode, default is false
          *
          * EXCHANGE SPECIFIC PARAMETERS
          * @param {int} [$params->leverage] $leverage is necessary on isolated margin
@@ -2330,17 +2335,29 @@ class mexc extends Exchange {
             }
         }
         $reduceOnly = $this->safe_bool($params, 'reduceOnly', false);
-        if ($reduceOnly) {
-            $request['side'] = ($side === 'buy') ? 2 : 4;
+        $hedged = $this->safe_bool($params, 'hedged', false);
+        $sideInteger = null;
+        if ($hedged) {
+            if ($reduceOnly) {
+                $params = $this->omit($params, 'reduceOnly'); // $hedged mode does not accept this parameter
+                $side = ($side === 'buy') ? 'sell' : 'buy';
+            }
+            $sideInteger = ($side === 'buy') ? 1 : 3;
+            $request['positionMode'] = 1;
         } else {
-            $request['side'] = ($side === 'buy') ? 1 : 3;
+            if ($reduceOnly) {
+                $sideInteger = ($side === 'buy') ? 2 : 4;
+            } else {
+                $sideInteger = ($side === 'buy') ? 1 : 3;
+            }
         }
+        $request['side'] = $sideInteger;
         $clientOrderId = $this->safe_string_2($params, 'clientOrderId', 'externalOid');
         if ($clientOrderId !== null) {
             $request['externalOid'] = $clientOrderId;
         }
         $stopPrice = $this->safe_number_2($params, 'triggerPrice', 'stopPrice');
-        $params = $this->omit($params, array( 'clientOrderId', 'externalOid', 'postOnly', 'stopPrice', 'triggerPrice' ));
+        $params = $this->omit($params, array( 'clientOrderId', 'externalOid', 'postOnly', 'stopPrice', 'triggerPrice', 'hedged' ));
         $response = null;
         if ($stopPrice) {
             $request['triggerPrice'] = $this->price_to_precision($symbol, $stopPrice);
@@ -2555,6 +2572,7 @@ class mexc extends Exchange {
          * @param {int} [$since] the earliest time in ms to fetch orders for
          * @param {int} [$limit] the maximum number of order structures to retrieve
          * @param {array} [$params] extra parameters specific to the exchange API endpoint
+         * @param {int} [$params->until] the latest time in ms to fetch orders for
          * @param {string} [$params->marginMode] only 'isolated' is supported, for spot-margin trading
          * @return {Order[]} a list of ~@link https://docs.ccxt.com/#/?id=order-structure order structures~
          */
@@ -2565,6 +2583,8 @@ class mexc extends Exchange {
             $market = $this->market($symbol);
             $request['symbol'] = $market['id'];
         }
+        $until = $this->safe_integer($params, 'until');
+        $params = $this->omit($params, 'until');
         list($marketType, $query) = $this->handle_market_type_and_params('fetchOrders', $market, $params);
         if ($marketType === 'spot') {
             if ($symbol === null) {
@@ -2573,6 +2593,9 @@ class mexc extends Exchange {
             list($marginMode, $queryInner) = $this->handle_margin_mode_and_params('fetchOrders', $params);
             if ($since !== null) {
                 $request['startTime'] = $since;
+            }
+            if ($until !== null) {
+                $request['endTime'] = $until;
             }
             if ($limit !== null) {
                 $request['limit'] = $limit;
@@ -2638,10 +2661,19 @@ class mexc extends Exchange {
         } else {
             if ($since !== null) {
                 $request['start_time'] = $since;
-                $end = $this->safe_integer($params, 'end_time');
+                $end = $this->safe_integer($params, 'end_time', $until);
                 if ($end === null) {
                     $request['end_time'] = $this->sum($since, $this->options['maxTimeTillEnd']);
+                } else {
+                    if (($end - $since) > $this->options['maxTimeTillEnd']) {
+                        throw new BadRequest($this->id . ' $end is invalid, i.e. exceeds allowed 90 days.');
+                    } else {
+                        $request['end_time'] = $until;
+                    }
                 }
+            } elseif ($until !== null) {
+                $request['start_time'] = $this->sum($until, $this->options['maxTimeTillEnd'] * -1);
+                $request['end_time'] = $until;
             }
             if ($limit !== null) {
                 $request['page_size'] = $limit;
@@ -3783,6 +3815,7 @@ class mexc extends Exchange {
          * @param {int} [$since] the earliest time in ms to fetch $trades for
          * @param {int} [$limit] the maximum number of $trades structures to retrieve
          * @param {array} [$params] extra parameters specific to the exchange API endpoint
+         * @param {int} [$params->until] the latest time in ms to fetch $trades for
          * @return {Trade[]} a list of ~@link https://docs.ccxt.com/#/?id=trade-structure trade structures~
          */
         if ($symbol === null) {
@@ -3790,19 +3823,25 @@ class mexc extends Exchange {
         }
         $this->load_markets();
         $market = $this->market($symbol);
-        list($marketType, $query) = $this->handle_market_type_and_params('fetchMyTrades', $market, $params);
+        $marketType = null;
+        list($marketType, $params) = $this->handle_market_type_and_params('fetchMyTrades', $market, $params);
         $request = array(
             'symbol' => $market['id'],
         );
         $trades = null;
         if ($marketType === 'spot') {
             if ($since !== null) {
-                $request['start_time'] = $since;
+                $request['startTime'] = $since;
             }
             if ($limit !== null) {
                 $request['limit'] = $limit;
             }
-            $trades = $this->spotPrivateGetMyTrades ($this->extend($request, $query));
+            $until = $this->safe_integer($params, 'until');
+            if ($until !== null) {
+                $params = $this->omit($params, 'until');
+                $request['endTime'] = $until;
+            }
+            $trades = $this->spotPrivateGetMyTrades ($this->extend($request, $params));
             //
             // spot
             //
@@ -3835,7 +3874,7 @@ class mexc extends Exchange {
             if ($limit !== null) {
                 $request['page_size'] = $limit;
             }
-            $response = $this->contractPrivateGetOrderListOrderDeals ($this->extend($request, $query));
+            $response = $this->contractPrivateGetOrderListOrderDeals ($this->extend($request, $params));
             //
             //     {
             //         "success" => true,
@@ -4095,7 +4134,7 @@ class mexc extends Exchange {
         return $result;
     }
 
-    public function parse_funding_rate($contract, ?array $market = null) {
+    public function parse_funding_rate($contract, ?array $market = null): array {
         //
         //     {
         //         "symbol" => "BTC_USDT",
@@ -4110,9 +4149,13 @@ class mexc extends Exchange {
         $nextFundingRate = $this->safe_number($contract, 'fundingRate');
         $nextFundingTimestamp = $this->safe_integer($contract, 'nextSettleTime');
         $marketId = $this->safe_string($contract, 'symbol');
-        $symbol = $this->safe_symbol($marketId, $market);
+        $symbol = $this->safe_symbol($marketId, $market, null, 'contract');
         $timestamp = $this->safe_integer($contract, 'timestamp');
-        $datetime = $this->iso8601($timestamp);
+        $interval = $this->safe_string($contract, 'collectCycle');
+        $intervalString = null;
+        if ($interval !== null) {
+            $intervalString = $interval . 'h';
+        }
         return array(
             'info' => $contract,
             'symbol' => $symbol,
@@ -4121,7 +4164,7 @@ class mexc extends Exchange {
             'interestRate' => null,
             'estimatedSettlePrice' => null,
             'timestamp' => $timestamp,
-            'datetime' => $datetime,
+            'datetime' => $this->iso8601($timestamp),
             'fundingRate' => $nextFundingRate,
             'fundingTimestamp' => $nextFundingTimestamp,
             'fundingDatetime' => $this->iso8601($nextFundingTimestamp),
@@ -4131,10 +4174,22 @@ class mexc extends Exchange {
             'previousFundingRate' => null,
             'previousFundingTimestamp' => null,
             'previousFundingDatetime' => null,
+            'interval' => $intervalString,
         );
     }
 
-    public function fetch_funding_rate(string $symbol, $params = array ()) {
+    public function fetch_funding_interval(string $symbol, $params = array ()): array {
+        /**
+         * fetch the current funding rate interval
+         * @see https://mexcdevelop.github.io/apidocs/contract_v1_en/#get-contract-funding-rate
+         * @param {string} $symbol unified market $symbol
+         * @param {array} [$params] extra parameters specific to the exchange API endpoint
+         * @return {array} a ~@link https://docs.ccxt.com/#/?id=funding-rate-structure funding rate structure~
+         */
+        return $this->fetch_funding_rate($symbol, $params);
+    }
+
+    public function fetch_funding_rate(string $symbol, $params = array ()): array {
         /**
          * fetch the current funding rate
          * @see https://mexcdevelop.github.io/apidocs/contract_v1_en/#get-contract-funding-rate
@@ -4374,7 +4429,7 @@ class mexc extends Exchange {
         return $tiers;
     }
 
-    public function parse_deposit_address($depositAddress, ?array $currency = null) {
+    public function parse_deposit_address($depositAddress, ?array $currency = null): array {
         //
         //    {
         //        coin => "USDT",
@@ -4388,21 +4443,21 @@ class mexc extends Exchange {
         $networkId = $this->safe_string($depositAddress, 'netWork');
         $this->check_address($address);
         return array(
+            'info' => $depositAddress,
             'currency' => $this->safe_currency_code($currencyId, $currency),
+            'network' => $this->network_id_to_code($networkId),
             'address' => $address,
             'tag' => $this->safe_string($depositAddress, 'memo'),
-            'network' => $this->network_id_to_code($networkId),
-            'info' => $depositAddress,
         );
     }
 
-    public function fetch_deposit_addresses_by_network(string $code, $params = array ()) {
+    public function fetch_deposit_addresses_by_network(string $code, $params = array ()): array {
         /**
-         * fetch a dictionary of addresses for a $currency, indexed by network
-         * @see https://mexcdevelop.github.io/apidocs/spot_v3_en/#deposit-address-supporting-network
+         * fetch a dictionary of addresses for a $currency, indexed by $network
+         * @see https://mexcdevelop.github.io/apidocs/spot_v3_en/#deposit-address-supporting-$network
          * @param {string} $code unified $currency $code of the $currency for the deposit address
          * @param {array} [$params] extra parameters specific to the exchange API endpoint
-         * @return {array} a dictionary of ~@link https://docs.ccxt.com/#/?id=address-structure address structures~ indexed by the network
+         * @return {array} a dictionary of ~@link https://docs.ccxt.com/#/?id=address-structure address structures~ indexed by the $network
          */
         $this->load_markets();
         $currency = $this->currency($code);
@@ -4412,7 +4467,16 @@ class mexc extends Exchange {
         $networkCode = $this->safe_string($params, 'network');
         $networkId = null;
         if ($networkCode !== null) {
-            $networkId = $this->network_code_to_id($networkCode, $code);
+            // createDepositAddress and fetchDepositAddress use a different $network-id compared to withdraw
+            $networkUnified = $this->network_id_to_code($networkCode, $code);
+            $networks = $this->safe_dict($currency, 'networks', array());
+            if (is_array($networks) && array_key_exists($networkUnified, $networks)) {
+                $network = $this->safe_dict($networks, $networkUnified, array());
+                $networkInfo = $this->safe_value($network, 'info', array());
+                $networkId = $this->safe_string($networkInfo, 'network');
+            } else {
+                $networkId = $this->network_code_to_id($networkCode, $code);
+            }
         }
         if ($networkId !== null) {
             $request['network'] = $networkId;
@@ -4423,7 +4487,7 @@ class mexc extends Exchange {
         //    array(
         //        {
         //            coin => "USDT",
-        //            network => "BNB Smart Chain(BEP20)",
+        //            $network => "BNB Smart Chain(BEP20)",
         //            address => "0x0d48003e0c27c5de62b97c9b4cdb31fdd29da619",
         //            memo =>  null
         //        }
@@ -4437,10 +4501,10 @@ class mexc extends Exchange {
     public function create_deposit_address(string $code, $params = array ()) {
         /**
          * create a $currency deposit address
-         * @see https://mexcdevelop.github.io/apidocs/spot_v3_en/#generate-deposit-address-supporting-network
+         * @see https://mexcdevelop.github.io/apidocs/spot_v3_en/#generate-deposit-address-supporting-$network
          * @param {string} $code unified $currency $code of the $currency for the deposit address
          * @param {array} [$params] extra parameters specific to the exchange API endpoint
-         * @param {string} [$params->network] the blockchain network name
+         * @param {string} [$params->network] the blockchain $network name
          * @return {array} an ~@link https://docs.ccxt.com/#/?id=address-structure address structure~
          */
         $this->load_markets();
@@ -4450,9 +4514,19 @@ class mexc extends Exchange {
         );
         $networkCode = $this->safe_string($params, 'network');
         if ($networkCode === null) {
-            throw new ArgumentsRequired($this->id . ' createDepositAddress requires a `network` parameter');
+            throw new ArgumentsRequired($this->id . ' createDepositAddress requires a `$network` parameter');
         }
-        $networkId = $this->network_code_to_id($networkCode, $code);
+        // createDepositAddress and fetchDepositAddress use a different $network-id compared to withdraw
+        $networkId = null;
+        $networkUnified = $this->network_id_to_code($networkCode, $code);
+        $networks = $this->safe_dict($currency, 'networks', array());
+        if (is_array($networks) && array_key_exists($networkUnified, $networks)) {
+            $network = $this->safe_dict($networks, $networkUnified, array());
+            $networkInfo = $this->safe_value($network, 'info', array());
+            $networkId = $this->safe_string($networkInfo, 'network');
+        } else {
+            $networkId = $this->network_code_to_id($networkCode, $code);
+        }
         if ($networkId !== null) {
             $request['network'] = $networkId;
         }
@@ -4467,7 +4541,7 @@ class mexc extends Exchange {
         return $this->parse_deposit_address($response, $currency);
     }
 
-    public function fetch_deposit_address(string $code, $params = array ()) {
+    public function fetch_deposit_address(string $code, $params = array ()): array {
         /**
          * fetch the deposit address for a currency associated with this account
          * @see https://mexcdevelop.github.io/apidocs/spot_v3_en/#deposit-address-supporting-$network
@@ -4477,7 +4551,6 @@ class mexc extends Exchange {
          * @return {array} an ~@link https://docs.ccxt.com/#/?id=address-structure address structure~
          */
         $network = $this->safe_string($params, 'network');
-        $params = $this->omit($params, array( 'network' ));
         $addressStructures = $this->fetch_deposit_addresses_by_network($code, $params);
         $result = null;
         if ($network !== null) {

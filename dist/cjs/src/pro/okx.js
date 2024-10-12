@@ -13,6 +13,8 @@ class okx extends okx$1 {
             'has': {
                 'ws': true,
                 'watchTicker': true,
+                'watchMarkPrice': true,
+                'watchMarkPrices': true,
                 'watchTickers': true,
                 'watchBidsAsks': true,
                 'watchOrderBook': true,
@@ -423,6 +425,46 @@ class okx extends okx$1 {
         symbols = this.marketSymbols(symbols, undefined, false);
         let channel = undefined;
         [channel, params] = this.handleOptionAndParams(params, 'watchTickers', 'channel', 'tickers');
+        const newTickers = await this.subscribeMultiple('public', channel, symbols, params);
+        if (this.newUpdates) {
+            return newTickers;
+        }
+        return this.filterByArray(this.tickers, 'symbol', symbols);
+    }
+    async watchMarkPrice(symbol, params = {}) {
+        /**
+         * @method
+         * @name okx#watchMarkPrice
+         * @see https://www.okx.com/docs-v5/en/#public-data-websocket-mark-price-channel
+         * @description watches a mark price
+         * @param {string} symbol unified symbol of the market to fetch the ticker for
+         * @param {object} [params] extra parameters specific to the exchange API endpoint
+         * @param {string} [params.channel] the channel to subscribe to, tickers by default. Can be tickers, sprd-tickers, index-tickers, block-tickers
+         * @returns {object} a [ticker structure]{@link https://docs.ccxt.com/#/?id=ticker-structure}
+         */
+        let channel = undefined;
+        [channel, params] = this.handleOptionAndParams(params, 'watchMarkPrice', 'channel', 'mark-price');
+        params['channel'] = channel;
+        const market = this.market(symbol);
+        symbol = market['symbol'];
+        const ticker = await this.watchMarkPrices([symbol], params);
+        return ticker[symbol];
+    }
+    async watchMarkPrices(symbols = undefined, params = {}) {
+        /**
+         * @method
+         * @name okx#watchMarkPrices
+         * @see https://www.okx.com/docs-v5/en/#public-data-websocket-mark-price-channel
+         * @description watches mark prices
+         * @param {string[]} [symbols] unified symbol of the market to fetch the ticker for
+         * @param {object} [params] extra parameters specific to the exchange API endpoint
+         * @param {string} [params.channel] the channel to subscribe to, tickers by default. Can be tickers, sprd-tickers, index-tickers, block-tickers
+         * @returns {object} a [ticker structure]{@link https://docs.ccxt.com/#/?id=ticker-structure}
+         */
+        await this.loadMarkets();
+        symbols = this.marketSymbols(symbols, undefined, false);
+        let channel = undefined;
+        [channel, params] = this.handleOptionAndParams(params, 'watchMarkPrices', 'channel', 'mark-price');
         const newTickers = await this.subscribeMultiple('public', channel, symbols, params);
         if (this.newUpdates) {
             return newTickers;
@@ -1949,7 +1991,7 @@ class okx extends okx$1 {
         const tradeSymbols = Object.keys(symbols);
         for (let i = 0; i < tradeSymbols.length; i++) {
             const symbolMessageHash = messageHash + '::' + tradeSymbols[i];
-            client.resolve(this.orders, symbolMessageHash);
+            client.resolve(this.myTrades, symbolMessageHash);
         }
     }
     requestId() {
@@ -2209,14 +2251,30 @@ class okx extends okx$1 {
         //     { event: 'error', msg: "Illegal request: {"op":"subscribe","args":["spot/ticker:BTC-USDT"]}", code: "60012" }
         //     { event: 'error", msg: "channel:ticker,instId:BTC-USDT doesn"t exist", code: "60018" }
         //
-        const errorCode = this.safeString(message, 'code');
+        let errorCode = this.safeString(message, 'code');
         try {
             if (errorCode && errorCode !== '0') {
                 const feedback = this.id + ' ' + this.json(message);
-                this.throwExactlyMatchedException(this.exceptions['exact'], errorCode, feedback);
-                const messageString = this.safeValue(message, 'msg');
+                if (errorCode !== '1') {
+                    this.throwExactlyMatchedException(this.exceptions['exact'], errorCode, feedback);
+                }
+                let messageString = this.safeValue(message, 'msg');
                 if (messageString !== undefined) {
                     this.throwBroadlyMatchedException(this.exceptions['broad'], messageString, feedback);
+                }
+                else {
+                    const data = this.safeList(message, 'data', []);
+                    for (let i = 0; i < data.length; i++) {
+                        const d = data[i];
+                        errorCode = this.safeString(d, 'sCode');
+                        if (errorCode !== undefined) {
+                            this.throwExactlyMatchedException(this.exceptions['exact'], errorCode, feedback);
+                        }
+                        messageString = this.safeValue(message, 'sMsg');
+                        if (messageString !== undefined) {
+                            this.throwBroadlyMatchedException(this.exceptions['broad'], messageString, feedback);
+                        }
+                    }
                 }
                 throw new errors.ExchangeError(feedback);
             }
@@ -2313,6 +2371,7 @@ class okx extends okx$1 {
                 'books50-l2-tbt': this.handleOrderBook,
                 'books-l2-tbt': this.handleOrderBook,
                 'tickers': this.handleTicker,
+                'mark-price': this.handleTicker,
                 'positions': this.handlePositions,
                 'index-tickers': this.handleTicker,
                 'sprd-tickers': this.handleTicker,

@@ -1302,6 +1302,7 @@ export default class bitmart extends Exchange {
             'average': average,
             'baseVolume': baseVolume,
             'quoteVolume': quoteVolume,
+            'indexPrice': this.safeString(ticker, 'index_price'),
             'info': ticker,
         }, market);
     }
@@ -3510,9 +3511,9 @@ export default class bitmart extends Exchange {
         return {
             'info': depositAddress,
             'currency': this.safeString(currency, 'code'),
+            'network': network,
             'address': address,
             'tag': this.safeString(depositAddress, 'address_memo'),
-            'network': network,
         };
     }
     async withdraw(code, amount, address, tag = undefined, params = {}) {
@@ -4499,6 +4500,7 @@ export default class bitmart extends Exchange {
             'previousFundingRate': this.safeNumber(contract, 'rate_value'),
             'previousFundingTimestamp': undefined,
             'previousFundingDatetime': undefined,
+            'interval': undefined,
         };
     }
     async fetchPosition(symbol, params = {}) {
