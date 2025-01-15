@@ -989,11 +989,13 @@ export default class currencycom extends Exchange {
      * @param {int} [since] timestamp in ms of the earliest candle to fetch
      * @param {int} [limit] the maximum amount of candles to fetch
      * @param {object} [params] extra parameters specific to the exchange API endpoint
+     * @param {int} [params.until] timestamp in ms of the latest candle to fetch
      * @returns {int[][]} A list of candles ordered as timestamp, open, high, low, close, volume
      */
     async fetchOHLCV (symbol: string, timeframe = '1m', since: Int = undefined, limit: Int = undefined, params = {}): Promise<OHLCV[]> {
         await this.loadMarkets ();
         const market = this.market (symbol);
+        const until = this.safeInteger (params, 'until');
         const request: Dict = {
             'symbol': market['id'],
             'interval': this.safeString (this.timeframes, timeframe, timeframe),
@@ -1004,6 +1006,10 @@ export default class currencycom extends Exchange {
         if (limit !== undefined) {
             request['limit'] = Math.min (limit, 1000); // default 500, max 1000
         }
+        if (until !== undefined) {
+            request['endTime'] = Math.min (limit, 1000); // default 500, max 1000
+        }
+        params = this.omit (params, 'until');
         const response = await this.publicGetV2Klines (this.extend (request, params));
         //
         //     [
