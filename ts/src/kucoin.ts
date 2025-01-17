@@ -1951,6 +1951,7 @@ export default class kucoin extends Exchange {
      * @param {int} [since] timestamp in ms of the earliest candle to fetch
      * @param {int} [limit] the maximum amount of candles to fetch
      * @param {object} [params] extra parameters specific to the exchange API endpoint
+     * @param {int} [params.until] timestamp in ms of the latest candle to fetch
      * @param {boolean} [params.paginate] default false, when true will automatically paginate by calling this endpoint multiple times. See in the docs all the [availble parameters](https://github.com/ccxt/ccxt/wiki/Manual#pagination-params)
      * @returns {int[][]} A list of candles ordered as timestamp, open, high, low, close, volume
      */
@@ -1968,9 +1969,10 @@ export default class kucoin extends Exchange {
             'type': this.safeString (this.timeframes, timeframe, timeframe),
         };
         const duration = this.parseTimeframe (timeframe) * 1000;
-        let endAt = this.milliseconds (); // required param
+        const until = this.safeInteger (params, 'until');
+        let endAt = (until !== undefined) ? until : this.milliseconds (); // required param
         if (since !== undefined) {
-            request['startAt'] = this.parseToInt (Math.floor (since / 1000));
+            request['startAt'] = this.parseToInt (Math.floor (since / 1000)) - 1;
             if (limit === undefined) {
                 // https://docs.kucoin.com/#get-klines
                 // https://docs.kucoin.com/#details
@@ -1978,12 +1980,15 @@ export default class kucoin extends Exchange {
                 // To obtain more data, please page the data by time.
                 limit = this.safeInteger (this.options, 'fetchOHLCVLimit', 1500);
             }
-            endAt = this.sum (since, limit * duration);
+            if (until === undefined) {
+                endAt = this.sum (since, limit * duration);
+            }
         } else if (limit !== undefined) {
             since = endAt - limit * duration;
-            request['startAt'] = this.parseToInt (Math.floor (since / 1000));
+            request['startAt'] = this.parseToInt (Math.floor (since / 1000)) - 1;
         }
-        request['endAt'] = this.parseToInt (Math.floor (endAt / 1000));
+        request['endAt'] = this.parseToInt (Math.floor (endAt / 1000)) + 1;
+        params = this.omit (params, 'until');
         const response = await this.publicGetMarketCandles (this.extend (request, params));
         //
         //     {
