@@ -425,6 +425,94 @@
                 ]
             },
             {
+                "description": "fetchOHLCV with since",
+                "method": "fetchOHLCV",
+                "url": "https://whitebit.com/api/v1/public/kline?market=BTC_USDT&interval=1h&start=1735711200",
+                "input": [
+                  "BTC/USDT",
+                  "1h",
+                  1735711200000
+                ]
+            },
+            {
+                "description": "fetchOHLCV with limit",
+                "method": "fetchOHLCV",
+                "url": "https://whitebit.com/api/v1/public/kline?market=BTC_USDT&interval=1h&limit=4",
+                "input": [
+                  "BTC/USDT",
+                  "1h",
+                  null,
+                  4
+                ]
+            },
+            {
+                "description": "fetchOHLCV with until",
+                "method": "fetchOHLCV",
+                "url": "https://whitebit.com/api/v1/public/kline?market=BTC_USDT&interval=1h&end=1735952400&limit=1440&until=1735948800000",
+                "input": [
+                  "BTC/USDT",
+                  "1h",
+                  null,
+                  null,
+                  {
+                    "until": 1735948800000
+                  }
+                ]
+            },
+            {
+                "description": "fetchOHLCV with since, and limit",
+                "method": "fetchOHLCV",
+                "url": "https://whitebit.com/api/v1/public/kline?market=BTC_USDT&interval=1h&start=1735711200",
+                "input": [
+                  "BTC/USDT",
+                  "1h",
+                  1735711200000,
+                  4
+                ]
+            },
+            {
+                "description": "fetchOHLCV with since and until",
+                "method": "fetchOHLCV",
+                "url": "https://whitebit.com/api/v1/public/kline?market=BTC_USDT&interval=1h&end=1735948800&start=1735711200&until=1735948800000",
+                "input": [
+                  "BTC/USDT",
+                  "1h",
+                  1735711200000,
+                  null,
+                  {
+                    "until": 1735948800000
+                  }
+                ]
+            },
+            {
+                "description": "fetchOHLCV with limit and until",
+                "method": "fetchOHLCV",
+                "url": "https://whitebit.com/api/v1/public/kline?market=BTC_USDT&interval=1h&end=1735952400&limit=4&until=1735948800000",
+                "input": [
+                  "BTC/USDT",
+                  "1h",
+                  null,
+                  4,
+                  {
+                    "until": 1735948800000
+                  }
+                ]
+            },
+            {
+                "description": "fetchOHLCV with until - since equal to limit",
+                "method": "fetchOHLCV",
+                "url": "https://whitebit.com/api/v1/public/kline?market=BTC_USDT&interval=1h&end=1735948800&start=1735711200&until=1735948800000",
+                "input": [
+                  "BTC/USDT",
+                  "1h",
+                  1735711200000,
+                  3,
+                  {
+                    "until": 1735948800000
+                  }
+                ]
+            }              
+            {
                 "description": "swap ohlcv",
                 "method": "fetchOHLCV",
                 "url": "https://whitebit.com/api/v1/public/kline?market=BTC_PERP&interval=1m",

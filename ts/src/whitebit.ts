@@ -1247,20 +1247,23 @@ export default class whitebit extends Exchange {
         };
         const until = this.safeInteger (params, 'until');
         const maxLimit = 1440;
-        if ((since !== undefined) || (until !== undefined)) {
+        const duration = this.parseTimeframe (timeframe);
+        if (until !== undefined) {
             if (limit === undefined) {
                 limit = maxLimit;
             }
             limit = Math.min (limit, maxLimit);
+            const end = this.parseToInt (until / 1000);
             if (since !== undefined) {
-                const start = this.parseToInt (since / 1000);
-                request['start'] = start;
-            } else if (until !== undefined) {
-                const end = this.parseToInt (until / 1000);
                 request['end'] = end;
+            } else {
+                request['end'] = end + duration;
             }
         }
-        if (limit !== undefined) {
+        if (since !== undefined) {
+            const start = this.parseToInt (since / 1000);
+            request['start'] = start;
+        } else if (limit !== undefined) {
             request['limit'] = Math.min (limit, maxLimit);
         }
         const response = await this.v1PublicGetKline (this.extend (request, params));
