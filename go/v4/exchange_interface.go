@@ -226,6 +226,7 @@ type ICoreExchange interface {
 	SetOptions(options interface{})
 	CreateOrders(orders interface{}, optionalArgs ...interface{}) <-chan interface{}
 	AddMargin(symbol interface{}, amount interface{}, optionalArgs ...interface{}) <-chan interface{}
+	AmountToPrecision(symbol interface{}, amount interface{}) interface{}
 	BorrowCrossMargin(code interface{}, amount interface{}, optionalArgs ...interface{}) <-chan interface{}
 	BorrowIsolatedMargin(symbol interface{}, code interface{}, amount interface{}, optionalArgs ...interface{}) <-chan interface{}
 	BorrowMargin(code interface{}, amount interface{}, optionalArgs ...interface{}) <-chan interface{}
@@ -233,6 +234,7 @@ type ICoreExchange interface {
 	CancelOrder(id interface{}, optionalArgs ...interface{}) <-chan interface{}
 	CloseAllPositions(optionalArgs ...interface{}) <-chan interface{}
 	ClosePosition(symbol interface{}, optionalArgs ...interface{}) <-chan interface{}
+	CostToPrecision(symbol interface{}, cost interface{}) interface{}
 	CreateDepositAddress(code interface{}, optionalArgs ...interface{}) <-chan interface{}
 	CreateLimitBuyOrder(symbol interface{}, amount interface{}, price interface{}, optionalArgs ...interface{}) <-chan interface{}
 	CreateLimitOrder(symbol interface{}, side interface{}, amount interface{}, price interface{}, optionalArgs ...interface{}) <-chan interface{}
@@ -254,8 +256,10 @@ type ICoreExchange interface {
 	CreateTrailingAmountOrder(symbol interface{}, typeVar interface{}, side interface{}, amount interface{}, optionalArgs ...interface{}) <-chan interface{}
 	CreateTrailingPercentOrder(symbol interface{}, typeVar interface{}, side interface{}, amount interface{}, optionalArgs ...interface{}) <-chan interface{}
 	CreateTriggerOrder(symbol interface{}, typeVar interface{}, side interface{}, amount interface{}, optionalArgs ...interface{}) <-chan interface{}
+	CurrencyToPrecision(code interface{}, fee interface{}, optionalArgs ...interface{}) interface{}
 	EditOrder(id interface{}, symbol interface{}, typeVar interface{}, side interface{}, optionalArgs ...interface{}) <-chan interface{}
 	EditOrders(orders interface{}, optionalArgs ...interface{}) <-chan interface{}
+	FeeToPrecision(symbol interface{}, fee interface{}) interface{}
 	FetchBorrowRate(code interface{}, amount interface{}, optionalArgs ...interface{}) <-chan interface{}
 	FetchCanceledAndClosedOrders(optionalArgs ...interface{}) <-chan interface{}
 	FetchCrossBorrowRate(code interface{}, optionalArgs ...interface{}) <-chan interface{}
@@ -294,6 +298,7 @@ type ICoreExchange interface {
 	FetchTransactionFees(optionalArgs ...interface{}) <-chan interface{}
 	FetchTransfer(id interface{}, optionalArgs ...interface{}) <-chan interface{}
 	FetchTransfers(optionalArgs ...interface{}) <-chan interface{}
+	PriceToPrecision(symbol interface{}, precision interface{}) <-chan interface{}
 	ReduceMargin(symbol interface{}, amount interface{}, optionalArgs ...interface{}) <-chan interface{}
 	RepayCrossMargin(code interface{}, amount interface{}, optionalArgs ...interface{}) <-chan interface{}
 	RepayIsolatedMargin(symbol interface{}, code interface{}, amount interface{}, optionalArgs ...interface{}) <-chan interface{}
@@ -302,7 +307,7 @@ type ICoreExchange interface {
 	SetMarginMode(marginMode interface{}, optionalArgs ...interface{}) <-chan interface{}
 	SetPositionMode(hedged interface{}, optionalArgs ...interface{}) <-chan interface{}
 	Transfer(code interface{}, amount interface{}, fromAccount interface{}, toAccount interface{}, optionalArgs ...interface{}) <-chan interface{}
-
+	
 	//TODO
 	// WebSocket methods
 	// CancelAllOrdersWs(optionalArgs ...interface{}) <-chan interface{}
