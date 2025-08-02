@@ -298,7 +298,7 @@ type ICoreExchange interface {
 	FetchTransactionFees(optionalArgs ...interface{}) <-chan interface{}
 	FetchTransfer(id interface{}, optionalArgs ...interface{}) <-chan interface{}
 	FetchTransfers(optionalArgs ...interface{}) <-chan interface{}
-	PriceToPrecision(symbol interface{}, precision interface{}) <-chan interface{}
+	PriceToPrecision(symbol interface{}, price interface{}) interface{}
 	ReduceMargin(symbol interface{}, amount interface{}, optionalArgs ...interface{}) <-chan interface{}
 	RepayCrossMargin(code interface{}, amount interface{}, optionalArgs ...interface{}) <-chan interface{}
 	RepayIsolatedMargin(symbol interface{}, code interface{}, amount interface{}, optionalArgs ...interface{}) <-chan interface{}
