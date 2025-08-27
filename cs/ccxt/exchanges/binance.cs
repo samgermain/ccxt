@@ -1310,6 +1310,7 @@ public partial class binance : Exchange
                 { "defaultSubType", null },
                 { "hasAlreadyAuthenticatedSuccessfully", false },
                 { "warnOnFetchOpenOrdersWithoutSymbol", true },
+                { "currencyToPrecisionRoundingMode", TRUNCATE },
                 { "throwMarginModeAlreadySet", false },
                 { "fetchPositions", "positionRisk" },
                 { "recvWindow", multiply(10, 1000) },
@@ -2657,15 +2658,18 @@ public partial class binance : Exchange
                 return getValue(markets, 0);
             } else if (isTrue(isTrue((isGreaterThan(getIndexOf(symbol, "/"), -1))) && isTrue((isLessThan(getIndexOf(symbol, ":"), 0)))))
             {
-                // support legacy symbols
-                var bsquoteVariable = ((string)symbol).Split(new [] {((string)"/")}, StringSplitOptions.None).ToList<object>();
-                var bs = ((IList<object>) bsquoteVariable)[0];
-                var quote = ((IList<object>) bsquoteVariable)[1];
-                object settle = ((bool) isTrue((isEqual(quote, "USD")))) ? bs : quote;
-                object futuresSymbol = add(add(symbol, ":"), settle);
-                if (isTrue(inOp(this.markets, futuresSymbol)))
+                if (isTrue(isTrue((!isEqual(defaultType, null))) && isTrue((!isEqual(defaultType, "spot")))))
                 {
-                    return getValue(this.markets, futuresSymbol);
+                    // support legacy symbols
+                    var bsquoteVariable = ((string)symbol).Split(new [] {((string)"/")}, StringSplitOptions.None).ToList<object>();
+                    var bs = ((IList<object>) bsquoteVariable)[0];
+                    var quote = ((IList<object>) bsquoteVariable)[1];
+                    object settle = ((bool) isTrue((isEqual(quote, "USD")))) ? bs : quote;
+                    object futuresSymbol = add(add(symbol, ":"), settle);
+                    if (isTrue(inOp(this.markets, futuresSymbol)))
+                    {
+                        return getValue(this.markets, futuresSymbol);
+                    }
                 }
             } else if (isTrue(isTrue((isGreaterThan(getIndexOf(symbol, "-C"), -1))) || isTrue((isGreaterThan(getIndexOf(symbol, "-P"), -1)))))
             {
@@ -2689,18 +2693,6 @@ public partial class binance : Exchange
     public override object costToPrecision(object symbol, object cost)
     {
         return this.decimalToPrecision(cost, TRUNCATE, getValue(getValue(getValue(this.markets, symbol), "precision"), "quote"), this.precisionMode, this.paddingMode);
-    }
-
-    public override object currencyToPrecision(object code, object fee, object networkCode = null)
-    {
-        // info is available in currencies only if the user has configured his api keys
-        if (isTrue(!isEqual(this.safeValue(getValue(this.currencies, code), "precision"), null)))
-        {
-            return this.decimalToPrecision(fee, TRUNCATE, getValue(getValue(this.currencies, code), "precision"), this.precisionMode, this.paddingMode);
-        } else
-        {
-            return this.numberToString(fee);
-        }
     }
 
     public override object nonce()
@@ -8115,6 +8107,7 @@ public partial class binance : Exchange
      * @param {string[]} ids order ids
      * @param {string} [symbol] unified market symbol
      * @param {object} [params] extra parameters specific to the exchange API endpoint
+     * @param {string[]} [params.clientOrderIds] alternative to ids, array of client order ids
      *
      * EXCHANGE SPECIFIC PARAMETERS
      * @param {string[]} [params.origClientOrderIdList] max length 10 e.g. ["my_id_1","my_id_2"], encode the double quotes. No space after comma
@@ -8136,8 +8129,16 @@ public partial class binance : Exchange
         }
         object request = new Dictionary<string, object>() {
             { "symbol", getValue(market, "id") },
-            { "orderidlist", ids },
         };
+        object origClientOrderIdList = this.safeList2(parameters, "origClientOrderIdList", "clientOrderIds");
+        if (isTrue(!isEqual(origClientOrderIdList, null)))
+        {
+            parameters = this.omit(parameters, new List<object>() {"clientOrderIds"});
+            ((IDictionary<string,object>)request)["origClientOrderIdList"] = origClientOrderIdList;
+        } else
+        {
+            ((IDictionary<string,object>)request)["orderidlist"] = ids;
+        }
         object response = null;
         if (isTrue(getValue(market, "linear")))
         {
@@ -9686,7 +9687,6 @@ public partial class binance : Exchange
         object request = new Dictionary<string, object>() {
             { "coin", getValue(currency, "id") },
             { "address", address },
-            { "amount", this.currencyToPrecision(code, amount) },
         };
         if (isTrue(!isEqual(tag, null)))
         {
@@ -9700,6 +9700,7 @@ public partial class binance : Exchange
             ((IDictionary<string,object>)request)["network"] = network;
             parameters = this.omit(parameters, "network");
         }
+        ((IDictionary<string,object>)request)["amount"] = this.currencyToPrecision(code, amount, network);
         object response = await this.sapiPostCapitalWithdrawApply(this.extend(request, parameters));
         //     { id: '9a67628b16ba4988ae20d329333f16bc' }
         return this.parseTransaction(response, currency);
@@ -12561,8 +12562,8 @@ public partial class binance : Exchange
                 if (isTrue(isTrue((isEqual(method, "DELETE"))) && isTrue((isEqual(path, "batchOrders")))))
                 {
                     object orderidlist = this.safeList(extendedParams, "orderidlist", new List<object>() {});
-                    object origclientorderidlist = this.safeList(extendedParams, "origclientorderidlist", new List<object>() {});
-                    extendedParams = this.omit(extendedParams, new List<object>() {"orderidlist", "origclientorderidlist"});
+                    object origclientorderidlist = this.safeList2(extendedParams, "origclientorderidlist", "origClientOrderIdList", new List<object>() {});
+                    extendedParams = this.omit(extendedParams, new List<object>() {"orderidlist", "origclientorderidlist", "origClientOrderIdList"});
                     query = this.rawencode(extendedParams);
                     object orderidlistLength = getArrayLength(orderidlist);
                     object origclientorderidlistLength = getArrayLength(origclientorderidlist);
@@ -12572,7 +12573,13 @@ public partial class binance : Exchange
                     }
                     if (isTrue(isGreaterThan(origclientorderidlistLength, 0)))
                     {
-                        query = add(add(add(add(query, "&"), "origclientorderidlist=%5B"), String.Join("%2C", ((IList<object>)origclientorderidlist).ToArray())), "%5D");
+                        // wrap clientOrderids around ""
+                        object newClientOrderIds = new List<object>() {};
+                        for (object i = 0; isLessThan(i, origclientorderidlistLength); postFixIncrement(ref i))
+                        {
+                            ((IList<object>)newClientOrderIds).Add(add(add("%22", getValue(origclientorderidlist, i)), "%22"));
+                        }
+                        query = add(add(add(add(query, "&"), "origclientorderidlist=%5B"), String.Join("%2C", ((IList<object>)newClientOrderIds).ToArray())), "%5D");
                     }
                 } else
                 {
@@ -14008,6 +14015,7 @@ public partial class binance : Exchange
             { "contracts", this.safeNumber(liquidation, "executedQty") },
             { "contractSize", this.safeNumber(market, "contractSize") },
             { "price", this.safeNumber(liquidation, "avgPrice") },
+            { "side", this.safeStringLower(liquidation, "side") },
             { "baseValue", this.safeNumber(liquidation, "cumBase") },
             { "quoteValue", this.safeNumber(liquidation, "cumQuote") },
             { "timestamp", timestamp },

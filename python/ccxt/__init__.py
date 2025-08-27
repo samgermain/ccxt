@@ -22,7 +22,7 @@
 
 # ----------------------------------------------------------------------------
 
-__version__ = '4.4.98'
+__version__ = '4.5.2'
 
 # ----------------------------------------------------------------------------
 
@@ -137,7 +137,6 @@ from ccxt.delta import delta                                          # noqa: F4
 from ccxt.deribit import deribit                                      # noqa: F401
 from ccxt.derive import derive                                        # noqa: F401
 from ccxt.digifinex import digifinex                                  # noqa: F401
-from ccxt.ellipx import ellipx                                        # noqa: F401
 from ccxt.exmo import exmo                                            # noqa: F401
 from ccxt.fmfwio import fmfwio                                        # noqa: F401
 from ccxt.foxbit import foxbit                                        # noqa: F401
@@ -145,6 +144,7 @@ from ccxt.gate import gate                                            # noqa: F4
 from ccxt.gateio import gateio                                        # noqa: F401
 from ccxt.gemini import gemini                                        # noqa: F401
 from ccxt.hashkey import hashkey                                      # noqa: F401
+from ccxt.hibachi import hibachi                                      # noqa: F401
 from ccxt.hitbtc import hitbtc                                        # noqa: F401
 from ccxt.hollaex import hollaex                                      # noqa: F401
 from ccxt.htx import htx                                              # noqa: F401
@@ -181,7 +181,6 @@ from ccxt.timex import timex                                          # noqa: F4
 from ccxt.tokocrypto import tokocrypto                                # noqa: F401
 from ccxt.tradeogre import tradeogre                                  # noqa: F401
 from ccxt.upbit import upbit                                          # noqa: F401
-from ccxt.vertex import vertex                                        # noqa: F401
 from ccxt.wavesexchange import wavesexchange                          # noqa: F401
 from ccxt.whitebit import whitebit                                    # noqa: F401
 from ccxt.woo import woo                                              # noqa: F401
@@ -245,7 +244,6 @@ exchanges = [
     'deribit',
     'derive',
     'digifinex',
-    'ellipx',
     'exmo',
     'fmfwio',
     'foxbit',
@@ -253,6 +251,7 @@ exchanges = [
     'gateio',
     'gemini',
     'hashkey',
+    'hibachi',
     'hitbtc',
     'hollaex',
     'htx',
@@ -289,7 +288,6 @@ exchanges = [
     'tokocrypto',
     'tradeogre',
     'upbit',
-    'vertex',
     'wavesexchange',
     'whitebit',
     'woo',
