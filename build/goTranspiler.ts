@@ -1991,7 +1991,7 @@ func (this *${className}) Init(userConfig map[string]interface{}) {
     // ---------------------------------------------------------------------------------------------
     transpileWsOrderbookTestsToGo (outDir: string) {
 
-        const jsFile = './ts/src/pro/test/base/test.OrderBook.ts';
+        const jsFile = './ts/src/pro/test/base/test.orderBook.ts';
         const goFile = `${outDir}/cache/orderbook.go`;
 
         log.magenta ('Transpiling from', (jsFile as any).yellow)
@@ -2025,7 +2025,7 @@ func (this *${className}) Init(userConfig map[string]interface{}) {
     // ---------------------------------------------------------------------------------------------
     transpileWsCacheTestsToGo (outDir: string) {
 
-        const jsFile = './ts/src/pro/test/base/test.Cache.ts';
+        const jsFile = './ts/src/pro/test/base/test.cache.ts';
         const goFile = `${outDir}/cache/cache.go`;
 
         log.magenta ('Transpiling from', (jsFile as any).yellow)
@@ -2308,6 +2308,8 @@ func (this *${className}) Init(userConfig map[string]interface{}) {
                 [/exchange\.(\w+)(,|;|\)|\s)/g, 'exchange.Get$1()$2'],
                 [/Precise\./gm, 'ccxt.Precise.'],
                 [/Spawn\(createOrderAfterDelay/g, 'Spawn(CreateOrderAfterDelay'],
+                [/<-exchange.WatchOrderBook\(symbol\)/g, '((<-exchange.WatchOrderBook(symbol)).(ccxt.OrderBookInterface)).ToMap()'], // orderbook watch
+                [/<-exchange.WatchOrderBookForSymbols\((.*?)\)/g, '((<-exchange.WatchOrderBookForSymbols($1)).(ccxt.OrderBookInterface)).ToMap()'],
                 [/(interface{}\sfunc\sEquals.+\n.*\n.+\n.+|func Equals\(.+\n.*\n.*\n.*\})/gm, ''] // remove equals
 
 
