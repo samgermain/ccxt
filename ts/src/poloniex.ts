@@ -123,7 +123,7 @@ export default class poloniex extends Exchange {
                 'www': 'https://www.poloniex.com',
                 'doc': 'https://api-docs.poloniex.com/spot/',
                 'fees': 'https://poloniex.com/fees',
-                'referral': 'https://poloniex.com/signup?c=UBFZJRPJ',
+                'referral': 'https://poloniex.com/signup?c=JHT93FRG',
             },
             'api': {
                 'public': {

@@ -153,7 +153,7 @@ export default class bitvavo extends Exchange {
                 'www': 'https://bitvavo.com/',
                 'doc': 'https://docs.bitvavo.com/',
                 'fees': 'https://bitvavo.com/en/fees',
-                'referral': 'https://bitvavo.com/?a=24F34952F7',
+                'referral': 'https://bitvavo.com/?a=4D8DB756F2',
             },
             'api': {
                 'public': {

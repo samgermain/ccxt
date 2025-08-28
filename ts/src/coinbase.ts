@@ -175,7 +175,7 @@ export default class coinbase extends Exchange {
                     'https://support.coinbase.com/customer/portal/articles/2109597-buy-sell-bank-transfer-fees',
                     'https://www.coinbase.com/advanced-fees',
                 ],
-                'referral': 'https://www.coinbase.com/join/58cbe25a355148797479dbd2',
+                'referral': 'https://coinbase.com/join/kaiqxs',
             },
             'requiredCredentials': {
                 'apiKey': true,

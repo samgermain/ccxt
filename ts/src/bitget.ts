@@ -192,7 +192,7 @@ export default class bitget extends Exchange {
                     'https://bitgetlimited.github.io/apidoc/en/margin',
                 ],
                 'fees': 'https://www.bitget.cc/zh-CN/rate?tab=1',
-                'referral': 'https://www.bitget.com/expressly?languageType=0&channelCode=ccxt&vipCode=tg9j',
+                'referral': 'https://www.bitget.com/en/welfare/register?clacCode=N0BVGF3L',
             },
             'api': {
                 'public': {

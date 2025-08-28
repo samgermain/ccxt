@@ -114,7 +114,7 @@ export default class phemex extends Exchange {
                 'doc': 'https://phemex-docs.github.io/#overview',
                 'fees': 'https://phemex.com/fees-conditions',
                 'referral': {
-                    'url': 'https://phemex.com/register?referralCode=EDNVJ',
+                    'url': 'https://phemex.com/register?referralCode=C6XBH3',
                     'discount': 0.1,
                 },
             },

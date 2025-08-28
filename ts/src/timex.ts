@@ -137,7 +137,7 @@ export default class timex extends Exchange {
                 },
                 'www': 'https://timex.io',
                 'doc': 'https://plasma-relay-backend.timex.io/swagger-ui/index.html',
-                'referral': 'https://timex.io/?refcode=1x27vNkTbP1uwkCck',
+                'referral': 'https://timex.io/?refcode=7aKFUD9GX4muae0C',
             },
             'api': {
                 'addressbook': {
