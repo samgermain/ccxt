@@ -150,7 +150,7 @@ export default class woo extends Exchange {
                     'https://support.woox.io/hc/en-001/articles/4404611795353--Trading-Fees',
                 ],
                 'referral': {
-                    'url': 'https://woox.io/register?ref=DIJT0CNL',
+                    'url': 'https://woox.io/register?ref=5LWDDLLT',
                     'discount': 0.35,
                 },
             },

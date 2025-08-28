@@ -104,7 +104,7 @@ export default class krakenfutures extends Exchange {
                     'https://docs.kraken.com/api/docs/futures-api/trading/market-data/',
                 ],
                 'fees': 'https://support.kraken.com/hc/en-us/articles/360022835771-Transaction-fees-and-rebates-for-Kraken-Futures',
-                'referral': undefined,
+                'referral': 'https://invite.kraken.com/JDNW/tl4ndx8o',
             },
             'api': {
                 'public': {

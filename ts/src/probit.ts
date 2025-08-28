@@ -161,7 +161,7 @@ export default class probit extends Exchange {
                     'https://docs-ko.probit.com',
                 ],
                 'fees': 'https://support.probit.com/hc/en-us/articles/360020968611-Trading-Fees',
-                'referral': 'https://www.probit.com/r/34608773',
+                'referral': 'https://www.probit.com/r/46571288',
             },
             'api': {
                 'public': {

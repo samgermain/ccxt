@@ -125,7 +125,7 @@ export default class bitmex extends Exchange {
                 ],
                 'fees': 'https://www.bitmex.com/app/fees',
                 'referral': {
-                    'url': 'https://www.bitmex.com/app/register/NZTR1q',
+                    'url': 'https://www.bitmex.com//app/register/88ozaj',
                     'discount': 0.1,
                 },
             },

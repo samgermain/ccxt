@@ -134,7 +134,7 @@ export default class ascendex extends Exchange {
                 ],
                 'fees': 'https://ascendex.com/en/feerate/transactionfee-traderate',
                 'referral': {
-                    'url': 'https://ascendex.com/en-us/register?inviteCode=EL6BXBQM',
+                    'url': 'https://ascendex.com/en-us/register?inviteCode=ULNPAPM6O',
                     'discount': 0.25,
                 },
             },

@@ -78,7 +78,7 @@ export default class bitbns extends Exchange {
                     'v2': 'https://api.{hostname}/api/trade/v2',
                 },
                 'www': 'https://bitbns.com',
-                'referral': 'https://ref.bitbns.com/1090961',
+                'referral': 'https://ref.bitbns.com/2037621',
                 'doc': [
                     'https://bitbns.com/trade/#/api-trading/',
                 ],

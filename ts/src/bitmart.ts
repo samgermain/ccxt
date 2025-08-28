@@ -122,7 +122,7 @@ export default class bitmart extends Exchange {
                 'www': 'https://www.bitmart.com/',
                 'doc': 'https://developer-pro.bitmart.com/',
                 'referral': {
-                    'url': 'http://www.bitmart.com/?r=rQCFLh',
+                    'url': 'https://www.bitmart.com/register-referral/en?r=XWBvjr',
                     'discount': 0.3,
                 },
                 'fees': 'https://www.bitmart.com/fee/en',

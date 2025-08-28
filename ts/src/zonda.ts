@@ -145,7 +145,7 @@ export default class zonda extends Exchange {
             },
             'hostname': 'zondacrypto.exchange',
             'urls': {
-                'referral': 'https://auth.zondaglobal.com/ref/jHlbB4mIkdS1',
+                'referral': 'https://auth.zondaglobal.com/ref/nF5riiB4H3X6',
                 'logo': 'https://user-images.githubusercontent.com/1294454/159202310-a0e38007-5e7c-4ba9-a32f-c8263a0291fe.jpg',
                 'www': 'https://zondaglobal.com',
                 'api': {

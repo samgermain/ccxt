@@ -116,6 +116,7 @@ export default class kraken extends Exchange {
                     'private': 'https://api.kraken.com',
                     'zendesk': 'https://kraken.zendesk.com/api/v2/help_center/en-us/articles', // use the public zendesk api to receive article bodies and bypass new anti-spam protections
                 },
+                'referral': 'https://invite.kraken.com/JDNW/tl4ndx8o',
                 'www': 'https://www.kraken.com',
                 'doc': 'https://docs.kraken.com/rest/',
                 'fees': 'https://www.kraken.com/en-us/features/fee-schedule',
