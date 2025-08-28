@@ -123,7 +123,7 @@ export default class delta extends Exchange {
                     'https://docs.delta.exchange',
                 ],
                 'fees': 'https://www.delta.exchange/fees',
-                'referral': 'https://www.delta.exchange/app/signup/?code=IULYNB',
+                'referral': 'https://www.delta.exchange/?code=YVEZWW',
             },
             'api': {
                 'public': {

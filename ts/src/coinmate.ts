@@ -124,7 +124,7 @@ export default class coinmate extends Exchange {
                     'https://coinmate.docs.apiary.io',
                     'https://coinmate.io/developers',
                 ],
-                'referral': 'https://coinmate.io?referral=YTFkM1RsOWFObVpmY1ZjMGREQmpTRnBsWjJJNVp3PT0',
+                'referral': 'https://coinmate.io?invite=5ZC20VJ7SZRSRAALMWPZIT1S5SV9R28G4R39FNL1M7AA',
             },
             'requiredCredentials': {
                 'apiKey': true,

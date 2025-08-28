@@ -160,7 +160,7 @@ export default class ndax extends Exchange {
                     'https://apidoc.ndax.io/',
                 ],
                 'fees': 'https://ndax.io/fees',
-                'referral': 'https://one.ndax.io/bfQiSL',
+                'referral': 'https://refer.ndax.io/sdSU',
             },
             'api': {
                 'public': {

@@ -117,7 +117,7 @@ export default class lbank extends Exchange {
                 'www': 'https://www.lbank.com',
                 'doc': 'https://www.lbank.com/en-US/docs/index.html',
                 'fees': 'https://support.lbank.site/hc/en-gb/articles/900000535703-Trading-Fees-From-14-00-on-April-7-2020-UTC-8-',
-                'referral': 'https://www.lbank.com/login/?icode=7QCY',
+                'referral': 'https://www.lbank.com/login/?icode=1CA7B',
             },
             'api': {
                 'spot': {
