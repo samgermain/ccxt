@@ -147,7 +147,7 @@ export default class coinex extends Exchange {
                 'www': 'https://www.coinex.com',
                 'doc': 'https://docs.coinex.com/api/v2',
                 'fees': 'https://www.coinex.com/fees',
-                'referral': 'https://www.coinex.com/register?refer_code=kegxb',
+                'referral': 'https://www.coinex.com/register?rc=kegxb&channel=Referral',
             },
             'api': {
                 'v1': {

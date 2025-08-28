@@ -143,7 +143,7 @@ export default class btcalpha extends Exchange {
                 'www': 'https://btc-alpha.com',
                 'doc': 'https://btc-alpha.github.io/api-docs',
                 'fees': 'https://btc-alpha.com/fees/',
-                'referral': 'https://btc-alpha.com/?r=123788',
+                'referral': 'https://btc-alpha.com/?r=PK1JS6176EB',
             },
             'api': {
                 'public': {
