@@ -182,8 +182,6 @@ export default class okx extends Exchange {
                 'doc': 'https://www.okx.com/docs-v5/en/',
                 'fees': 'https://www.okx.com/pages/products/fees.html',
                 'referral': {
-                    // old reflink 0% discount https://www.okx.com/join/1888677
-                    // new reflink 20% discount https://www.okx.com/join/CCXT2023
                     'url': 'https://www.okx.com/join/11182923',
                     'discount': 0.2,
                 },

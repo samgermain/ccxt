@@ -187,7 +187,7 @@ export default class htx extends Exchange {
                 },
                 'www': 'https://www.huobi.com',
                 'referral': {
-                    'url': 'https://www.htx.com.vc/invite/en-us/1h?invite_code=6rmm2223',
+                    'url': 'https://www.htx.com.vc/invite/en-us/1h?invite_code=r3z6d223',
                     'discount': 0.15,
                 },
                 'doc': [
