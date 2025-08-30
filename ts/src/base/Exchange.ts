@@ -2598,6 +2598,10 @@ export default class Exchange {
         throw new NotSupported (this.id + ' unWatchPositions() is not supported yet');
     }
 
+    async unWatchTicker (symbol: string, params = {}): Promise<any> {
+        throw new NotSupported (this.id + ' unWatchTicker() is not supported yet');
+    }
+
     async fetchDepositAddresses (codes: Strings = undefined, params = {}): Promise<DepositAddress[]> {
         throw new NotSupported (this.id + ' fetchDepositAddresses() is not supported yet');
     }
@@ -5202,6 +5206,13 @@ export default class Exchange {
             return market;
         }
         return result;
+    }
+
+    marketOrNull (symbol: string): MarketInterface {
+        if (symbol === undefined) {
+            return undefined;
+        }
+        return this.market (symbol);
     }
 
     checkRequiredCredentials (error = true) {
