@@ -7506,7 +7506,7 @@ export default class Exchange {
         return this.filterBySinceLimit (uniqueResults, since, limit, key);
     }
 
-    async fetchPaginatedCallCursor (method: string, symbol: Str = undefined, since: Int = undefined, limit: Int = undefined, params = {}, cursorReceived: IndexType = undefined, cursorSent: IndexType = undefined, cursorIncrement: Int = undefined, maxEntriesPerRequest: Int = undefined): Promise<any> {
+    async fetchPaginatedCallCursor (method: string, symbol: Str = undefined, since: Int = undefined, limit: Int = undefined, params = {}, cursorReceived: any = undefined, cursorSent: any = undefined, cursorIncrement: Int = undefined, maxEntriesPerRequest: Int = undefined): Promise<any> {  // TODO: cursorSent/cursorReceived should be IndexType but cant transpile to go
         let maxCalls = undefined;
         [ maxCalls, params ] = this.handleOptionAndParams (params, method, 'paginationCalls', 10);
         let maxRetries = undefined;
@@ -7581,7 +7581,7 @@ export default class Exchange {
         return this.filterBySinceLimit (sorted, since, limit, key);
     }
 
-    async fetchPaginatedCallIncremental (method: string, symbol: Str = undefined, since: Int = undefined, limit: Int = undefined, params = {}, pageKey: IndexType = undefined, maxEntriesPerRequest: Int = undefined): Promise<any> {
+    async fetchPaginatedCallIncremental (method: string, symbol: Str = undefined, since: Int = undefined, limit: Int = undefined, params = {}, pageKey: any = undefined, maxEntriesPerRequest: Int = undefined): Promise<any> {  // TODO: cursorSent/cursorReceived should be IndexType but cant transpile to go
         let maxCalls = undefined;
         [ maxCalls, params ] = this.handleOptionAndParams (params, method, 'paginationCalls', 10);
         let maxRetries = undefined;
