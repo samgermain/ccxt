@@ -38,7 +38,7 @@ import { OrderBook as WsOrderBook, IndexedOrderBook, CountedOrderBook, OrderBook
 //
 import { axolotl } from './functions/crypto.js';
 // import types
-import type { Market, Trade, Ticker, OHLCV, OHLCVC, Order, OrderBook, Balance, Balances, Dictionary, Transaction, Currency, MinMax, IndexType, Int, OrderType, OrderSide, Position, FundingRate, DepositWithdrawFee, LedgerEntry, BorrowInterest, OpenInterest, LeverageTier, TransferEntry, FundingRateHistory, Liquidation, FundingHistory, OrderRequest, MarginMode, Tickers, Greeks, Option, OptionChain, Str, Num, MarketInterface, CurrencyInterface, BalanceAccount, MarginModes, MarketType, Leverage, Leverages, LastPrice, LastPrices, Account, Strings, MarginModification, TradingFeeInterface, Currencies, TradingFees, Conversion, CancellationRequest, IsolatedBorrowRate, IsolatedBorrowRates, CrossBorrowRates, CrossBorrowRate, Dict, FundingRates, LeverageTiers, Bool, int, DepositAddress, LongShortRatio, OrderBooks, OpenInterests, ConstructorArgs } from './types.js';
+import type { Market, Trade, Ticker, OHLCV, OHLCVC, Order, OrderBook, Balance, Balances, Dictionary, Transaction, Currency, MinMax, IndexType, Int, OrderType, OrderSide, Position, FundingRate, DepositWithdrawFee, LedgerEntry, BorrowInterest, OpenInterest, LeverageTier, TransferEntry, FundingRateHistory, Liquidation, FundingHistory, OrderRequest, MarginMode, Tickers, Greeks, Option, OptionChain, Str, Num, MarketInterface, CurrencyInterface, BalanceAccount, MarginModes, MarketType, Leverage, Leverages, LastPrice, LastPrices, Account, Strings, MarginModification, TradingFeeInterface, Currencies, TradingFees, Conversion, CancellationRequest, IsolatedBorrowRate, IsolatedBorrowRates, CrossBorrowRates, CrossBorrowRate, Dict, FundingRates, LeverageTiers, Bool, int, DepositAddress, LongShortRatio, OrderBooks, OpenInterests, ConstructorArgs, MarketLimits, Status, RequiredCredentials, Urls } from './types.js';
 // ----------------------------------------------------------------------------
 // move this elsewhere.
 import { ArrayCache, ArrayCacheByTimestamp } from './ws/Cache.js';
@@ -180,9 +180,7 @@ let protobufMexc = undefined;
  * @class Exchange
  */
 export default class Exchange {
-    options: {
-        [key: string]: any;
-    };
+    options: Dict;
 
     isSandboxModeEnabled: boolean = false;
 
@@ -280,26 +278,11 @@ export default class Exchange {
     myLiquidations: Dictionary<Liquidation> = {};
     myTrades: ArrayCache;
     positions: any;
-    urls: {
-        logo?: string;
-        api?: string | Dictionary<string>;
-        test?: string | Dictionary<string>;
-        www?: string;
-        doc?: string[];
-        api_management?: string;
-        fees?: string;
-        referral?: string;
-    };
+    urls: Urls;
 
     requiresWeb3: boolean = false;
     requiresEddsa: boolean = false;
-    precision: {
-        amount: Num,
-        price: Num,
-        cost?: Num,
-        base?: Num,
-        quote?: Num,
-    } = undefined;
+    precision: Precision = undefined;
 
     enableLastJsonResponse: boolean = false;
     enableLastHttpResponse: boolean = true;
@@ -317,25 +300,9 @@ export default class Exchange {
     markets: Dictionary<any> = undefined;
     has: Dictionary<boolean | 'emulated' | undefined>;
     features: Dictionary<Dictionary<any>> = undefined;
-    status: {
-        status: Str,
-        updated: Num,
-        eta: Num,
-        url: Str,
-        info: any,
-    } = undefined;
+    status: Status = undefined;
 
-    requiredCredentials: {
-        apiKey: Bool,
-        secret: Bool,
-        uid: Bool,
-        login: Bool,
-        password: Bool,
-        twofa: Bool,  // 2-factor authentication (one-time password key)
-        privateKey: Bool,  // a "0x"-prefixed hexstring private key for a wallet
-        walletAddress: Bool,  // the wallet address "0x"-prefixed hexstring
-        token: Bool,  // reserved for HTTP auth in some cases
-    };
+    requiredCredentials: RequiredCredentials;
 
     rateLimit: Num = undefined; // milliseconds
     tokenBucket: Dictionary<number> = undefined;
@@ -344,27 +311,9 @@ export default class Exchange {
 
     httpExceptions: Dictionary<any> = undefined;
 
-    limits: {
-        amount?: MinMax,
-        cost?: MinMax,
-        leverage?: MinMax,
-        price?: MinMax,
-    } = undefined;
+    limits: MarketLimits = undefined;
 
-    fees: {
-        trading: {
-            tierBased: Bool,
-            percentage: Bool,
-            taker: Num,
-            maker: Num,
-        },
-        funding: {
-            tierBased: Bool,
-            percentage: Bool,
-            withdraw: {},
-            deposit: {},
-        },
-    };
+    fees: TradingFeeInterface;
 
     markets_by_id: Dictionary<any> = undefined;
     symbols: string[] = undefined;
