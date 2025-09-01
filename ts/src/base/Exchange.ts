@@ -182,7 +182,7 @@ let protobufMexc = undefined;
 export default class Exchange {
     options: {
         [key: string]: any;
-    }
+    };
     isSandboxModeEnabled: boolean = false;
 
     api: Dictionary<any> = undefined;
@@ -222,6 +222,7 @@ export default class Exchange {
         'chrome39': 'Mozilla/5.0 (Windows NT 6.1; WOW64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/39.0.2171.71 Safari/537.36',
         'chrome100': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/100.0.4896.75 Safari/537.36',
     };
+
     headers: Dictionary<string> = {};
     returnResponseHeaders: boolean = false;
     origin: string = '*';  // CORS origin
