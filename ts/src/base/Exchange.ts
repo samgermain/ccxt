@@ -183,6 +183,7 @@ export default class Exchange {
     options: {
         [key: string]: any;
     };
+
     isSandboxModeEnabled: boolean = false;
 
     api: Dictionary<any> = undefined;
@@ -335,6 +336,7 @@ export default class Exchange {
         walletAddress: Bool,  // the wallet address "0x"-prefixed hexstring
         token: Bool,  // reserved for HTTP auth in some cases
     };
+
     rateLimit: Num = undefined; // milliseconds
     tokenBucket: Dictionary<number> = undefined;
     throttler: any = undefined;
