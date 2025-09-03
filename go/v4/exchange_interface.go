@@ -195,6 +195,8 @@ type ICoreExchange interface {
 	SafeInteger(obj interface{}, key interface{}, defaultValue ...interface{}) interface{}
 	SafeStringUpper(obj interface{}, key interface{}, defaultValue ...interface{}) interface{}
 	SafeStringLower(obj interface{}, key interface{}, defaultValue ...interface{}) interface{}
+	// BEGIN: INJECT GETTERS AND SETTERS HERE //
+    // END: INJECT GETTERS AND SETTERS HERE //
 	SafeStringLower2(obj interface{}, key interface{}, key2 interface{}, defaultValue ...interface{}) interface{}
 	SafeFloatN(obj interface{}, keys []interface{}, defaultValue ...interface{}) interface{}
 	SafeStringN(obj interface{}, keys2 interface{}, defaultValue ...interface{}) interface{}
