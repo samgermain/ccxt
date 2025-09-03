@@ -56,7 +56,7 @@ type Exchange struct {
 	MAX_VALUE              float64
 	RateLimit              float64
 	TokenBucket            map[string]interface{}
-	Throttler              Throttler
+	Throttler              *Throttler
 	NewUpdates             bool
 	Alias                  bool
 	Verbose                bool
