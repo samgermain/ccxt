@@ -207,8 +207,8 @@ export default class Exchange {
     socks_proxy: string;
     socksProxyCallback: any;
     socks_proxy_callback: any;
-    userAgent: { 'User-Agent': string } | false = undefined;
-    user_agent: { 'User-Agent': string } | false = undefined;
+    userAgent: Str = undefined;
+    user_agent: Str = undefined;
     wsProxy: string;
     ws_proxy: string;
     wssProxy: string;
@@ -225,7 +225,7 @@ export default class Exchange {
     headers: Dictionary<string> = {};
     returnResponseHeaders: boolean = false;
     origin: string = '*';  // CORS origin
-    MAX_VALUE: Num = Number.MAX_VALUE;
+    MAX_VALUE: number = Number.MAX_VALUE;
     //
     agent: any = undefined;  // maintained for backwards compatibility
     nodeHttpModuleLoaded: boolean = false;
@@ -287,13 +287,20 @@ export default class Exchange {
     enableLastJsonResponse: boolean = false;
     enableLastHttpResponse: boolean = true;
     enableLastResponseHeaders: boolean = true;
-    last_http_response: string = undefined;
+    last_http_response: any = undefined;
     last_json_response: any = undefined;
     last_response_headers: Dictionary<string> = undefined;
     last_request_headers: Dictionary<string> = undefined;
     last_request_body: any = undefined;
     last_request_url: string = undefined;
     last_request_path: string = undefined;
+    // lastHttpResponse: any = undefined;
+    // lastJsonResponse: any = undefined;
+    // lastResponseHeaders: Dictionary<string> = undefined;
+    // lastRequestHeaders: Dictionary<string> = undefined;
+    lastRequestBody: any = undefined;
+    lastRequestUrl: string = undefined;
+    // lastRequestPath: string = undefined;
 
     id: string = 'Exchange';
 
@@ -304,7 +311,7 @@ export default class Exchange {
 
     requiredCredentials: RequiredCredentials;
 
-    rateLimit: Num = undefined; // milliseconds
+    rateLimit: number = -1; // milliseconds
     tokenBucket: Dictionary<number> = undefined;
     throttler: any = undefined;
     enableRateLimit: boolean = undefined;
@@ -316,27 +323,27 @@ export default class Exchange {
     fees: TradingFeeInterface;
 
     markets_by_id: Dictionary<any> = undefined;
-    symbols: string[] = undefined;
-    ids: string[] = undefined;
+    symbols: Strings = undefined;
+    ids: Strings = undefined;
     currencies: Currencies = {};
 
     baseCurrencies: Dictionary<CurrencyInterface> = undefined;
     quoteCurrencies: Dictionary<CurrencyInterface> = undefined;
     currencies_by_id: Dictionary<CurrencyInterface> = undefined;
-    codes: string[] = undefined;
+    codes: Strings = undefined;
 
-    reloadingMarkets: boolean = undefined;
-    marketsLoading: Promise<Dictionary<Market>> = undefined;
+    reloadingMarkets: Bool = undefined;
+    marketsLoading: Promise<Dictionary<any>> = undefined;
 
-    accounts: Account[] = undefined;
-    accountsById: Dictionary<Account> = undefined;
+    accounts: Account[] = [];
+    accountsById: Dictionary<Account> = {};
 
     commonCurrencies: Dictionary<string> = undefined;
 
     hostname: Str = undefined;
 
-    precisionMode: Num = undefined;
-    paddingMode: Num = undefined;
+    precisionMode: Int = undefined;
+    paddingMode: Int = undefined;
 
     exceptions: Dictionary<string> = {};
     timeframes: Dictionary<number | string> = {};
@@ -347,7 +354,7 @@ export default class Exchange {
 
     name: Str = undefined;
 
-    lastRestRequestTimestamp: number;
+    lastRestRequestTimestamp: int;
 
     targetAccount: string = undefined;
 
@@ -4573,7 +4580,7 @@ export default class Exchange {
         return this.filterBySinceLimit (sorted, since, limit, 0, tail) as any;
     }
 
-    parseLeverageTiers (response: any, symbols: string[] = undefined, marketIdKey = undefined): LeverageTiers {
+    parseLeverageTiers (response: any, symbols: Strings = undefined, marketIdKey = undefined): LeverageTiers {
         // marketIdKey should only be undefined when response is a dictionary.
         symbols = this.marketSymbols (symbols);
         const tiers = {};
@@ -4650,7 +4657,7 @@ export default class Exchange {
         return position as Position;
     }
 
-    parsePositions (positions: any[], symbols: string[] = undefined, params = {}): Position[] {
+    parsePositions (positions: any[], symbols: Strings = undefined, params = {}): Position[] {
         symbols = this.marketSymbols (symbols);
         positions = this.toArray (positions);
         const result = [];
@@ -4932,7 +4939,8 @@ export default class Exchange {
         if (reload) {
             this.accounts = await this.fetchAccounts (params);
         } else {
-            if (this.accounts) {
+            const accountsLength = this.accounts.length;
+            if (accountsLength > 0) {
                 return this.accounts;
             } else {
                 this.accounts = await this.fetchAccounts (params);
@@ -6632,12 +6640,12 @@ export default class Exchange {
         return this.filterByValueSinceLimit (array, 'currency', code, since, limit, 'timestamp', tail);
     }
 
-    filterBySymbolsSinceLimit (array, symbols: string[] = undefined, since: Int = undefined, limit: Int = undefined, tail = false) {
+    filterBySymbolsSinceLimit (array, symbols: Strings = undefined, since: Int = undefined, limit: Int = undefined, tail = false) {
         const result = this.filterByArray (array, 'symbol', symbols, false);
         return this.filterBySinceLimit (result, since, limit, 'timestamp', tail);
     }
 
-    parseLastPrices (pricesData, symbols: string[] = undefined, params = {}): LastPrices {
+    parseLastPrices (pricesData, symbols: Strings = undefined, params = {}): LastPrices {
         //
         // the value of tickers is either a dict or a list
         //
@@ -7730,7 +7738,7 @@ export default class Exchange {
         return optionStructures;
     }
 
-    parseMarginModes (response: object[], symbols: string[] = undefined, symbolKey: Str = undefined, marketType: MarketType = undefined): MarginModes {
+    parseMarginModes (response: object[], symbols: Strings = undefined, symbolKey: Str = undefined, marketType: MarketType = undefined): MarginModes {
         const marginModeStructures = {};
         if (marketType === undefined) {
             marketType = 'swap'; // default to swap
@@ -7750,7 +7758,7 @@ export default class Exchange {
         throw new NotSupported (this.id + ' parseMarginMode () is not supported yet');
     }
 
-    parseLeverages (response: object[], symbols: string[] = undefined, symbolKey: Str = undefined, marketType: MarketType = undefined): Leverages {
+    parseLeverages (response: object[], symbols: Strings = undefined, symbolKey: Str = undefined, marketType: MarketType = undefined): Leverages {
         const leverageStructures = {};
         if (marketType === undefined) {
             marketType = 'swap'; // default to swap

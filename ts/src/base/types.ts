@@ -671,19 +671,21 @@ export interface RequiredCredentials {
 }
 
 export interface Urls {
-    logo?: string;
-    api?: string | Dictionary<string>;
-    test?: string | Dictionary<string>;
-    www?: string;
-    doc?: string[];
-    api_management?: string;
-    fees?: string;
-    referral?: string;
+    logo?: Str;
+    api?: Str | Dictionary<string>;
+    apiBackup?: Str | Dictionary<string>;
+    test?: Str | Dictionary<string>;
+    www?: Str;
+    doc?: Strings;
+    api_management?: Str;  // ! deprecated, use apiManagement instead
+    apiManagement?: Str;
+    fees?: Str;
+    referral?: Str | Dictionary<string>;
 }
 
 export interface Precision {
-    amount: Num,
-    price: Num,
+    amount?: Num,
+    price?: Num,
     cost?: Num,
     base?: Num,
     quote?: Num,
